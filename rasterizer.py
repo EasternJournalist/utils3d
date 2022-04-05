@@ -19,7 +19,14 @@ def map_np_dtype(dtype) -> str:
 
 class Context:
     def __init__(self):
-        self.__ctx__ = moderngl.create_context()
+        # TODO: create context
+        try:
+            self.__ctx__ = moderngl.create_context()
+        except:
+            try:
+                self.__ctx__ = moderngl.create_standalone_context()
+            except:
+                raise Exception("Fail to create context")
 
         self.program_rasterize = self.__ctx__.program(
             vertex_shader='''
