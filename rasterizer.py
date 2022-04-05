@@ -19,9 +19,7 @@ def map_np_dtype(dtype) -> str:
 
 class Context:
     def __init__(self):
-        self.__ctx__ = moderngl.create_standalone_context()
-        self.__ctx__.depth_func = '<'
-        self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
+        self.__ctx__ = moderngl.create_context()
 
         self.program_rasterize = self.__ctx__.program(
             vertex_shader='''
@@ -193,8 +191,10 @@ class Context:
         # Render
         fbo.use()
         fbo.viewport = (0, 0, width, height)
-
+        self.__ctx__.depth_func = '<'
+        self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
         vao.render(moderngl.TRIANGLES)
+        self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
 
         # Read result
         image_tex.read_into(image_buffer)
@@ -246,7 +246,7 @@ class Context:
 
         `depth`: The depth buffer in window space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
 
-        '''
+        ''' 
         assert len(vertices_current.shape) == 2 and len(vertices_next.shape) == 2
         assert vertices_current.shape == vertices_next.shape
         assert 2 <= vertices_current.shape[1] <= 4
@@ -301,8 +301,10 @@ class Context:
         # Render
         fbo.use()
         fbo.viewport = (0, 0, width, height)
-
+        self.__ctx__.depth_func = '<'
+        self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
         vao.render(moderngl.TRIANGLES)
+        self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
 
         # Read result
         image_tex.read_into(image_buffer)
@@ -355,29 +357,29 @@ class Context:
         return image_buffer[:, :, :texture.shape[2]]
 
 
-camera_matrix = np.array([
-    [1., 0., 0., 0.],
-    [0., 1., 0., 0.],
-    [0., 0., 1., 2.],
-    [0., 0., 0., 1.]
-])
+# camera_matrix = np.array([
+#     [1., 0., 0., 0.],
+#     [0., 1., 0., 0.],
+#     [0., 0., 1., 2.],
+#     [0., 0., 0., 1.]
+# ])
 
-from shapes import cube
-vertices, indices = cube()
+# from shapes import cube
+# vertices, indices = cube()
 
-ctx = Context()
+# ctx = Context()
 
-start = time.time()
-img_flow, depth = ctx.rasterize_flow(320, 320, 
-    vertices, 
-    vertices + np.array([[1., 1., 0.]]), 
-    triangle_indices=triangulate(indices.reshape((-1, 4))),
-    transform_matrix=perspective_from_image(np.pi / 2., 320, 320, 0.01, 100.) @ np.linalg.inv(camera_matrix)
-)
+# start = time.time()
+# img_flow, depth = ctx.rasterize_flow(320, 320, 
+#     vertices, 
+#     vertices + np.array([[1., 1., 0.]]), 
+#     triangle_indices=triangulate(indices.reshape((-1, 4))),
+#     transform_matrix=perspective_from_image(np.pi / 2., 320, 320, 0.01, 100.) @ np.linalg.inv(camera_matrix)
+# )
 
-#uv = image_uv(10, 10)
-#print(ctx.texture(uv, np.linspace(1, 100, 100).reshape((10, 10, 1)).astype('f4'))[:, :, 0])
-print(time.time() - start)
+# #uv = image_uv(10, 10)
+# #print(ctx.texture(uv, np.linspace(1, 100, 100).reshape((10, 10, 1)).astype('f4'))[:, :, 0])
+# print(time.time() - start)
 
-from PIL import Image
-Image.fromarray(np.abs(img_flow * 255).astype(np.uint8)).show()
+# from PIL import Image
+# Image.fromarray(np.abs(img_flow * 255).astype(np.uint8)).show()

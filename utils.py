@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def to_linear_depth(depth_buffer: np.ndarray, near: float, far: float):
     return (2 * near * far) / (far + near - (2 * depth_buffer - 1) * (far - near))
 
@@ -11,7 +12,7 @@ def triangulate(indices: np.ndarray):
     loop_indice = np.stack([np.zeros(n - 2, dtype=int), np.arange(1, n - 1, 1, dtype=int), np.arange(2, n, 1, dtype=int)], axis=1)
     return indices[:, loop_indice].reshape(-1, 3)
 
-def perspective_from_image(fov: float, width: float, height: float, near: float, far: float):
+def perspective_from_image(fov: float, width: int, height: int, near: float, far: float):
     return np.array([
         [1. / (np.tan(fov / 2) * (width / max(width, height))), 0., 0., 0.],
         [0., 1. / (np.tan(fov / 2) * (height / max(width, height))), 0., 0.],
