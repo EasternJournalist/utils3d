@@ -135,7 +135,9 @@ class Context:
         triangle_indices: np.ndarray = None,  
         transform_matrix: np.ndarray = None, 
         image_buffer: np.ndarray = None, 
-        depth_buffer: np.ndarray = None
+        depth_buffer: np.ndarray = None,
+        alpha_blend: bool = False,
+        cull_backface: bool = False
     ):
         '''
         Rasterize triangles onto image with attributes attached to each vertex.\n
@@ -210,6 +212,14 @@ class Context:
         fbo.viewport = (0, 0, width, height)
         self.__ctx__.depth_func = '<'
         self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
+        if cull_backface:
+            self.__ctx__.enable(self.__ctx__.CULL_FACE)
+        else:
+            self.__ctx__.disable(self.__ctx__.CULL_FACE)
+        if alpha_blend:
+            self.__ctx__.enable(self.__ctx__.BLEND)
+        else:
+            self.__ctx__.disable(self.__ctx__.BLEND)
         vao.render(moderngl.TRIANGLES)
         self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
 
@@ -253,6 +263,7 @@ class Context:
         # Render
         fbo.use()
         fbo.viewport = (0, 0, width, height)
+        self.__ctx__.disable(self.__ctx__.BLEND)
         self.screen_quad_vao.render()
 
         # Read buffer
@@ -290,8 +301,9 @@ class Context:
         `depth_buffer`: Numpy array of shape [height, width]. The initial depth to draw on. By default the depth is initialized with ones.\n
 
         ## Returns
-        `flow_image`: Numpy array of shape `[height, width, 4]`. The flow map in normalized image space ranging [0, 1]. Note that in OpenGL, the origin of image space (i.e. viewport) is the left bottom corner. 
-            If you need to display or process the image through OpenCV  Pillow, you will have to flip the Y axis of both the flow vector and image data array.
+        `flow_image`: Numpy array of shape `[height, width, 4]`. The first two channels are UV flow in image space. The third channel is the depth flow in linear depth space. The last channel is the occulusion mask, where ones indicate visibility in target image.
+            The flow map in normalized image space ranging [0, 1]. Note that in OpenGL the origin of image space (i.e. viewport) is the left bottom corner. 
+            If you need to display or save the image through OpenCV or Pillow, you will have to flip the Y axis of both the flow vector and image data array.
             
             >>> opencv_flow_image = flow_image[::-1]    # Flip image data
             >>> opencv_flow_image[:, :, 1] *= -1        # Flip flow vector
@@ -347,8 +359,8 @@ class Context:
         
         # Set uniforms and bind texture
         self.program_flow['threshold'] = threshold
-        self.program_flow['transform_matrix_source'].write(transform_matrix_source.transpose().copy().astype('f4') if transform_matrix_source is not None else np.eye(4, 4, dtype='f4'))
-        self.program_flow['transform_matrix_target'].write(transform_matrix_target.transpose().copy().astype('f4') if transform_matrix_target is not None else np.eye(4, 4, dtype='f4'))
+        self.program_flow['transform_matrix_src'].write(transform_matrix_source.transpose().copy().astype('f4') if transform_matrix_source is not None else np.eye(4, 4, dtype='f4'))
+        self.program_flow['transform_matrix_tgt'].write(transform_matrix_target.transpose().copy().astype('f4') if transform_matrix_target is not None else np.eye(4, 4, dtype='f4'))
         tgt_depth_tex.use(location=0)
 
         # Render
@@ -356,6 +368,8 @@ class Context:
         fbo.viewport = (0, 0, width, height)
         self.__ctx__.depth_func = '<'
         self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
+        self.__ctx__.disable(self.__ctx__.CULL_FACE)
+        self.__ctx__.disable(self.__ctx__.BLEND)
         vao.render(moderngl.TRIANGLES)
         self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
 
@@ -375,8 +389,13 @@ class Context:
 
         return image_buffer, depth_buffer
     
-    def warp_image_by_flow(self, source_image, flow):
+    def warp_image_by_flow(self, source_image: np.ndarray, source_mask: np.ndarray, flow: np.ndarray):
         # TODO
+        assert source_image.shape[:2] == flow.shape[:2]
+        width, height = source_image.shape[1], source_image.shape[0]
+        image_dtype = map_np_dtype(source_image.dtype)
+        source_image_tex = self.__ctx__.texture((width, height), 4, dtype=image_dtype, data=source_image)
+        
         pass
 
 
