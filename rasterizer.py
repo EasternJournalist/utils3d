@@ -511,7 +511,8 @@ class Context:
         assert flow.shape[2] == 2
         height, width, n_channels = image.shape
         assert 1 <= n_channels <= 4
-        pixel_positions = np.concatenate([image_uv(width, height), -occlusion_mask.astype(float), np.ones((height, width, 1))])
+        uv = image_uv(width, height)
+        pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(float), np.ones((height, width, 1))])
         return self.warp_image_3d(image, pixel_positions, alpha_blend=alpha_blend)
         
 
