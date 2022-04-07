@@ -2,6 +2,7 @@ from typing import Literal, Tuple
 import numpy as np
 import moderngl
 import time
+from .utils import *
 
 def map_np_dtype(dtype) -> str:
     if dtype == int:
@@ -28,7 +29,7 @@ class Context:
             except:
                 raise Exception("Fail to create context")
 
-        self.program_rasterize = self.__ctx__.program(
+        self.__program_rasterize__ = self.__ctx__.program(
             vertex_shader='''
             #version 330
 
@@ -54,7 +55,7 @@ class Context:
             '''
         )
 
-        self.program_texture = self.__ctx__.program(
+        self.__program_texture__ = self.__ctx__.program(
             vertex_shader='''
             #version 330
 
@@ -80,10 +81,10 @@ class Context:
             }
             '''
         )
-        self.program_texture['tex'] = 0
-        self.program_texture['uv'] = 1
+        self.__program_texture__['tex'] = 0
+        self.__program_texture__['uv'] = 1
 
-        self.program_flow = self.__ctx__.program(
+        self.__program_flow__ = self.__ctx__.program(
             vertex_shader='''
             #version 330
 
@@ -121,11 +122,70 @@ class Context:
             }
             '''
         )
-        self.program_flow['tgt_depth'] = 0
+        self.__program_flow__['tgt_depth'] = 0
+
+        self.__program_rasterize_texture__ = self.__ctx__.program(
+            vertex_shader='''
+            #version 330
+
+            in vec4 in_vert;
+            in vec2 in_uv;
+            out vec2 uv;
+            uniform mat4 transform_matrix;
+
+            void main() {
+                uv = in_uv;
+                gl_Position = transform_matrix * in_vert;
+            }
+            ''',
+            fragment_shader='''
+            #version 330
+
+            in vec2 uv;
+            out vec4 color;
+
+            uniform sampler2D tex;
+
+            void main() {
+                flow = texture(tex, uv);
+            }
+            '''
+        )
+        self.__program_rasterize_texture__['tex'] = 0
+
+        self.__program_warp__ = self.__ctx__.program(
+            vertex_shader='''
+            #version 330
+
+            in vec2 in_uv;
+            out vec2 uv;
+            uniform sampler2D pixel_positions;
+            uniform mat4 transform_matrix;
+
+            void main() {
+                uv = in_uv;
+                gl_Position = transform_matrix * texture(pixel_positions, in_uv);
+            }
+            ''',
+            fragment_shader='''
+            #version 330
+
+            in vec2 uv;
+            out vec4 color;
+
+            uniform sampler2D image;
+
+            void main() {
+                color = texture(image, uv);
+            }
+            '''
+        )
+        self.__program_warp__['pixel_positions'] = 0
+        self.__program_warp__['image'] = 1
 
         self.screen_quad_vbo = self.__ctx__.buffer(np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], dtype='f4'))
         self.screen_quad_ibo = self.__ctx__.buffer(np.array([0, 1, 2, 0, 2, 3], dtype=np.int32))
-        self.screen_quad_vao = self.__ctx__.vertex_array(self.program_texture, [(self.screen_quad_vbo, '2f4', 'in_vert')], index_buffer=self.screen_quad_ibo, index_element_size=4)
+        self.screen_quad_vao = self.__ctx__.vertex_array(self.__program_texture__, [(self.screen_quad_vbo, '2f4', 'in_vert')], index_buffer=self.screen_quad_ibo, index_element_size=4)
 
     def rasterize(self, 
         width: int, 
@@ -184,18 +244,16 @@ class Context:
         if attr_size < 4:
             attributes = np.concatenate([attributes, np.ones((n_vertices, 4 - attr_size), dtype=attr_dtype)], axis=1)
 
-        # Create vertex buffer & index buffer
+        # Create vertex array
         vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
         vbo_attr = self.__ctx__.buffer(attributes)
         ibo = self.__ctx__.buffer(triangle_indices.astype('i4')) if triangle_indices is not None else None
-        
-        # Create vertex array
         if ibo is None:
-            vao = self.__ctx__.vertex_array(self.program_rasterize, [(vbo_vert, '4f4', 'in_vert'), (vbo_attr, f'4{attr_dtype}', 'in_attr')])
+            vao = self.__ctx__.vertex_array(self.__program_rasterize__, [(vbo_vert, '4f4', 'in_vert'), (vbo_attr, f'4{attr_dtype}', 'in_attr')])
         else:
-            vao = self.__ctx__.vertex_array(self.program_rasterize, [(vbo_vert, '4f4', 'in_vert'), (vbo_attr, f'4{attr_dtype}', 'in_attr')], index_buffer=ibo, index_element_size=4)
+            vao = self.__ctx__.vertex_array(self.__program_rasterize__, [(vbo_vert, '4f4', 'in_vert'), (vbo_attr, f'4{attr_dtype}', 'in_attr')], index_buffer=ibo, index_element_size=4)
 
-        # Create image texture & depth texture & frame buffer
+        # Create frame buffer & textrue
         if image_buffer is None:
             image_buffer = np.zeros((height, width, 4), dtype=attr_dtype)
         if depth_buffer is None:
@@ -205,7 +263,7 @@ class Context:
         fbo = self.__ctx__.framebuffer(color_attachments=[image_tex], depth_attachment=depth_tex)
 
         # Set transform matrix
-        self.program_rasterize['transform_matrix'].write(transform_matrix.transpose().copy().astype('f4') if transform_matrix is not None else np.eye(4, 4, dtype='f4'))
+        self.__program_rasterize__['transform_matrix'].write(transform_matrix.transpose().copy().astype('f4') if transform_matrix is not None else np.eye(4, 4, dtype='f4'))
 
         # Render
         fbo.use()
@@ -243,7 +301,8 @@ class Context:
         Given an UV image, texturing from the texture map
         """
         assert len(texture.shape) == 3 and 1 <= texture.shape[2] <= 4
-        height, width = uv.shape[0], uv.shape[1]
+        assert uv.shape[2] == 2
+        height, width = uv.shape[:2]
         texture_dtype = map_np_dtype(texture.dtype)
 
         # Create texture, set filter and bind. TODO: min mag filter, mipmap
@@ -330,18 +389,22 @@ class Context:
             vertices_source = np.concatenate([vertices_source, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
             vertices_target = np.concatenate([vertices_target, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
 
-        # Create vertex buffer & index buffer
+        # Create vertex array
         vbo_vert_src = self.__ctx__.buffer(vertices_source.astype('f4'))
         vbo_vert_tgt = self.__ctx__.buffer(vertices_target.astype('f4'))
         ibo = self.__ctx__.buffer(triangle_indices.astype('i4')) if triangle_indices is not None else None
-        
-        # Create vertex array
         if ibo is None:
-            vao = self.__ctx__.vertex_array(self.program_flow, [(vbo_vert_src, '4f4', 'in_vert_src'), (vbo_vert_tgt, '4f4', 'in_vert_tgt')])
+            vao = self.__ctx__.vertex_array(self.__program_flow__, [(vbo_vert_src, '4f4', 'in_vert_src'), (vbo_vert_tgt, '4f4', 'in_vert_tgt')])
         else:
-            vao = self.__ctx__.vertex_array(self.program_flow, [(vbo_vert_src, '4f4', 'in_vert_src'), (vbo_vert_tgt, '4f4', 'in_vert_tgt')], index_buffer=ibo, index_element_size=4)
+            vao = self.__ctx__.vertex_array(self.__program_flow__, [(vbo_vert_src, '4f4', 'in_vert_src'), (vbo_vert_tgt, '4f4', 'in_vert_tgt')], index_buffer=ibo, index_element_size=4)
 
-        # Create textures
+        # Create texture
+        if target_depth_buffer is None:
+            tgt_depth_tex = self.__ctx__.texture((width, height), 1, dtype='f4', data=np.ones((height, width), dtype='f4'))
+        else:
+            tgt_depth_tex = self.__ctx__.texture((width, height), 1, dtype='f4', data=target_depth_buffer)
+
+        # Create frame buffer
         if image_buffer is None:
             image_buffer = np.zeros((height, width, 4), dtype='f4')
         if depth_buffer is None:
@@ -349,18 +412,12 @@ class Context:
         image_tex = self.__ctx__.texture((width, height), 4, dtype='f4', data=image_buffer)
         depth_tex = self.__ctx__.depth_texture((width, height), data=depth_buffer)
 
-        if target_depth_buffer is None:
-            tgt_depth_tex = self.__ctx__.texture((width, height), 1, dtype='f4', data=np.ones((height, width), dtype='f4'))
-        else:
-            tgt_depth_tex = self.__ctx__.texture((width, height), 1, dtype='f4', data=target_depth_buffer)
-
-        # Create frame buffer
         fbo = self.__ctx__.framebuffer(color_attachments=[image_tex], depth_attachment=depth_tex)
         
         # Set uniforms and bind texture
-        self.program_flow['threshold'] = threshold
-        self.program_flow['transform_matrix_src'].write(transform_matrix_source.transpose().copy().astype('f4') if transform_matrix_source is not None else np.eye(4, 4, dtype='f4'))
-        self.program_flow['transform_matrix_tgt'].write(transform_matrix_target.transpose().copy().astype('f4') if transform_matrix_target is not None else np.eye(4, 4, dtype='f4'))
+        self.__program_flow__['threshold'] = threshold
+        self.__program_flow__['transform_matrix_src'].write(transform_matrix_source.transpose().copy().astype('f4') if transform_matrix_source is not None else np.eye(4, 4, dtype='f4'))
+        self.__program_flow__['transform_matrix_tgt'].write(transform_matrix_target.transpose().copy().astype('f4') if transform_matrix_target is not None else np.eye(4, 4, dtype='f4'))
         tgt_depth_tex.use(location=0)
 
         # Render
@@ -389,15 +446,74 @@ class Context:
 
         return image_buffer, depth_buffer
     
-    def warp_image_by_flow(self, source_image: np.ndarray, source_mask: np.ndarray, flow: np.ndarray):
-        # TODO
-        assert source_image.shape[:2] == flow.shape[:2]
-        width, height = source_image.shape[1], source_image.shape[0]
-        image_dtype = map_np_dtype(source_image.dtype)
-        source_image_tex = self.__ctx__.texture((width, height), 4, dtype=image_dtype, data=source_image)
-        
-        pass
+    def warp_image_3d(self, image: np.ndarray, pixel_positions: np.ndarray, transform_matrix: np.ndarray = None, alpha_blend: bool = False):
+        assert len(image.shape) == 3 and len(pixel_positions.shape) == 3
+        height, width, n_channels = image.shape
+        assert image.shape[:2] == pixel_positions.shape[:2]
+        assert 1 <= n_channels <= 4
+        assert 0 <= pixel_positions.shape[1] <= 4
 
+        image_dtype = map_np_dtype(image.dtype)
+        
+        # Pad pixel_positions
+        if pixel_positions.shape[2] == 3:
+            pixel_positions = np.concatenate([pixel_positions, np.ones((height, width, 1))], axis=2)
+        elif pixel_positions.shape[2] == 2:
+            pixel_positions = np.concatenate([pixel_positions, np.zeros((height, width, 1)), np.ones((height, width, 1))], axis=2)
+
+        # Create vertex array
+        im_uv, im_indices = image_mesh(width, height)
+        vbo_uv = self.__ctx__.buffer(im_uv.astype('f4'))
+        ibo = self.__ctx__.buffer(triangulate(im_indices).astype('i4'))
+        vao = self.__ctx__.vertex_array(self.__program_warp__, [(vbo_uv, '2f4', 'in_uv')], index_buffer=ibo, index_element_size=4)
+
+        # Create texture
+        pixel_positions_tex = self.__ctx__.texture((width, height), 4, dtype='f4', data=pixel_positions.astype('f4'))
+        image_tex = self.__ctx__.texture((width, height), n_channels, dtype=image_dtype, data=image)
+
+        # Create framebuffer
+        rb = self.__ctx__.renderbuffer((width, height), 4, dtype=image_dtype)
+        depth_tex = self.__ctx__.depth_texture((width, height))
+        fbo = self.__ctx__.framebuffer(color_attachments=[rb], depth_attachment=depth_tex)
+
+        # Set transform matrix
+        self.__program_warp__['transform_matrix'].write(transform_matrix.transpose().copy().astype('f4') if transform_matrix is not None else np.eye(4, 4, dtype='f4'))
+
+        # Render
+        fbo.use()
+        fbo.viewport = (0, 0, width, height)
+        self.__ctx__.depth_func = '<'
+        self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
+        if alpha_blend:
+            self.__ctx__.enable(self.__ctx__.BLEND)
+        else:
+            self.__ctx__.disable(self.__ctx__.BLEND)
+        pixel_positions_tex.use(location=0)
+        image_tex.use(location=1)
+        vao.render(moderngl.TRIANGLES)
+        self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
+
+        # Read result
+        image_buffer = np.frombuffer(fbo.read(components=4, attachment=0, dtype=image_dtype), dtype=image_dtype).reshape((height, width, 4))
+
+        # Release
+        vao.release()
+        vbo_uv.release()
+        ibo.release()
+        fbo.release()
+        rb.release()
+        depth_tex.release()
+
+        return image_buffer[:n_channels]
+
+    def warp_image_by_flow(self, image: np.ndarray, flow: np.ndarray, occlusion_mask: np.ndarray = None, alpha_blend: bool = False):
+        assert image.shape[:2] == flow.shape[:2]
+        assert flow.shape[2] == 2
+        height, width, n_channels = image.shape
+        assert 1 <= n_channels <= 4
+        pixel_positions = np.concatenate([image_uv(width, height), -occlusion_mask.astype(float), np.ones((height, width, 1))])
+        return self.warp_image_3d(image, pixel_positions, alpha_blend=alpha_blend)
+        
 
 # camera_matrix = np.array([
 #     [1., 0., 0., 0.],
