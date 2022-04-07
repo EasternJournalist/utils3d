@@ -147,7 +147,7 @@ class Context:
             uniform sampler2D tex;
 
             void main() {
-                flow = texture(tex, uv);
+                color = texture(tex, uv);
             }
             '''
         )
@@ -446,12 +446,12 @@ class Context:
 
         return image_buffer, depth_buffer
     
-    def warp_image_3d(self, image: np.ndarray, pixel_positions: np.ndarray, transform_matrix: np.ndarray = None, alpha_blend: bool = False):
+    def warp_image_3d(self, image: np.ndarray, pixel_positions: np.ndarray, transform_matrix: np.ndarray = None, interpolation: Literal['nearest', 'linear'] = 'linear', alpha_blend: bool = False):
         assert len(image.shape) == 3 and len(pixel_positions.shape) == 3
         height, width, n_channels = image.shape
         assert image.shape[:2] == pixel_positions.shape[:2]
         assert 1 <= n_channels <= 4
-        assert 0 <= pixel_positions.shape[1] <= 4
+        assert 1 <= pixel_positions.shape[2] <= 4
 
         image_dtype = map_np_dtype(image.dtype)
         
@@ -469,8 +469,12 @@ class Context:
 
         # Create texture
         pixel_positions_tex = self.__ctx__.texture((width, height), 4, dtype='f4', data=pixel_positions.astype('f4'))
+        pixel_positions_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
         image_tex = self.__ctx__.texture((width, height), n_channels, dtype=image_dtype, data=image)
-
+        if interpolation == 'linear':
+            image_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        elif interpolation == 'nearest':
+            image_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
         # Create framebuffer
         rb = self.__ctx__.renderbuffer((width, height), 4, dtype=image_dtype)
         depth_tex = self.__ctx__.depth_texture((width, height))
@@ -481,6 +485,7 @@ class Context:
 
         # Render
         fbo.use()
+        fbo.clear()
         fbo.viewport = (0, 0, width, height)
         self.__ctx__.depth_func = '<'
         self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
@@ -492,7 +497,7 @@ class Context:
         image_tex.use(location=1)
         vao.render(moderngl.TRIANGLES)
         self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
-
+        
         # Read result
         image_buffer = np.frombuffer(fbo.read(components=4, attachment=0, dtype=image_dtype), dtype=image_dtype).reshape((height, width, 4))
 
@@ -504,7 +509,7 @@ class Context:
         rb.release()
         depth_tex.release()
 
-        return image_buffer[:n_channels]
+        return image_buffer[:, :, :n_channels]
 
     def warp_image_by_flow(self, image: np.ndarray, flow: np.ndarray, occlusion_mask: np.ndarray = None, alpha_blend: bool = False):
         assert image.shape[:2] == flow.shape[:2]
@@ -512,7 +517,7 @@ class Context:
         height, width, n_channels = image.shape
         assert 1 <= n_channels <= 4
         uv = image_uv(width, height)
-        pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(float), np.ones((height, width, 1))])
+        pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -0 * occlusion_mask.astype(float).reshape((height, width, 1)), np.ones((height, width, 1))], axis=2)
         return self.warp_image_3d(image, pixel_positions, alpha_blend=alpha_blend)
         
 
