@@ -1,5 +1,5 @@
-# rasterizer
- Rasterize with the least efforts for researchers. 
+# utils3d
+ Rasterize and do image-based 3D transforms with the least efforts for researchers. Code fast and run fast. 
 ## Requirements
 * moderngl  
   * ``` pip install moderngl ```
