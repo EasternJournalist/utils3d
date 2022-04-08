@@ -1,9 +1,8 @@
 # utils3d
  Rasterize and do image-based 3D transforms with the least efforts for researchers. Code fast and run fast. 
 ## Requirements
-* moderngl  
-  * ``` pip install moderngl ```
-
+* numpy ```pip install numpy```
+* moderngl ``` pip install moderngl ```
 ## How to rasterize
 At first, initialize a OpenGL context, for either window display or a standalone context without any display device. (TODO in future: default context)
 
@@ -12,15 +11,17 @@ ctx = rasterizer.Context()
 ```
 The two functions the most probably you would like to use
 
-* `ctx.rasterize(...)` 
+* `ctx.rasterize(...)`: rasterize triangle vertex attributes.
   
-* `ctx.texture(uv, texture)`
+* `ctx.texture(uv, texture)`: sample texture by a UV image. Exactly the same as grid sample, but an OpenGL shader implementation.
 
 Some other functions that could be helpful for certain purposes
 
-* `ctx.render_flow(...)`
+* `ctx.render_flow(...)`: render an optical flow image given source and target geometry.
+
+* `ctx.warp_image_3d(image, pixel_positions, transform_matrix)`
   
-* `ctx.warp_image_by_flow(source_image, flow)`
+* `ctx.warp_image_by_flow(image, flow, occlusion_mask)`
 
 ## Useful tool functions
 

@@ -505,6 +505,8 @@ class Context:
         vao.release()
         vbo_uv.release()
         ibo.release()
+        pixel_positions_tex.release()
+        image_tex.release()
         fbo.release()
         rb.release()
         depth_tex.release()
@@ -517,33 +519,5 @@ class Context:
         height, width, n_channels = image.shape
         assert 1 <= n_channels <= 4
         uv = image_uv(width, height)
-        pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -0 * occlusion_mask.astype(float).reshape((height, width, 1)), np.ones((height, width, 1))], axis=2)
+        pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(float).reshape((height, width, 1)) * 1e-2, np.ones((height, width, 1))], axis=2)
         return self.warp_image_3d(image, pixel_positions, alpha_blend=alpha_blend)
-        
-
-# camera_matrix = np.array([
-#     [1., 0., 0., 0.],
-#     [0., 1., 0., 0.],
-#     [0., 0., 1., 2.],
-#     [0., 0., 0., 1.]
-# ])
-
-# from shapes import cube
-# vertices, indices = cube()
-
-# ctx = Context()
-
-# start = time.time()
-# img_flow, depth = ctx.rasterize_flow(320, 320, 
-#     vertices, 
-#     vertices + np.array([[1., 1., 0.]]), 
-#     triangle_indices=triangulate(indices.reshape((-1, 4))),
-#     transform_matrix=perspective_from_image(np.pi / 2., 320, 320, 0.01, 100.) @ np.linalg.inv(camera_matrix)
-# )
-
-# #uv = image_uv(10, 10)
-# #print(ctx.texture(uv, np.linspace(1, 100, 100).reshape((10, 10, 1)).astype('f4'))[:, :, 0])
-# print(time.time() - start)
-
-# from PIL import Image
-# Image.fromarray(np.abs(img_flow * 255).astype(np.uint8)).show()
