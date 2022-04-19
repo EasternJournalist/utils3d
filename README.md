@@ -7,7 +7,7 @@
 At first, initialize a OpenGL context, for either window display or a standalone context without any display device. (TODO in future: default context)
 
 ```
-ctx = rasterizer.Context()
+ctx = utils3d.Context()
 ```
 The two functions the most probably you would like to use
 

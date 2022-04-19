@@ -19,15 +19,12 @@ def map_np_dtype(dtype) -> str:
         return 'f8'
 
 class Context:
-    def __init__(self):
+    def __init__(self, standalone: bool = True, backend: str = None):
         # TODO: create context
-        try:
-            self.__ctx__ = moderngl.create_context()
-        except:
-            try:
-                self.__ctx__ = moderngl.create_standalone_context()
-            except:
-                raise Exception("Fail to create context")
+        if backend is None:
+            self.__ctx__ = moderngl.create_context(standalone=standalone)
+        else:
+            self.__ctx__ = moderngl.create_context(standalone=standalone, backend=backend)
 
         self.__program_rasterize__ = self.__ctx__.program(
             vertex_shader='''
