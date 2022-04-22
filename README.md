@@ -26,7 +26,7 @@ ctx = utils3d.Context()                                 # Recommanded for a nest
 ctx = utils3d.Context(standalone=True)                  # Recommanded for a standalone python program. The machine must have a display device (virtual display like X11 is also okay)
 ctx = utils3d.Context(standalone=True, backend='egl')   # Recommanded for a program running on a headless linux server (without any display device)
 ```
-The two functions the most probably you would like to use
+The functions the most probably you would like to use
 
 * `ctx.rasterize(...)`: rasterize trianglular mesh with vertex attributes.
 * `ctx.texture(uv, texture)`: sample texture by a UV image. Exactly the same as grid sample, but an OpenGL shader implementation.
