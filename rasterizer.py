@@ -15,8 +15,6 @@ def map_np_dtype(dtype) -> str:
         return 'f2'
     elif dtype == np.float32:
         return 'f4'
-    elif dtype == np.float64:
-        return 'f8'
 
 class Context:
     def __init__(self, standalone: bool = True, backend: str = None):
@@ -196,27 +194,25 @@ class Context:
         alpha_blend: bool = False,
         cull_backface: bool = False
     ):
-        '''
+        """
         Rasterize triangles onto image with attributes attached to each vertex.\n
-        ## Parameters
 
-        `width` : Image width\n
-        `height`: Image height\n
-        `vertices`: Numpy array of shape `[N, M]`, `M` = 2, 3 or 4. Vertex positions. `transform_matrix` can be applied convert vertex positions to clip space. 
-            If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`.
-            Note the data type will always be converted to `float32`.\n
-        `attributes`: Numpy array of shape `[N, L]`, `L` = 1, 2, 3 or 4. Variouse Attribtues attached to each vertex. The output image data type will be the same as that of attributes.\n
-        `triangle_indices`: Numpy array of shape `[T, 3]`. Vertex indices of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help.
-        `transform_matrix`: Numpy array of shape `[4, 4]`. Row major matrix. Identity matrix by default if not provided. Note the data type will always be converted to `float32`.\n
-        `image_buffer`: Numpy array of shape [height, width, 4]. The initial image to draw on. By default the image is initialized with zeros.\n
-        `depth_buffer`: Numpy array of shape [height, width]. The initial depth to draw on. By default the depth is initialized with ones.\n
+        Args:
+            width (int): result image width
+            height (int): result image height
+            vertices (np.ndarray): Vertex positions of shape (N, M), M = 2, 3 or 4. `transform_matrix` can be applied convert vertex positions to clip space. If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`. Note the dtype will always be converted to `float32`.
+            attributes (np.ndarray): Vertex attrubutes shape shape (N, C), C = 1, 2, 3 or 4. 
+            triangle_indices (np.ndarray): Triangle vertices
+            transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
+            image_buffer (np.ndarray, optional): The initial image to draw on. By default the image is initialized with zeros.
+            depth_buffer (np.ndarray, optional): The initial depth to draw on. By default the depth is initialized with ones (infinitely far).
+            alpha_blend (bool, optional): whether to enable alpha blend. Defaults to False.
+            cull_backface (bool, optional): whether to enable culling backface. Defaults to False.
 
-        ## Returns
-
-        `image_buffer`: Numpy array of shape `[height, width, 4]`. The rendering result. The first M channels corresponds to M channels of attributes. 
-            If M is less than 4, the 3rd channel will be filled with zero and the 4th channel will be filled with 1. This makes it convenient to get the mask from the 4th channel.\n
-        `depth_buffer`: Numpy array of shape `[height, width]`. The depth buffer in window space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
-        '''
+        Returns:
+            image_buffer (np.ndarray): shape (height, width, 4). The rendering result. The first M channels corresponds to M channels of attributes. If M is less than 4, the 3rd channel will be filled with zero and the 4th channel will be filled with 1. This makes it convenient to get the mask from the 4th channel.\n
+            depth_buffer (np.ndarray): shape (height, width). The depth buffer in screen space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
+        """
         assert len(vertices.shape) == 2 and len(attributes.shape) == 2
         assert vertices.shape[0] == attributes.shape[0]
         assert 2 <= vertices.shape[1] <= 4
@@ -332,6 +328,126 @@ class Context:
 
         return image_buffer[:, :, :texture.shape[2]]
 
+    def rasterize_texture(self, 
+        width: int,
+        height: int,
+        vertices: np.ndarray, 
+        vertices_uv: np.ndarray, 
+        texture: np.ndarray, 
+        triangle_indices: np.ndarray = None,
+        transform_matrix: np.ndarray = None, 
+        interpolation: Literal['nearest', 'linear'] = 'linear', 
+        image_buffer: np.ndarray = None, 
+        depth_buffer: np.ndarray = None,
+        alpha_blend: bool = False,
+        cull_backface: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Rasterize a triagular mesh with texture
+
+        Args:
+            width (int): result image width
+            height (int): result image height
+            vertices (np.ndarray): vertex positions of shape (N, M), `M` = 2, 3 or 4. `transform_matrix` can be applied convert vertex positions to clip space. If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`. Note the dtype will always be converted to `float32`.
+            vertices_uv (np.ndarray): vertices UV texture coordinates fo shape (N, 2). Note the dtype will always be converted to `float32`.
+            triangle_indices (np.ndarray): triangles' vertices indices of shape (T, 3). 
+            texture (np.ndarray): The texture image
+            transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
+            interpolation (Literal[&#39;nearest&#39;, &#39;linear&#39;], optional): texture interpolation method. Defaults to 'linear'.
+            image_buffer (np.ndarray, optional): The initial image to draw on. By default the image is initialized with zeros.
+            depth_buffer (np.ndarray, optional): The initial depth to draw on. By default the depth is initialized with ones (infinitely far).
+            alpha_blend (bool, optional): whether to enable alpha blend. Defaults to False.
+            cull_backface (bool, optional): whether to enable culling backface. Defaults to False.
+
+        Returns:
+            image_buffer (np.ndarray): shape (height, width, 4). The rendering result. The first M channels corresponds to M channels of attributes. If M is less than 4, the 3rd channel will be filled with zero and the 4th channel will be filled with 1. This makes it convenient to get the mask from the 4th channel.\n
+            depth_buffer (np.ndarray): shape (height, width). The depth buffer in screen space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
+        """
+        # Check data type
+        assert len(vertices.shape) == 2 and len(vertices_uv.shape) == 2 and len(triangle_indices.shape) == 2 and len(texture.shape) == 3
+        assert vertices.shape[0] == vertices_uv.shape[0]
+        assert 2 <= vertices.shape[1] <= 4
+        assert 1 <= texture.shape[2] <= 4
+        if image_buffer is not None:
+            assert image_buffer.shape[0] == height and image_buffer.shape[1] == width
+        if depth_buffer is not None:
+            assert depth_buffer.dtype == np.float32 and len(depth_buffer.shape) == 2 and depth_buffer.shape[0] == height and depth_buffer.shape[1] == width 
+
+        # Pad vertices
+        n_vertices = vertices.shape[0]
+        if vertices.shape[1] == 3:
+            vertices = np.concatenate([vertices, np.ones((n_vertices, 1))], axis=1)
+        elif vertices.shape[1] == 2:
+            vertices = np.concatenate([vertices, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
+
+        # Pad texture
+        tex_dsize = texture.shape[2]
+        tex_dtype = map_np_dtype(texture.dtype)
+        if not tex_dtype:
+            raise TypeError('attribute dtype unsupported')
+        if tex_dsize < 4:
+            texture = np.concatenate([texture, np.ones((*texture.shape[:2], 4 - tex_dsize), dtype=tex_dtype)], axis=1)
+
+        # Create vertex array
+        vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
+        vbo_uv = self.__ctx__.buffer(vertices_uv.astype('f4'))
+        ibo = self.__ctx__.buffer(triangle_indices.astype('i4')) if triangle_indices is not None else None
+        if ibo is None:
+            vao = self.__ctx__.vertex_array(self.__program_rasterize_texture__, [(vbo_vert, '4f4', 'in_vert'), (vbo_uv, f'2f4', 'in_uv')])
+        else:
+            vao = self.__ctx__.vertex_array(self.__program_rasterize_texture__, [(vbo_vert, '4f4', 'in_vert'), (vbo_uv, f'2f4', 'in_uv')], index_buffer=ibo, index_element_size=4)
+
+        # Create texture
+        texture_tex = self.__ctx__.texture((texture.shape[1], texture.shape[0]), 4, dtype=tex_dtype, data=texture)
+        if interpolation == 'linear':
+            texture_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        elif interpolation == 'nearest':
+            texture_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+
+        # Create frame buffer
+        if image_buffer is None:
+            image_buffer = np.zeros((height, width, 4), dtype=tex_dtype)
+        if depth_buffer is None:
+            depth_buffer = np.ones((height, width), dtype='f4')
+        image_tex = self.__ctx__.texture((width, height), 4, dtype=tex_dtype, data=image_buffer)
+        depth_tex = self.__ctx__.depth_texture((width, height), data=depth_buffer)
+        fbo = self.__ctx__.framebuffer(color_attachments=[image_tex], depth_attachment=depth_tex)
+
+        # Set transform matrix
+        self.__program_rasterize_texture__['transform_matrix'].write(transform_matrix.transpose().copy().astype('f4') if transform_matrix is not None else np.eye(4, 4, dtype='f4'))
+
+        # Render
+        fbo.use()
+        fbo.viewport = (0, 0, width, height)
+        self.__ctx__.depth_func = '<'
+        self.__ctx__.enable(self.__ctx__.DEPTH_TEST)
+        if cull_backface:
+            self.__ctx__.enable(self.__ctx__.CULL_FACE)
+        else:
+            self.__ctx__.disable(self.__ctx__.CULL_FACE)
+        if alpha_blend:
+            self.__ctx__.enable(self.__ctx__.BLEND)
+        else:
+            self.__ctx__.disable(self.__ctx__.BLEND)
+        texture_tex.use(location=0)
+        vao.render(moderngl.TRIANGLES)
+        self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
+
+        # Read result
+        image_tex.read_into(image_buffer)
+        depth_tex.read_into(depth_buffer)
+
+        # Release
+        vao.release()
+        vbo_vert.release()
+        vbo_uv.release()
+        ibo.release()
+        texture_tex.release()
+        fbo.release()
+        image_tex.release()
+        depth_tex.release()
+
+        return image_buffer, depth_buffer
+
     def render_flow(self, 
         width: int, 
         height: int, 
@@ -345,28 +461,29 @@ class Context:
         image_buffer: np.ndarray = None, 
         depth_buffer: np.ndarray = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        '''
-        Render optical flow. \n
-        ## Parameters
+        """Render optical flow. 
 
-        `width` : Image width\n
-        `height`: Image height\n
-        `triangle_indices`: Numpy array of shape `[T, 3]`. Vertex indices of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help.
-        `transform_matrix`: Numpy array of shape `[4, 4]`. Row major matrix. Identity matrix by default if not provided. Note the data type will always be converted to `float32`.\n
-        `image_buffer`: Numpy array of shape [height, width, 4]. The initial image to draw on. By default the image is initialized with zeros.\n
-        `depth_buffer`: Numpy array of shape [height, width]. The initial depth to draw on. By default the depth is initialized with ones.\n
+        Args:
+            width (int): image width
+            height (int): image height
+            vertices_source (np.ndarray): source vertices positions
+            vertices_target (np.ndarray): target vertices positions
+            triangle_indices (np.ndarray, optional): shape (T, 3). Vertex indices of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help. Defaults to None.
+            transform_matrix_source (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
+            transform_matrix_target (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
+            target_depth_buffer (np.ndarray, optional): _description_. Defaults to None.
+            threshold (float, optional): _description_. Defaults to 1e-4.
+            image_buffer (np.ndarray, optional): _description_. Defaults to None.
+            depth_buffer (np.ndarray, optional): _description_. Defaults to None.
 
-        ## Returns
-        `flow_image`: Numpy array of shape `[height, width, 4]`. The first two channels are UV flow in image space. The third channel is the depth flow in linear depth space. The last channel is the occulusion mask, where ones indicate visibility in target image.
-            The flow map in normalized image space ranging [0, 1]. Note that in OpenGL the origin of image space (i.e. viewport) is the left bottom corner. 
-            If you need to display or save the image through OpenCV or Pillow, you will have to flip the Y axis of both the flow vector and image data array.
-            
-            >>> opencv_flow_image = flow_image[::-1]    # Flip image data
-            >>> opencv_flow_image[:, :, 1] *= -1        # Flip flow vector
-
-        `depth`: Numpy array of shape `[height, width]`. The depth buffer in window space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
-
-        ''' 
+        Returns:
+            image_buffer (np.ndarray): shape (height, width, 4). The first two channels are UV flow in image space. The third channel is the depth flow in linear depth space. The last channel is the occulusion mask, where ones indicate visibility in target image.
+                The flow map in normalized image space ranging [0, 1]. Note that in OpenGL the origin of screen space (i.e. viewport) is the left bottom corner. 
+                If you need to display or save the image through OpenCV or Pillow, you will have to flip the Y axis of both the flow vector and image data array.
+                >>> opencv_flow_image = flow_image[::-1]    # Flip image data
+                >>> opencv_flow_image[:, :, 1] *= -1        # Flip flow vector
+            depth_buffer (np.ndarray): shape (height, width). The depth buffer in screen space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
+        """
         assert len(vertices_source.shape) == 2 and len(vertices_target.shape) == 2
         assert vertices_source.shape == vertices_target.shape
         assert 2 <= vertices_source.shape[1] <= 4
@@ -472,6 +589,7 @@ class Context:
             image_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
         elif interpolation == 'nearest':
             image_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+
         # Create framebuffer
         rb = self.__ctx__.renderbuffer((width, height), 4, dtype=image_dtype)
         depth_tex = self.__ctx__.depth_texture((width, height))
@@ -510,11 +628,26 @@ class Context:
 
         return image_buffer[:, :, :n_channels]
 
-    def warp_image_by_flow(self, image: np.ndarray, flow: np.ndarray, occlusion_mask: np.ndarray = None, alpha_blend: bool = False):
+    def warp_image_by_flow(self, image: np.ndarray, flow: np.ndarray, occlusion_mask: np.ndarray = None, alpha_blend: bool = False) -> np.ndarray:
+        """ Warp image by flow map. 
+
+        Args:
+            image (np.ndarray): image to warp
+            flow (np.ndarray): flow map in image UV space.
+            occlusion_mask (np.ndarray, optional): occulsion mask. Zeros or false indicates occluded. Defaults to None.
+            alpha_blend (bool, optional): whether use alpha blend. Defaults to False.
+
+        Returns:
+            warped_image (np.ndarray): shape (height, width, channels)
+        """
         assert image.shape[:2] == flow.shape[:2]
         assert flow.shape[2] == 2
         height, width, n_channels = image.shape
         assert 1 <= n_channels <= 4
         uv = image_uv(width, height)
-        pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(float).reshape((height, width, 1)) * 1e-2, np.ones((height, width, 1))], axis=2)
+        flow = flow.astype(np.float32)
+        if occlusion_mask is not None:
+            pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(np.float32).reshape((height, width, 1)) * 1e-2, np.ones((height, width, 1))], axis=2)
+        else:
+            pixel_positions = np.concatenate([(uv + flow) * 2 - 1, np.zeros((height, width, 1), dtype=np.float32), np.ones((height, width, 1), dtype=np.float32)], axis=2)
         return self.warp_image_3d(image, pixel_positions, alpha_blend=alpha_blend)
