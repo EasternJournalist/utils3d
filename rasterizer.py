@@ -1,4 +1,4 @@
-from typing import Literal, Tuple
+from typing import Tuple
 import numpy as np
 import moderngl
 import time
@@ -210,7 +210,7 @@ class Context:
             cull_backface (bool, optional): whether to enable culling backface. Defaults to False.
 
         Returns:
-            image_buffer (np.ndarray): shape (height, width, 4). The rendering result. The first M channels corresponds to M channels of attributes. If M is less than 4, the 3rd channel will be filled with zero and the 4th channel will be filled with 1. This makes it convenient to get the mask from the 4th channel.\n
+            image_buffer (np.ndarray): shape (height, width, 4). The rendering result. The first M channels corresponds to M channels of attributes. If M is less than 4, the extra channels will be filled ones in the rendered areas. This makes it convenient to get the mask from the 4th channel.\n
             depth_buffer (np.ndarray): shape (height, width). The depth buffer in screen space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
         """
         assert len(vertices.shape) == 2 and len(attributes.shape) == 2
@@ -289,7 +289,7 @@ class Context:
 
         return image_buffer, depth_buffer
 
-    def texture(self, uv: np.ndarray, texture: np.ndarray, interpolation: Literal['nearest', 'linear'] = 'linear', wrap: Literal['clamp', 'repeat'] = 'clamp'):
+    def texture(self, uv: np.ndarray, texture: np.ndarray, interpolation: str= 'linear', wrap: str = 'clamp'):
         """
         Given an UV image, texturing from the texture map
         """
@@ -336,7 +336,7 @@ class Context:
         texture: np.ndarray, 
         triangle_indices: np.ndarray = None,
         transform_matrix: np.ndarray = None, 
-        interpolation: Literal['nearest', 'linear'] = 'linear', 
+        interpolation: str = 'linear', 
         image_buffer: np.ndarray = None, 
         depth_buffer: np.ndarray = None,
         alpha_blend: bool = False,
@@ -560,7 +560,7 @@ class Context:
 
         return image_buffer, depth_buffer
     
-    def warp_image_3d(self, image: np.ndarray, pixel_positions: np.ndarray, transform_matrix: np.ndarray = None, interpolation: Literal['nearest', 'linear'] = 'linear', alpha_blend: bool = False):
+    def warp_image_3d(self, image: np.ndarray, pixel_positions: np.ndarray, transform_matrix: np.ndarray = None, interpolation: str = 'linear', alpha_blend: bool = False):
         assert len(image.shape) == 3 and len(pixel_positions.shape) == 3
         height, width, n_channels = image.shape
         assert image.shape[:2] == pixel_positions.shape[:2]
