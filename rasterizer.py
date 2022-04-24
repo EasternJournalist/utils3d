@@ -385,7 +385,7 @@ class Context:
         if not tex_dtype:
             raise TypeError('attribute dtype unsupported')
         if tex_dsize < 4:
-            texture = np.concatenate([texture, np.ones((*texture.shape[:2], 4 - tex_dsize), dtype=tex_dtype)], axis=1)
+            texture = np.concatenate([texture, np.ones((*texture.shape[:2], 4 - tex_dsize), dtype=tex_dtype)], axis=-1)
 
         # Create vertex array
         vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
