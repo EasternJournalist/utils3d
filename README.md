@@ -7,7 +7,7 @@ It could be helpful when you want to:
 * warp an image as a 2D or 3D mesh (eg. optical-flow-based warping)
 * render a optical flow image
 
-This tool sets helps you achieve it in a few lines.
+This tool sets could help you achieve them in a few lines.
 
 It is **NOT** what you are looking for when you want:
 
