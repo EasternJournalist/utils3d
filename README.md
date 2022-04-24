@@ -1,5 +1,20 @@
 # utils3d
- Rasterize and do image-based 3D transforms with the least efforts for researchers. Based on numpy and OpenGL.
+Rasterize and do image-based 3D transforms with the least efforts for researchers. Based on numpy and OpenGL.
+
+It could be helpful when you want to:
+
+* rasterize a simple mesh but don't want get into OpenGL chores
+* warp an image as a 2D or 3D mesh (eg. optical-flow-based warping)
+* render a optical flow image
+
+This tool sets helps you achieve it in a few lines.
+
+It is **NOT** what you are looking for when you want:
+
+* a differentiable rasterization tool. You should turn to `nvdiffrast`, `pytorch3d`, `SoftRas`  etc.
+* a real-time graphics application. Though as fast as it could be, the expected performance of `util3d` rasterization is to be around 20 ~ 100 ms. It is not expected to fully make use of GPU performance because of the overhead of buffering every time calling rasterzation. If the best performance withou any overhead is demanded, You will have to manage buffer objects like VBO, VAO and FBO. I personally recommand `moderngl` as an alternative python OpenGL library. 
+
+
 ## Install
 
 The folder of repo is a package. Clone the repo.
