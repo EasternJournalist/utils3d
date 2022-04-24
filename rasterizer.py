@@ -1,8 +1,8 @@
 from typing import Tuple
 import numpy as np
 import moderngl
-import time
-from .utils import *
+
+from . import utils
 
 def map_np_dtype(dtype) -> str:
     if dtype == int:
@@ -187,7 +187,7 @@ class Context:
         height: int, 
         vertices: np.ndarray, 
         attributes: np.ndarray, 
-        triangle_indices: np.ndarray = None,  
+        triangle_faces: np.ndarray = None,  
         transform_matrix: np.ndarray = None, 
         image_buffer: np.ndarray = None, 
         depth_buffer: np.ndarray = None,
@@ -202,7 +202,7 @@ class Context:
             height (int): result image height
             vertices (np.ndarray): Vertex positions of shape (N, M), M = 2, 3 or 4. `transform_matrix` can be applied convert vertex positions to clip space. If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`. Note the dtype will always be converted to `float32`.
             attributes (np.ndarray): Vertex attrubutes shape shape (N, C), C = 1, 2, 3 or 4. 
-            triangle_indices (np.ndarray): Triangle vertices
+            triangle_faces (np.ndarray): Triangle vertices
             transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             image_buffer (np.ndarray, optional): The initial image to draw on. By default the image is initialized with zeros.
             depth_buffer (np.ndarray, optional): The initial depth to draw on. By default the depth is initialized with ones (infinitely far).
@@ -225,9 +225,9 @@ class Context:
         # Pad vertices
         n_vertices = vertices.shape[0]
         if vertices.shape[1] == 3:
-            vertices = np.concatenate([vertices, np.ones((n_vertices, 1))], axis=1)
+            vertices = np.concatenate([vertices, np.ones((n_vertices, 1))], axis=-1)
         elif vertices.shape[1] == 2:
-            vertices = np.concatenate([vertices, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
+            vertices = np.concatenate([vertices, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=-1)
 
         # Pad attributes
         attr_size = attributes.shape[1]
@@ -235,12 +235,12 @@ class Context:
         if not attr_dtype:
             raise TypeError('attribute dtype unsupported')
         if attr_size < 4:
-            attributes = np.concatenate([attributes, np.ones((n_vertices, 4 - attr_size), dtype=attr_dtype)], axis=1)
+            attributes = np.concatenate([attributes, np.ones((n_vertices, 4 - attr_size), dtype=attr_dtype)], axis=-1)
 
         # Create vertex array
         vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
         vbo_attr = self.__ctx__.buffer(attributes)
-        ibo = self.__ctx__.buffer(triangle_indices.astype('i4')) if triangle_indices is not None else None
+        ibo = self.__ctx__.buffer(triangle_faces.astype('i4')) if triangle_faces is not None else None
         if ibo is None:
             vao = self.__ctx__.vertex_array(self.__program_rasterize__, [(vbo_vert, '4f4', 'in_vert'), (vbo_attr, f'4{attr_dtype}', 'in_attr')])
         else:
@@ -334,7 +334,7 @@ class Context:
         vertices: np.ndarray, 
         vertices_uv: np.ndarray, 
         texture: np.ndarray, 
-        triangle_indices: np.ndarray = None,
+        triangle_faces: np.ndarray = None,
         transform_matrix: np.ndarray = None, 
         interpolation: str = 'linear', 
         image_buffer: np.ndarray = None, 
@@ -349,7 +349,7 @@ class Context:
             height (int): result image height
             vertices (np.ndarray): vertex positions of shape (N, M), `M` = 2, 3 or 4. `transform_matrix` can be applied convert vertex positions to clip space. If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`. Note the dtype will always be converted to `float32`.
             vertices_uv (np.ndarray): vertices UV texture coordinates fo shape (N, 2). Note the dtype will always be converted to `float32`.
-            triangle_indices (np.ndarray): triangles' vertices indices of shape (T, 3). 
+            triangle_faces (np.ndarray): triangles' vertices faces of shape (T, 3). 
             texture (np.ndarray): The texture image
             transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             interpolation (Literal[&#39;nearest&#39;, &#39;linear&#39;], optional): texture interpolation method. Defaults to 'linear'.
@@ -363,7 +363,7 @@ class Context:
             depth_buffer (np.ndarray): shape (height, width). The depth buffer in screen space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
         """
         # Check data type
-        assert len(vertices.shape) == 2 and len(vertices_uv.shape) == 2 and len(triangle_indices.shape) == 2 and len(texture.shape) == 3
+        assert len(vertices.shape) == 2 and len(vertices_uv.shape) == 2 and len(triangle_faces.shape) == 2 and len(texture.shape) == 3
         assert vertices.shape[0] == vertices_uv.shape[0]
         assert 2 <= vertices.shape[1] <= 4
         assert 1 <= texture.shape[2] <= 4
@@ -375,9 +375,9 @@ class Context:
         # Pad vertices
         n_vertices = vertices.shape[0]
         if vertices.shape[1] == 3:
-            vertices = np.concatenate([vertices, np.ones((n_vertices, 1))], axis=1)
+            vertices = np.concatenate([vertices, np.ones((n_vertices, 1))], axis=-1)
         elif vertices.shape[1] == 2:
-            vertices = np.concatenate([vertices, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
+            vertices = np.concatenate([vertices, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=-1)
 
         # Pad texture
         tex_dsize = texture.shape[2]
@@ -390,7 +390,7 @@ class Context:
         # Create vertex array
         vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
         vbo_uv = self.__ctx__.buffer(vertices_uv.astype('f4'))
-        ibo = self.__ctx__.buffer(triangle_indices.astype('i4')) if triangle_indices is not None else None
+        ibo = self.__ctx__.buffer(triangle_faces.astype('i4')) if triangle_faces is not None else None
         if ibo is None:
             vao = self.__ctx__.vertex_array(self.__program_rasterize_texture__, [(vbo_vert, '4f4', 'in_vert'), (vbo_uv, f'2f4', 'in_uv')])
         else:
@@ -453,7 +453,7 @@ class Context:
         height: int, 
         vertices_source: np.ndarray, 
         vertices_target: np.ndarray, 
-        triangle_indices: np.ndarray = None,  
+        triangle_faces: np.ndarray = None,  
         transform_matrix_source: np.ndarray = None,
         transform_matrix_target: np.ndarray = None, 
         target_depth_buffer: np.ndarray = None,
@@ -468,7 +468,7 @@ class Context:
             height (int): image height
             vertices_source (np.ndarray): source vertices positions
             vertices_target (np.ndarray): target vertices positions
-            triangle_indices (np.ndarray, optional): shape (T, 3). Vertex indices of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help. Defaults to None.
+            triangle_faces (np.ndarray, optional): shape (T, 3). Vertex faces of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help. Defaults to None.
             transform_matrix_source (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             transform_matrix_target (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             target_depth_buffer (np.ndarray, optional): _description_. Defaults to None.
@@ -497,16 +497,16 @@ class Context:
         # Pad vertices
         n_vertices = vertices_source.shape[0]
         if vertices_source.shape[1] == 3:
-            vertices_source = np.concatenate([vertices_source, np.ones((n_vertices, 1))], axis=1)
-            vertices_target = np.concatenate([vertices_target, np.ones((n_vertices, 1))], axis=1)
+            vertices_source = np.concatenate([vertices_source, np.ones((n_vertices, 1))], axis=-1)
+            vertices_target = np.concatenate([vertices_target, np.ones((n_vertices, 1))], axis=-1)
         elif vertices_source.shape[1] == 2:
-            vertices_source = np.concatenate([vertices_source, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
-            vertices_target = np.concatenate([vertices_target, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=1)
+            vertices_source = np.concatenate([vertices_source, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=-1)
+            vertices_target = np.concatenate([vertices_target, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=-1)
 
         # Create vertex array
         vbo_vert_src = self.__ctx__.buffer(vertices_source.astype('f4'))
         vbo_vert_tgt = self.__ctx__.buffer(vertices_target.astype('f4'))
-        ibo = self.__ctx__.buffer(triangle_indices.astype('i4')) if triangle_indices is not None else None
+        ibo = self.__ctx__.buffer(triangle_faces.astype('i4')) if triangle_faces is not None else None
         if ibo is None:
             vao = self.__ctx__.vertex_array(self.__program_flow__, [(vbo_vert_src, '4f4', 'in_vert_src'), (vbo_vert_tgt, '4f4', 'in_vert_tgt')])
         else:
@@ -571,14 +571,14 @@ class Context:
         
         # Pad pixel_positions
         if pixel_positions.shape[2] == 3:
-            pixel_positions = np.concatenate([pixel_positions, np.ones((height, width, 1))], axis=2)
+            pixel_positions = np.concatenate([pixel_positions, np.ones((height, width, 1))], axis=-1)
         elif pixel_positions.shape[2] == 2:
-            pixel_positions = np.concatenate([pixel_positions, np.zeros((height, width, 1)), np.ones((height, width, 1))], axis=2)
+            pixel_positions = np.concatenate([pixel_positions, np.zeros((height, width, 1)), np.ones((height, width, 1))], axis=-1)
 
         # Create vertex array
-        im_uv, im_indices = image_mesh(width, height)
+        im_uv, im_faces = utils.image_mesh(width, height)
         vbo_uv = self.__ctx__.buffer(im_uv.astype('f4'))
-        ibo = self.__ctx__.buffer(triangulate(im_indices).astype('i4'))
+        ibo = self.__ctx__.buffer(utils.triangulate(im_faces).astype('i4'))
         vao = self.__ctx__.vertex_array(self.__program_warp__, [(vbo_uv, '2f4', 'in_uv')], index_buffer=ibo, index_element_size=4)
 
         # Create texture
@@ -644,10 +644,10 @@ class Context:
         assert flow.shape[2] == 2
         height, width, n_channels = image.shape
         assert 1 <= n_channels <= 4
-        uv = image_uv(width, height)
+        uv = utils.image_uv(width, height)
         flow = flow.astype(np.float32)
         if occlusion_mask is not None:
-            pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(np.float32).reshape((height, width, 1)) * 1e-2, np.ones((height, width, 1))], axis=2)
+            pixel_positions = np.concatenate([(uv + flow) * 2 - 1, -occlusion_mask.astype(np.float32).reshape((height, width, 1)) * 1e-2, np.ones((height, width, 1))], axis=-1)
         else:
-            pixel_positions = np.concatenate([(uv + flow) * 2 - 1, np.zeros((height, width, 1), dtype=np.float32), np.ones((height, width, 1), dtype=np.float32)], axis=2)
+            pixel_positions = np.concatenate([(uv + flow) * 2 - 1, np.zeros((height, width, 1), dtype=np.float32), np.ones((height, width, 1), dtype=np.float32)], axis=-1)
         return self.warp_image_3d(image, pixel_positions, alpha_blend=alpha_blend)
