@@ -8,13 +8,13 @@ def to_depth_buffer(linear_depth: np.ndarray, near: float, far: float) -> np.nda
     ndc_depth =(near + far - 2. * near * far / linear_depth) / (far - near)
     return 0.5 * ndc_depth + 0.5
 
-def triangulate(indices: np.ndarray) -> np.ndarray:
-    assert len(indices.shape) == 2
-    if indices.shape[1] == 3:
-        return indices
-    n = indices.shape[1]
+def triangulate(faces: np.ndarray) -> np.ndarray:
+    assert len(faces.shape) == 2
+    if faces.shape[1] == 3:
+        return faces
+    n = faces.shape[1]
     loop_indice = np.stack([np.zeros(n - 2, dtype=int), np.arange(1, n - 1, 1, dtype=int), np.arange(2, n, 1, dtype=int)], axis=1)
-    return indices[:, loop_indice].reshape(-1, 3)
+    return faces[:, loop_indice].reshape(-1, 3)
 
 def perspective_from_image(fov: float, width: int, height: int, near: float, far: float) -> np.ndarray:
     return np.array([
@@ -67,31 +67,67 @@ def image_uv(width: int, height: int) -> np.ndarray:
     return np.concatenate([u[None, :, None].repeat(height, axis=0), v[:, None, None].repeat(width, axis=1)], axis=2)
 
 def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
+    """Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
+
+    Args:
+        width (int): image width
+        height (int): image height
+        mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: _description_
+    """
     if mask is not None:
         assert mask.shape[0] == height and mask.shape[1] == width
         assert mask.dtype == np.bool_
     vertices = image_uv(width, height).reshape((-1, 2))
-    row_indices = np.stack([np.arange(0, width - 1), np.arange(1, width), np.arange(1 + width, 2 * width), np.arange(width, 2 * width - 1)], axis=1)
-    indices = (np.arange(0, (height - 1) * width, width)[:, None, None] + row_indices[None, :, :]).reshape((-1, 4))
+    row_faces = np.stack([np.arange(0, width - 1), np.arange(width, 2 * width - 1), np.arange(1 + width, 2 * width), np.arange(1, width)], axis=1)
+    faces = (np.arange(0, (height - 1) * width, width)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
     if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
-        indices = indices[quad_mask]
-        fewer_indices, inv_map = np.unique(indices, return_inverse=True)
-        indices = inv_map.reshape((-1, 4))
-        vertices = vertices[fewer_indices]
-    return vertices, indices
+        faces = faces[quad_mask]
+        fewer_faces, inv_map = np.unique(faces, return_inverse=True)
+        faces = inv_map.reshape((-1, 4))
+        vertices = vertices[fewer_faces]
+    return vertices, faces
 
 def image_mesh_3d_cv(width: int, height: int, normalized_intrinsic: np.ndarray, linear_depth: np.ndarray, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
-    vertices_uv, indices = image_mesh(width, height, mask)
+    """Get an 3d image mesh following OpenCV transformation convention. (intrinsic-extrincs convention)
+
+    Args:
+        width (int): image width
+        height (int): image height
+        normalized_intrinsic (np.ndarray): shape (3, 3). Normalized camera intrinsic matrix
+        linear_depth (np.ndarray): linear depth in [0, inf)
+        mask (np.ndarray, optional): binary mask of shape (height, width). Defaults to None.
+
+    Returns:
+        vertices (np.ndarray): shape (N, 3). 3d vertex positions. If mask is None, N = height * width
+        faces (np.ndarray): shape (T, 4). Quad mesh face indices. If mask is None, T = (height - 1) * (width - 1)
+    """
+    vertices_uv, faces = image_mesh(width, height, mask)
     vertices_uv_ndc = vertices_uv * 2 - 1
     vertices = (np.concatenate([vertices_uv_ndc, np.ones_like(vertices_uv[:, :1])], axis=1) @ np.linalg.inv(normalized_intrinsic).transpose()) * linear_depth[:, None]
-    return vertices, indices
+    return vertices, faces
 
 def image_mesh_3d_gl(width: int, height: int, perspective: np.ndarray, linear_depth: np.ndarray, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
-    vertices_uv, indices = image_mesh(width, height, mask)
+    """Get an 3d image mesh following OpenCV transformation convention. (view_matrix - projection convention)
+
+    Args:
+        width (int): image width
+        height (int): image height
+        perspective (np.ndarray): shape (4, 4).Pperspective matrix in OpenGL convention
+        linear_depth (np.ndarray): linear depth in [0, inf)
+        mask (np.ndarray, optional): binary mask of shape (height, width). Defaults to None.
+
+    Returns:
+        vertices (np.ndarray): shape (N, 3). 3d vertex positions. If mask is None, N = height * width
+        faces (np.ndarray): shape (T, 4). Quad mesh face indices. If mask is None, T = (height - 1) * (width - 1)
+    """
+    vertices_uv, faces = image_mesh(width, height, mask)
     vertices_xy = (2 * vertices_uv - 1) * linear_depth[:, None] @ np.linalg.inv(perspective[:2, :2]).transpose()
     vertices = np.concatenate([vertices_xy, -linear_depth[:, None]], axis=1)
-    return vertices, indices
+    return vertices, faces
 
 def projection(vertices: np.ndarray, model_matrix: np.ndarray = None, view_matrix: np.ndarray = None, projection_matrix: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
@@ -118,3 +154,40 @@ def projection(vertices: np.ndarray, model_matrix: np.ndarray = None, view_matri
 
     zbuffer = scr_coord[..., 2]
     return scr_coord, zbuffer
+
+def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
+    """Compute face normals of a triangular mesh
+
+    Args:
+        vertices (np.ndarray):  3-dimensional vertices of shape (N, 3)
+        faces (np.ndarray): triangular face indices of shape (T, 3)
+
+    Returns:
+        normals (np.ndarray): face normals of shape (T, 3)
+    """
+    normal = np.cross(vertices[faces[..., 1]] - vertices[faces[..., 0]], vertices[faces[..., 2]] - vertices[faces[..., 0]])
+    normal = np.nan_to_num(normal / np.sum(normal ** 2, axis=-1, keepdims=True) ** 0.5)
+    return normal
+
+def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Compute vertex normals of a triangular mesh by averaging neightboring face normals
+
+    Args:
+        vertices (np.ndarray): 3-dimensional vertices of shape (N, 3)
+        faces (np.ndarray): triangular face indices of shape (T, 3)
+
+    Returns:
+        normals (np.ndarray): vertex normals of shape (N, 3)
+    """
+    face_normal = compute_face_normal(vertices, faces)
+    face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((-1, 3))
+    face_indices = faces.reshape((-1,))
+    vertex_normal = np.zeros_like(vertices)
+    vertex_count = np.zeros(vertices.shape[0], dtype=int)
+    while len(face_normal) > 0:
+        v_id, f_i = np.unique(face_indices, return_index=True)
+        vertex_normal[v_id] += face_normal[f_i]
+        vertex_count[v_id] += 1
+        face_normal = np.delete(face_indices, f_i)
+    vertex_normal = np.nan_to_num(vertex_normal / np.sum(vertex_normal ** 2, axis=-1, keepdims=True) ** 0.5)
+    return vertex_normal

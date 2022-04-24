@@ -22,8 +22,8 @@ At first, one step to initialize a OpenGL context. It depends on your platform a
 ```python
 import utils3d
 
-ctx = utils3d.Context()                                 # Recommanded for a nested python script running in a windowed opengl program to share the OpenGL context, eg. Blender.
-ctx = utils3d.Context(standalone=True)                  # Recommanded for a standalone python program. The machine must have a display device (virtual display like X11 is also okay)
+ctx = utils3d.Context(standalone=True)                 # Recommanded for a standalone python program. The machine must have a display device (virtual display like X11 is also okay)
+ctx = utils3d.Context(standalone=False)                 # Recommanded for a nested python script running in a windowed opengl program to share the OpenGL context, eg. Blender.
 ctx = utils3d.Context(standalone=True, backend='egl')   # Recommanded for a program running on a headless linux server (without any display device)
 ```
 The functions the most probably you would like to use
@@ -42,7 +42,7 @@ Some other functions that could be helpful for certain purposes
 
 * `image_uv(width, height)` : return a numpy array of shape `[height, width, 2]`, the image uv of each pixel. 
 * `image_mesh(width, height, mask=None)` : return a quad mesh connecting all neighboring pixels as vertices. A boolean array of shape `[height, width]` or  `[height, width, 1]` mask is optional. If a mask is provided, only pixels where mask value is `True` are involved in te mesh.
-* `triangulate(indices)` : convert a polygonal mesh into a triangular mesh (naively).
+* `triangulate(faces)` : convert a polygonal mesh into a triangular mesh (naively).
 * `perspective_from_image()`
 * `perspective_from_fov_xy()`
 * `projection()`: project 3D points to 2D following the OpenGL convention (except for using row major matrix)
