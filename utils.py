@@ -46,17 +46,40 @@ def intrinsic_from_fov_xy(fov_x: float, fov_y: float) -> np.ndarray:
         [0., 0., 1.],
     ])
 
-def pixel_to_uv(pixel: np.ndarray, W: int, H: int, revese_h: bool=True) -> np.ndarray:
-    """pixel: pixel coordinrates defined on image space,  x range is (0, W - 1), y range is (0, H - 1)
-    
+def pixel_to_uv(pixel: np.ndarray, W: int, H: int) -> np.ndarray:
     """
-    pixel_x = pixel[..., 0]
-    pixel_y = pixel[..., 1]
-    if revese_h:
-        pixel_y = H - 1 - pixel_y
+    Args:
+        pixel(np.ndarray): pixel coordinrates defined on image space,  x range is (0, W - 1), 
+        y range is (0, H - 1)
+        W (int): image width
+        H (int): image height
+    Returns:
+        uv(np.ndarray): pixel coordinrates defined on uv space, the range is (0, 1)
+    """
+    pixel_x = pixel[..., 0].copy()
+    pixel_y = pixel[..., 1].copy()
     u = (pixel_x + 0.5) / W
     v = (pixel_y + 0.5) / H
+
     return np.stack([u, v], axis=-1)
+
+def pixel_to_ndc(pixel: np.ndarray, W: int, H: int) -> np.ndarray:
+    """
+    Args:
+        pixel(np.ndarray): pixel coordinrates defined on image space,  x range is (0, W - 1), 
+        y range is (0, H - 1)
+        W (int): image width
+        H (int): image height
+    Returns:
+        ndc(np.ndarray): pixel coordinrates defined on ndc space, the range is (-1, 1)
+    """
+    pixel_x = pixel[..., 0].copy()
+    pixel_y = pixel[..., 1].copy()
+    pixel_y = H - 1 - pixel_y
+    x = (pixel_x + 0.5) / W
+    y = (pixel_y + 0.5) / H
+
+    return 2 * np.stack([x, y], axis=-1) - 1
 
 def image_uv(width: int, height: int) -> np.ndarray:
     """Get image space UV grid, ranging in [0, 1]. 
