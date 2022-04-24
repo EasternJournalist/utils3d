@@ -1,8 +1,8 @@
 # utils3d
- Rasterize and do image-based 3D transforms with the least efforts for researchers. Code fast and run fast. 
+ Rasterize and do image-based 3D transforms with the least efforts for researchers. Based on numpy and OpenGL.
 ## Install
 
-Clone the repo.
+The folder of repo is a package. Clone the repo.
 
 ```bash
 git clone https://github.com/EasternJournalist/utils3d.git 
@@ -14,8 +14,6 @@ Install requirements
 pip install numpy
 pip install moderngl
 ```
-
-The folder of repo is a package. 
 
 ## Usage
 At first, one step to initialize a OpenGL context. It depends on your platform and machine.
@@ -45,4 +43,6 @@ Some other functions that could be helpful for certain purposes
 * `triangulate(faces)` : convert a polygonal mesh into a triangular mesh (naively).
 * `perspective_from_image()`
 * `perspective_from_fov_xy()`
-* `projection()`: project 3D points to 2D following the OpenGL convention (except for using row major matrix)
+* `projection(vertices, model_matrix=None, view_matrix=None, projection_matrix=None)`: project 3D points to 2D screen space following the OpenGL convention (except for using row major matrix). This also gives a insight of how the projection works when you have confusion about the coordinate system.
+* `compute_face_normal(vertices, faces)`
+* `compute_vertex_normal(vertices, faces)` 
