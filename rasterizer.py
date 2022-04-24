@@ -16,6 +16,14 @@ def map_np_dtype(dtype) -> str:
     elif dtype == np.float32:
         return 'f4'
 
+def one_value(dtype):
+    if dtype == 'u1':
+        return 255
+    elif dtype == 'u2':
+        return 65536
+    else:
+        return 1
+
 class Context:
     def __init__(self, standalone: bool = True, backend: str = None):
         # TODO: create context
@@ -235,7 +243,7 @@ class Context:
         if not attr_dtype:
             raise TypeError('attribute dtype unsupported')
         if attr_size < 4:
-            attributes = np.concatenate([attributes, np.ones((n_vertices, 4 - attr_size), dtype=attr_dtype)], axis=-1)
+            attributes = np.concatenate([attributes, np.full((n_vertices, 4 - attr_size), one_value(attr_dtype), dtype=attr_dtype)], axis=-1)
 
         # Create vertex array
         vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
@@ -308,6 +316,7 @@ class Context:
         texture_uv = self.__ctx__.texture((width, height), 2, dtype='f4', data=uv.astype('f4'))
         texture_uv.filter = (moderngl.NEAREST, moderngl.NEAREST)
         texture_uv.use(location=1)
+
         # Create render buffer and frame buffer
         rb = self.__ctx__.renderbuffer((uv.shape[1], uv.shape[0]), 4, dtype=texture_dtype)
         fbo = self.__ctx__.framebuffer(color_attachments=[rb])
@@ -385,7 +394,7 @@ class Context:
         if not tex_dtype:
             raise TypeError('attribute dtype unsupported')
         if tex_dsize < 4:
-            texture = np.concatenate([texture, np.ones((*texture.shape[:2], 4 - tex_dsize), dtype=tex_dtype)], axis=-1)
+            texture = np.concatenate([texture, np.full((*texture.shape[:2], 4 - tex_dsize), one_value(tex_dtype), dtype=tex_dtype)], axis=-1)
 
         # Create vertex array
         vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))

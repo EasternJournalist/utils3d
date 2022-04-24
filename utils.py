@@ -22,7 +22,7 @@ def perspective_from_image(fov: float, width: int, height: int, near: float, far
         [0., 1. / (np.tan(fov / 2) * (height / max(width, height))), 0., 0.],
         [0., 0., (near + far) / (near - far), 2. * near * far / (near - far)],
         [0., 0., -1., 0.] 
-    ])
+    ], dtype=np.float32)
 
 def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float) -> np.ndarray:
     return np.array([
@@ -30,21 +30,21 @@ def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float)
         [0., 1. / np.tan(fov_y / 2), 0., 0.],
         [0., 0., (near + far) / (near - far), 2. * near * far / (near - far)],
         [0., 0., -1., 0.] 
-    ])
+    ], dtype=np.float32)
 
 def instrinsic_from_image(fov: float, width: int, height: int) -> np.ndarray:
     return np.array([
         [0.5 / (np.tan(fov / 2) * (width / max(width, height))), 0., 0.5],
         [0., 0.5 / (np.tan(fov / 2) * (height / max(width, height))), 0.5],
         [0., 0., 1.],
-    ])
+    ], dtype=np.float32)
 
 def intrinsic_from_fov_xy(fov_x: float, fov_y: float) -> np.ndarray:
     return np.array([
         [0.5 / np.tan(fov_x / 2), 0., 0.5],
         [0., 0.5 / np.tan(fov_y / 2), 0.5],
         [0., 0., 1.],
-    ])
+    ], dtype=np.float32)
 
 def image_uv(width: int, height: int) -> np.ndarray:
     """Get image space UV grid, ranging in [0, 1]. 
@@ -81,8 +81,8 @@ def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.nda
         assert mask.shape[0] == height and mask.shape[1] == width
         assert mask.dtype == np.bool_
     vertices = image_uv(width, height).reshape((-1, 2))
-    row_faces = np.stack([np.arange(0, width - 1), np.arange(width, 2 * width - 1), np.arange(1 + width, 2 * width), np.arange(1, width)], axis=1)
-    faces = (np.arange(0, (height - 1) * width, width)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
+    row_faces = np.stack([np.arange(0, width - 1, dtype=np.int32), np.arange(width, 2 * width - 1, dtype=np.int32), np.arange(1 + width, 2 * width, dtype=np.int32), np.arange(1, width, dtype=np.int32)], axis=1)
+    faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
     if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
@@ -183,7 +183,7 @@ def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
     face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((-1, 3))
     face_indices = faces.reshape((-1,))
     vertex_normal = np.zeros_like(vertices)
-    vertex_count = np.zeros(vertices.shape[0], dtype=int)
+    vertex_count = np.zeros(vertices.shape[0])
     while len(face_normal) > 0:
         v_id, f_i = np.unique(face_indices, return_index=True)
         vertex_normal[v_id] += face_normal[f_i]

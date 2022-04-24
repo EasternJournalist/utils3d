@@ -13,6 +13,6 @@ def cube():
         [5, 4, 7, 6], # v5-v4-v7-v6 (back)
         [1, 5, 6, 2], # v1-v5-v6-v2 (right)
         [4, 0, 3, 7]  # v4-v0-v3-v7 (left)
-    ], dtype=int)
+    ], dtype=np.int32)
 
     return vertices, faces
