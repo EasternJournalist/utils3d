@@ -1,8 +1,23 @@
 # utils3d
- Rasterize and do image-based 3D transforms with the least efforts for researchers. Code fast and run fast. 
+Rasterize and do image-based 3D transforms with the least efforts for researchers. Based on numpy and OpenGL.
+
+It could be helpful when you want to:
+
+* rasterize a simple mesh but don't want get into OpenGL chores
+* warp an image as a 2D or 3D mesh (eg. optical-flow-based warping)
+* render a optical flow image
+
+This tool sets could help you achieve them in a few lines.
+
+It is **NOT** what you are looking for when you want:
+
+* a differentiable rasterization tool. You should turn to `nvdiffrast`, `pytorch3d`, `SoftRas`  etc.
+* a real-time graphics application. Though as fast as it could be, the expected performance of `util3d` rasterization is to be around 20 ~ 100 ms. It is not expected to fully make use of GPU performance because of the overhead of buffering every time calling rasterzation. If the best performance withou any overhead is demanded, You will have to manage buffer objects like VBO, VAO and FBO. I personally recommand `moderngl` as an alternative python OpenGL library. 
+
+
 ## Install
 
-Clone the repo.
+The folder of repo is a package. Clone the repo.
 
 ```bash
 git clone https://github.com/EasternJournalist/utils3d.git 
@@ -14,8 +29,6 @@ Install requirements
 pip install numpy
 pip install moderngl
 ```
-
-The folder of repo is a package. 
 
 ## Usage
 At first, one step to initialize a OpenGL context. It depends on your platform and machine.
@@ -45,4 +58,6 @@ Some other functions that could be helpful for certain purposes
 * `triangulate(faces)` : convert a polygonal mesh into a triangular mesh (naively).
 * `perspective_from_image()`
 * `perspective_from_fov_xy()`
-* `projection()`: project 3D points to 2D following the OpenGL convention (except for using row major matrix)
+* `projection(vertices, model_matrix=None, view_matrix=None, projection_matrix=None)`: project 3D points to 2D screen space following the OpenGL convention (except for using row major matrix). This also gives a insight of how the projection works when you have confusion about the coordinate system.
+* `compute_face_normal(vertices, faces)`
+* `compute_vertex_normal(vertices, faces)` 
