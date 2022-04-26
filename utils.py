@@ -75,59 +75,22 @@ def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.nda
         mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: _description_
+        uv (np.ndarray): uv corresponding to pixels as described in image_uv()
+        faces (np.ndarray): quad faces connecting neighboring pixels
     """
     if mask is not None:
         assert mask.shape[0] == height and mask.shape[1] == width
         assert mask.dtype == np.bool_
-    vertices = image_uv(width, height).reshape((-1, 2))
+    uv = image_uv(width, height).reshape((-1, 2))
     row_faces = np.stack([np.arange(0, width - 1, dtype=np.int32), np.arange(width, 2 * width - 1, dtype=np.int32), np.arange(1 + width, 2 * width, dtype=np.int32), np.arange(1, width, dtype=np.int32)], axis=1)
     faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
     if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
-        fewer_faces, inv_map = np.unique(faces, return_inverse=True)
+        fewer_indices, inv_map = np.unique(faces, return_inverse=True)
         faces = inv_map.reshape((-1, 4))
-        vertices = vertices[fewer_faces]
-    return vertices, faces
-
-def image_mesh_3d_cv(width: int, height: int, normalized_intrinsic: np.ndarray, linear_depth: np.ndarray, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
-    """Get an 3d image mesh following OpenCV transformation convention. (intrinsic-extrincs convention)
-
-    Args:
-        width (int): image width
-        height (int): image height
-        normalized_intrinsic (np.ndarray): shape (3, 3). Normalized camera intrinsic matrix
-        linear_depth (np.ndarray): linear depth in [0, inf)
-        mask (np.ndarray, optional): binary mask of shape (height, width). Defaults to None.
-
-    Returns:
-        vertices (np.ndarray): shape (N, 3). 3d vertex positions. If mask is None, N = height * width
-        faces (np.ndarray): shape (T, 4). Quad mesh face indices. If mask is None, T = (height - 1) * (width - 1)
-    """
-    vertices_uv, faces = image_mesh(width, height, mask)
-    vertices_uv_ndc = vertices_uv * 2 - 1
-    vertices = (np.concatenate([vertices_uv_ndc, np.ones_like(vertices_uv[:, :1])], axis=1) @ np.linalg.inv(normalized_intrinsic).transpose()) * linear_depth[:, None]
-    return vertices, faces
-
-def image_mesh_3d_gl(width: int, height: int, perspective: np.ndarray, linear_depth: np.ndarray, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
-    """Get an 3d image mesh following OpenCV transformation convention. (view_matrix - projection convention)
-
-    Args:
-        width (int): image width
-        height (int): image height
-        perspective (np.ndarray): shape (4, 4).Pperspective matrix in OpenGL convention
-        linear_depth (np.ndarray): linear depth in [0, inf)
-        mask (np.ndarray, optional): binary mask of shape (height, width). Defaults to None.
-
-    Returns:
-        vertices (np.ndarray): shape (N, 3). 3d vertex positions. If mask is None, N = height * width
-        faces (np.ndarray): shape (T, 4). Quad mesh face indices. If mask is None, T = (height - 1) * (width - 1)
-    """
-    vertices_uv, faces = image_mesh(width, height, mask)
-    vertices_xy = (2 * vertices_uv - 1) * linear_depth[:, None] @ np.linalg.inv(perspective[:2, :2]).transpose()
-    vertices = np.concatenate([vertices_xy, -linear_depth[:, None]], axis=1)
-    return vertices, faces
+        uv = uv[fewer_indices]
+    return uv, faces
 
 def projection(vertices: np.ndarray, model_matrix: np.ndarray = None, view_matrix: np.ndarray = None, projection_matrix: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
@@ -154,6 +117,24 @@ def projection(vertices: np.ndarray, model_matrix: np.ndarray = None, view_matri
 
     zbuffer = scr_coord[..., 2]
     return scr_coord, zbuffer
+
+def inverse_projection(screen_coord: np.ndarray, linear_depth: np.ndarray, fovX: float, fovY: float, view_matrix: np.ndarray = None) -> np.ndarray:
+    """inverse project screen space coordinates to 3d view space or world space
+
+    Args:
+        screen_coord (np.ndarray): screen space coordinates ranging in [0, 1]. Note that the origin (0, 0) of screen space is the left-buttom corner of the screen
+        linear_depth (np.ndarray): linear depth values
+        fovX (float): x-axis field of view
+        fovY (float): y-axis field of view
+        view_matrix (np.ndarray): camera view matrix
+
+    Returns:
+        points (np.ndarray): 3d points
+    """
+    ndc_xy = screen_coord * 2 - 1
+    clip_coord = np.concatenate([ndc_xy, np.ones_like(ndc_xy[..., :1])], axis=-1) * linear_depth
+    points = clip_coord @ (np.diag([np.tan(fovX / 2), np.tan(fovY / 2), -1], dtype=clip_coord.dtype) @ np.linalg.inv(view_matrix))
+    return points
 
 def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
     """Compute face normals of a triangular mesh
