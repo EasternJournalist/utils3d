@@ -92,48 +92,47 @@ def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.nda
         uv = uv[fewer_indices]
     return uv, faces
 
-def projection(vertices: np.ndarray, model_matrix: np.ndarray = None, view_matrix: np.ndarray = None, projection_matrix: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
+def projection(points: np.ndarray, model_matrix: np.ndarray = None, view_matrix: np.ndarray = None, projection_matrix: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
 
     Args:
-        vertices (np.ndarray): 3D vertices positions of shape (..., 3)
+        points (np.ndarray): 3D points of shape (n, 3) or (n, 4), which means (x, y, z) and (x, y, z, 1) are both okay.
+            NOTE: shapes of higher dimensions are supported if you handle numpy broadcast properply.
         model_matrix (np.ndarray): row major model to world matrix of shape (4, 4)
         view_matrix (np.ndarray): camera to world matrix of shape (4, 4)
         projection_matrix (np.ndarray): projection matrix of shape (4, 4)
 
     Returns:
-        scr_coord (np.ndarray): vertex screen space coordinates of shape (..., 2), value ranging in [0, 1]. The origin (0., 0.) is corresponding to the bottom-left corner of the screen
-        zbuffer (np.ndarray): vertex z-buffer of shape (...)
+        scr_coord (np.ndarray): vertex screen space coordinates of shape (n, 3), value ranging in [0, 1]. The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
+        linear_depth (np.ndarray): vertex linear depth of shape
     """
-    assert vertices.shape[-1] == 3
-    if model_matrix is None: model_matrix = np.eye(4, dtype=vertices.dtype)
-    if view_matrix is None: view_matrix = np.eye(4, dtype=vertices.dtype)
-    if projection_matrix is None: projection_matrix = np.eye(4, dtype=vertices.dtype)
+    if model_matrix is None: model_matrix = np.eye(4, dtype=points.dtype)
+    if view_matrix is None: view_matrix = np.eye(4, dtype=points.dtype)
+    if projection_matrix is None: projection_matrix = np.eye(4, dtype=points.dtype)
 
-    vertices = np.concatenate([vertices, np.ones_like(vertices[..., :1])], axis=1)
-    clip_coord = vertices (model_matrix @ np.linalg.inv(view_matrix).T @ projection_matrix.T)
+    if points.shape[-1] == 3:
+        points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
+    clip_coord = points @ np.swapaxes(projection_matrix @ np.linalg.inv(view_matrix) @ model_matrix, -2, -1)
     ndc_coord = clip_coord[..., :3] / clip_coord[..., 3:]
     scr_coord = ndc_coord * 0.5 + 0.5
+    linear_depth = clip_coord[..., 3]
+    return scr_coord, linear_depth
 
-    zbuffer = scr_coord[..., 2]
-    return scr_coord, zbuffer
-
-def inverse_projection(screen_coord: np.ndarray, linear_depth: np.ndarray, fovX: float, fovY: float, view_matrix: np.ndarray = None) -> np.ndarray:
-    """inverse project screen space coordinates to 3d view space or world space
+def inverse_projection(screen_coord: np.ndarray, linear_depth: np.ndarray, fovX: float, fovY: float) -> np.ndarray:
+    """inverse project screen space coordinates to 3d view space 
 
     Args:
         screen_coord (np.ndarray): screen space coordinates ranging in [0, 1]. Note that the origin (0, 0) of screen space is the left-buttom corner of the screen
         linear_depth (np.ndarray): linear depth values
         fovX (float): x-axis field of view
         fovY (float): y-axis field of view
-        view_matrix (np.ndarray): camera view matrix
 
     Returns:
         points (np.ndarray): 3d points
     """
     ndc_xy = screen_coord * 2 - 1
     clip_coord = np.concatenate([ndc_xy, np.ones_like(ndc_xy[..., :1])], axis=-1) * linear_depth
-    points = clip_coord @ (np.diag([np.tan(fovX / 2), np.tan(fovY / 2), -1], dtype=clip_coord.dtype) @ np.linalg.inv(view_matrix))
+    points = clip_coord * np.array([np.tan(fovX / 2), np.tan(fovY / 2), -1], dtype=clip_coord.dtype)
     return points
 
 def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
