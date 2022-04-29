@@ -3,7 +3,7 @@ Rasterize and do image-based 3D transforms with the least efforts for researcher
 
 It could be helpful when you want to:
 
-* rasterize a simple mesh but don't want get into OpenGL chores
+* rasterize a simple mesh with customized attributes but don't want get into OpenGL chores
 * warp an image as either a 2D or 3D mesh (eg. optical-flow-based warping)
 * projection following either OpenCV or OpenGL conventions
 * render a optical flow image
