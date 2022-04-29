@@ -34,6 +34,28 @@ def perspective_from_image(fov: float, width: int, height: int, near: float, far
 def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float) -> torch.Tensor:
     return torch.from_numpy(__perspective_from_fov_xy(fov_x, fov_y, near, far))
 
+def perspective_from_intrinsics(intrinsics: torch.Tensor, near: float, far: float):
+    focal_x, focal_y = intrinsics[..., 0, 0], intrinsics[..., 1, 1]
+    principal_x, principal_y = intrinsics[..., 0, 2], intrinsics[..., 1, 2]
+    zero = torch.zeros_like(focal_x)
+    negone = torch.full_like(focal_x, -1)
+
+    a = torch.full_like(focal_x, (near + far) / (near - far))
+    b = torch.full_like(focal_y, 2. * near * far / (near - far))
+
+    matrix = [
+        [2. * focal_x, zero, 2. * principal_x - 1., zero],
+        [zero, 2. * focal_y, 2. * principal_y - 1., zero],
+        [zero, zero, a,         b   ],
+        [zero, zero, negone,    zero]]
+    perspective = torch.stack([torch.stack(row, dim=-1) for row in matrix], dim=-2)
+    return perspective
+
+def cv_to_gl(extrinsics: torch.Tensor, intrinsics: torch.Tensor, near: float, far: float):
+    view_matrix = torch.inverse(extrinsics) @ torch.diag(torch.tensor([1, -1, -1, 1]))
+    perspective_matrix = perspective_from_intrinsics(intrinsics, near, far)
+    
+
 def image_uv(width: int, height: int):
     return torch.from_numpy(__image_uv(width, height))
 
