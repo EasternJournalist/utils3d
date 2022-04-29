@@ -229,6 +229,14 @@ def inverse_projection(screen_coord: np.ndarray, linear_depth: np.ndarray, fovX:
     points = clip_coord * np.array([np.tan(fovX / 2), np.tan(fovY / 2), -1], dtype=clip_coord.dtype)
     return points
 
+def projection_cv(points: np.ndarray, extrinsic: np.ndarray, intrinsic: np.ndarray):
+    if points.shape[-1] == 3:
+        points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
+    image_coord = points @ np.swapaxes(intrinsic @ extrinsic[..., :3, :], -2, -1)
+    image_coord = points[..., :2] / points[..., 2:]
+    linear_depth = points[..., 2]
+    return image_coord, linear_depth
+
 def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
     """Compute face normals of a triangular mesh
 
