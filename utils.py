@@ -16,7 +16,7 @@ def triangulate(faces: np.ndarray) -> np.ndarray:
     loop_indice = np.stack([np.zeros(n - 2, dtype=int), np.arange(1, n - 1, 1, dtype=int), np.arange(2, n, 1, dtype=int)], axis=1)
     return faces[:, loop_indice].reshape(-1, 3)
 
-def perspective_from_image(fov: float, width: int, height: int, near: float, far: float) -> np.ndarray:
+def perspective_from_fov(fov: float, width: int, height: int, near: float, far: float) -> np.ndarray:
     return np.array([
         [1. / (np.tan(fov / 2) * (width / max(width, height))), 0., 0., 0.],
         [0., 1. / (np.tan(fov / 2) * (height / max(width, height))), 0., 0.],
@@ -32,7 +32,7 @@ def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float)
         [0., 0., -1., 0.] 
     ], dtype=np.float32)
 
-def instrinsic_from_image(fov: float, width: int, height: int) -> np.ndarray:
+def instrinsic_from_fov(fov: float, width: int, height: int) -> np.ndarray:
     return np.array([
         [0.5 / (np.tan(fov / 2) * (width / max(width, height))), 0., 0.5],
         [0., 0.5 / (np.tan(fov / 2) * (height / max(width, height))), 0.5],
@@ -45,6 +45,100 @@ def intrinsic_from_fov_xy(fov_x: float, fov_y: float) -> np.ndarray:
         [0., 0.5 / np.tan(fov_y / 2), 0.5],
         [0., 0., 1.],
     ], dtype=np.float32)
+
+def perspective_to_intrinsic(perspective: np.ndarray) -> np.ndarray:
+    """OpenGL convention perspective matrix to OpenCV convention intrinsic
+
+    Args:
+        perspective (np.ndarray): shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+
+    Returns:
+        np.ndarray: shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+    """
+    fx, fy = perspective[..., 0, 0], perspective[..., 1, 1]
+    cx, cy = perspective[..., 0, 2], perspective[..., 1, 2]
+    zero = np.zeros_like(fx)
+    one = np.full_like(fx, -1)
+
+    matrix = [
+        [0.5 * fx,     zero, -0.5 * cx + 0.5],
+        [    zero, 0.5 * fy,  0.5 * cy + 0.5],
+        [    zero,     zero,             one]]
+    return np.stack([np.stack(row, axis=-1) for row in matrix], axis=-2)
+
+def intrinsic_to_perspective(intrinsic: np.ndarray, near: float, far: float) -> np.ndarray:
+    """OpenGL convention perspective matrix to OpenCV convention intrinsic
+
+    Args:
+        intrinsic (np.ndarray): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+        near (float): near plane to clip
+        far (float): far plane to clip
+    Returns:
+        np.ndarray: shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+    """
+    fx, fy = intrinsic[..., 0, 0], intrinsic[..., 1, 1]
+    cx, cy = intrinsic[..., 0, 2], intrinsic[..., 1, 2]
+    zero = np.zeros_like(fx)
+    negone = np.full_like(fx, -1)
+    a = np.full_like(fx, (near + far) / (near - far))
+    b = np.full_like(fx, 2. * near * far / (near - far))
+
+    matrix = [
+        [2 * fx,   zero,  -2 * cx + 1, zero],
+        [  zero, 2 * fy,   2 * cy - 1, zero],
+        [  zero,   zero,            a,    b],
+        [  zero,   zero,       negone, zero]]
+    return np.stack([np.stack(row, axis=-1) for row in matrix], axis=-2)
+
+def extrinsic_to_view(extrinsic: np.ndarray) -> np.ndarray:
+    """OpenCV convention camera extrinsic to OpenGL convention view matrix
+
+    Args:
+        extrinsic (np.ndarray): shape (4, 4) or (..., 4, 4), OpenCV convention camera extrinsic
+
+    Returns:
+        np.ndarray: shape (4, 4) or (..., 4, 4) OpenGL convention view matrix
+    """
+    return np.linalg.inv(extrinsic) @ np.diag([1, -1, -1, 1], dtype=extrinsic.dtype)
+
+def view_to_extrinsic(view: np.ndarray) -> np.ndarray:
+    """OpenCV convention camera extrinsic to OpenGL convention view matrix
+
+    Args:
+        view (np.ndarray): shape (4, 4) or (..., 4, 4), OpenGL convention view matrix
+
+    Returns:
+        np.ndarray: shape (4, 4) or (..., 4, 4) OpenCV convention camera extrinsic
+    """
+    return np.diag([1, -1, -1, 1], dtype=view.dtype) @ np.linalg.inv(view)
+
+def camera_cv_to_gl(extrinsic: np.ndarray, intrinsic: np.ndarray, near: float, far: float):
+    """Convert OpenCV convention camera extrinsic & intrinsic to OpenGL convention view matrix and perspective matrix
+
+    Args:
+        extrinsic (np.ndarray): shape (4, 4) or (..., 4, 4), OpenCV convention camera extrinsic
+        intrinsic (np.ndarray): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+        near (float): near plane to clip
+        far (float): far plane to clip
+
+    Returns:
+        view (np.ndarray): shape (4, 4) or (..., 4, 4), OpenGL convention view matrix
+        perspective (np.ndarrray): shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+    """
+    return extrinsic_to_view(extrinsic), intrinsic_to_perspective(intrinsic, near, far)
+
+def camera_gl_to_cv(view, perspective):
+    """Convert OpenGL convention view matrix & perspective matrix to OpenCV convention camera extrinsic & intrinsic 
+
+    Args:
+        view (np.ndarray): shape (4, 4) or (..., 4, 4), OpenGL convention view matrix
+        perspective (np.ndarray): shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+
+    Returns:
+        view (np.ndarray): shape (4, 4) or (..., 4, 4), OpenCV convention camera extrinsic
+        perspective (np.ndarrray): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+    """
+    return view_to_extrinsic(view), perspective_to_intrinsic(perspective)
 
 def image_uv(width: int, height: int) -> np.ndarray:
     """Get image space UV grid, ranging in [0, 1]. 
