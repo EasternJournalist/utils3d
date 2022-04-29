@@ -2,7 +2,7 @@ import torch
 from typing import Tuple
 
 from ..numpy_.utils import (
-    perspective_from_image as __perspective_from_image, 
+    perspective_from_fov as __perspective_from_fov, 
     perspective_from_fov_xy as __perspective_from_fov_xy,
     image_uv as __image_uv,
     image_mesh as __image_mesh,
@@ -29,32 +29,104 @@ def triangulate(faces: torch.Tensor) -> torch.Tensor:
     return faces[:, loop_indice].reshape(-1, 3)
 
 def perspective_from_image(fov: float, width: int, height: int, near: float, far: float) -> torch.Tensor:
-    return torch.from_numpy(__perspective_from_image(fov, width, height, near, far))
+    return torch.from_numpy(__perspective_from_fov(fov, width, height, near, far))
 
 def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float) -> torch.Tensor:
     return torch.from_numpy(__perspective_from_fov_xy(fov_x, fov_y, near, far))
 
-def perspective_from_intrinsics(intrinsics: torch.Tensor, near: float, far: float):
-    focal_x, focal_y = intrinsics[..., 0, 0], intrinsics[..., 1, 1]
-    principal_x, principal_y = intrinsics[..., 0, 2], intrinsics[..., 1, 2]
-    zero = torch.zeros_like(focal_x)
-    negone = torch.full_like(focal_x, -1)
+def perspective_to_intrinsic(perspective: torch.Tensor) -> torch.Tensor:
+    """OpenGL convention perspective matrix to OpenCV convention intrinsic
 
-    a = torch.full_like(focal_x, (near + far) / (near - far))
-    b = torch.full_like(focal_y, 2. * near * far / (near - far))
+    Args:
+        perspective (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+
+    Returns:
+        torch.Tensor: shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+    """
+    fx, fy = perspective[..., 0, 0], perspective[..., 1, 1]
+    cx, cy = perspective[..., 0, 2], perspective[..., 1, 2]
+    zero = torch.zeros_like(fx)
+    one = torch.full_like(fx, -1)
 
     matrix = [
-        [2. * focal_x, zero, 2. * principal_x - 1., zero],
-        [zero, 2. * focal_y, 2. * principal_y - 1., zero],
-        [zero, zero, a,         b   ],
-        [zero, zero, negone,    zero]]
-    perspective = torch.stack([torch.stack(row, dim=-1) for row in matrix], dim=-2)
-    return perspective
+        [0.5 * fx,     zero, -0.5 * cx + 0.5],
+        [    zero, 0.5 * fy,  0.5 * cy + 0.5],
+        [    zero,     zero,             one]]
+    return torch.stack([torch.stack(row, dim=-1) for row in matrix], dim=-2)
 
-def cv_to_gl(extrinsics: torch.Tensor, intrinsics: torch.Tensor, near: float, far: float):
-    view_matrix = torch.inverse(extrinsics) @ torch.diag(torch.tensor([1, -1, -1, 1]))
-    perspective_matrix = perspective_from_intrinsics(intrinsics, near, far)
-    
+def intrinsic_to_perspective(intrinsic: torch.Tensor, near: float, far: float) -> torch.Tensor:
+    """OpenGL convention perspective matrix to OpenCV convention intrinsic
+
+    Args:
+        intrinsic (torch.Tensor): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+        near (float): near plane to clip
+        far (float): far plane to clip
+    Returns:
+        torch.Tensor: shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+    """
+    fx, fy = intrinsic[..., 0, 0], intrinsic[..., 1, 1]
+    cx, cy = intrinsic[..., 0, 2], intrinsic[..., 1, 2]
+    zero = torch.zeros_like(fx)
+    negone = torch.full_like(fx, -1)
+    a = torch.full_like(fx, (near + far) / (near - far))
+    b = torch.full_like(fx, 2. * near * far / (near - far))
+
+    matrix = [
+        [2 * fx,   zero,  -2 * cx + 1, zero],
+        [  zero, 2 * fy,   2 * cy - 1, zero],
+        [  zero,   zero,            a,    b],
+        [  zero,   zero,       negone, zero]]
+    return torch.stack([torch.stack(row, dim=-1) for row in matrix], dim=-2)
+
+def extrinsic_to_view(extrinsic: torch.Tensor) -> torch.Tensor:
+    """OpenCV convention camera extrinsic to OpenGL convention view matrix
+
+    Args:
+        extrinsic (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenCV convention camera extrinsic
+
+    Returns:
+        torch.Tensor: shape (4, 4) or (..., 4, 4) OpenGL convention view matrix
+    """
+    return torch.inverse(extrinsic) @ torch.diag([1, -1, -1, 1]).to(extrinsic)
+
+def view_to_extrinsic(view: torch.Tensor) -> torch.Tensor:
+    """OpenCV convention camera extrinsic to OpenGL convention view matrix
+
+    Args:
+        view (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenGL convention view matrix
+
+    Returns:
+        torch.Tensor: shape (4, 4) or (..., 4, 4) OpenCV convention camera extrinsic
+    """
+    return torch.diag([1, -1, -1, 1]).to(view) @ torch.inverse(view)
+
+def camera_cv_to_gl(extrinsic: torch.Tensor, intrinsic: torch.Tensor, near: float, far: float):
+    """Convert OpenCV convention camera extrinsic & intrinsic to OpenGL convention view matrix and perspective matrix
+
+    Args:
+        extrinsic (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenCV convention camera extrinsic
+        intrinsic (torch.Tensor): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+        near (float): near plane to clip
+        far (float): far plane to clip
+
+    Returns:
+        view (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenGL convention view matrix
+        perspective (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+    """
+    return extrinsic_to_view(extrinsic), intrinsic_to_perspective(intrinsic, near, far)
+
+def camera_gl_to_cv(view, perspective):
+    """Convert OpenGL convention view matrix & perspective matrix to OpenCV convention camera extrinsic & intrinsic 
+
+    Args:
+        view (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenGL convention view matrix
+        perspective (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenGL convention perspective matrix
+
+    Returns:
+        view (torch.Tensor): shape (4, 4) or (..., 4, 4), OpenCV convention camera extrinsic
+        perspective (torch.Tensor): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
+    """
+    return view_to_extrinsic(view), perspective_to_intrinsic(perspective)
 
 def image_uv(width: int, height: int):
     return torch.from_numpy(__image_uv(width, height))
