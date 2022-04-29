@@ -1,17 +1,18 @@
 # utils3d
-Rasterize and do image-based 3D transforms with the least efforts for researchers. Based on numpy and OpenGL.
+Rasterize and do image-based 3D transforms with the least efforts for researchers. Based on numpy and OpenGL (and torch & nvdiffrast in progress)
 
 It could be helpful when you want to:
 
 * rasterize a simple mesh but don't want get into OpenGL chores
-* warp an image as a 2D or 3D mesh (eg. optical-flow-based warping)
+* warp an image as either a 2D or 3D mesh (eg. optical-flow-based warping)
+* projection following either OpenCV or OpenGL conventions
 * render a optical flow image
 
 This tool sets could help you achieve them in a few lines.
 
 It is **NOT** what you are looking for when you want:
 
-* a differentiable rasterization tool. You should turn to `nvdiffrast`, `pytorch3d`, `SoftRas`  etc.
+* a differentiable rasterization tool. You should turn to `nvdiffrast`, `pytorch3d`, `SoftRas`  etc. *(2022-04-29: I am currently working on branch `torch`, wrapping tool functions based on `pytorch` & `nvdiffrast`)*
 * a real-time graphics application. Though as fast as it could be, the expected performance of `util3d` rasterization is to be around 20 ~ 100 ms. It is not expected to fully make use of GPU performance because of the overhead of buffering every time calling rasterzation. If the best performance withou any overhead is demanded, You will have to manage buffer objects like VBO, VAO and FBO. I personally recommand `moderngl` as an alternative python OpenGL library. 
 
 
@@ -30,7 +31,7 @@ pip install numpy
 pip install moderngl
 ```
 
-## Usage
+## Rasterization 
 At first, one step to initialize a OpenGL context. It depends on your platform and machine.
 ```python
 import utils3d
@@ -39,7 +40,8 @@ ctx = utils3d.Context(standalone=True)                 # Recommanded for a stand
 ctx = utils3d.Context(standalone=False)                 # Recommanded for a nested python script running in a windowed opengl program to share the OpenGL context, eg. Blender.
 ctx = utils3d.Context(standalone=True, backend='egl')   # Recommanded for a program running on a headless linux server (without any display device)
 ```
-The functions the most probably you would like to use
+
+Then a number of rasterization functions of `ctx` can be used. The functions the most probably you would like to use
 
 * `ctx.rasterize(...)`: rasterize trianglular mesh with vertex attributes.
 * `ctx.texture(uv, texture)`: sample texture by a UV image. Exactly the same as grid sample, but an OpenGL shader implementation.
@@ -52,12 +54,28 @@ Some other functions that could be helpful for certain purposes
 * `ctx.warp_image_by_flow(image, flow, occlusion_mask)`
 
 ## Useful tool functions
+* Image based tool functions
+    * `image_uv(width, height)` : return a numpy array of shape `[height, width, 2]`, the image uv of each pixel. 
+    * `image_mesh(width, height, mask=None)` : return a quad mesh connecting all neighboring pixels as vertices. A boolean array of shape `[height, width]` or  `[height, width, 1]` mask is optional. If a mask is provided, only pixels where mask value is `True` are involved in the mesh.
+* Geometric tools
+    * `triangulate(faces)` : convert a polygonal mesh into a triangular mesh (naively).
+    * `compute_face_normal(vertices, faces)`
+    * `compute_vertex_normal(vertices, faces)` 
+* OpenGL convention projection
+    * `perspective_from_fov(...)`
+    * `perspective_from_fov_xy(...)`
+    * `projection(...)`: project 3D points to 2D screen space following the OpenGL convention (except for using row major matrix). 
+    * `inverse_projection(...)`: reconstruct 3D position in view space given screen space coordinates and linear depth. to be updated (2020-04-29)
+* OpenCV convention projection
+    * `intrinsic_from_fov(...)`
+    * `intrinsic_from_fov_xy(...)`
+    * `projection_cv(...)`
+    * `inverse_projection_cv(...)`: to be updated (2020-04-29)
+* OpenGL↔OpenCV convention camera conversion
+    * `extrinsic_to_view(...)`
+    * `view_to_extrinsic(...)`
+    * `intrinsic_to_perspective(...)`
+    * `perspective_to_extrinsic(...)`
+    * `camera_cv_to_gl(...)`
+    * `camera_gl_to_cv(...)`
 
-* `image_uv(width, height)` : return a numpy array of shape `[height, width, 2]`, the image uv of each pixel. 
-* `image_mesh(width, height, mask=None)` : return a quad mesh connecting all neighboring pixels as vertices. A boolean array of shape `[height, width]` or  `[height, width, 1]` mask is optional. If a mask is provided, only pixels where mask value is `True` are involved in te mesh.
-* `triangulate(faces)` : convert a polygonal mesh into a triangular mesh (naively).
-* `perspective_from_image()`
-* `perspective_from_fov_xy()`
-* `projection(vertices, model_matrix=None, view_matrix=None, projection_matrix=None)`: project 3D points to 2D screen space following the OpenGL convention (except for using row major matrix). This also gives a insight of how the projection works when you have confusion about the coordinate system.
-* `compute_face_normal(vertices, faces)`
-* `compute_vertex_normal(vertices, faces)` 

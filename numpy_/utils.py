@@ -140,6 +140,29 @@ def camera_gl_to_cv(view, perspective):
     """
     return view_to_extrinsic(view), perspective_to_intrinsic(perspective)
 
+def pixel_to_uv(pixel: np.ndarray, width: int, height: int) -> np.ndarray:
+    """
+    Args:
+        pixel(np.ndarray): pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
+        W (int): image width
+        H (int): image height
+    Returns:
+        uv(np.ndarray): pixel coordinrates defined in uv space, the range is (0, 1)
+    """
+    uv = (pixel + 0.5) / np.array([width, height])
+    return uv
+
+def pixel_to_ndc(pixel: np.ndarray, width: int, height: int) -> np.ndarray:
+    """
+    Args:
+        pixel(np.ndarray): pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
+        W (int): image width
+        H (int): image height
+    Returns:
+        ndc(np.ndarray): pixel coordinrates defined in ndc space, the range is (-1, 1)
+    """
+    return np.array([2, -2]) * pixel_to_uv(pixel, width, height) + np.array([-1, 1])
+
 def image_uv(width: int, height: int) -> np.ndarray:
     """Get image space UV grid, ranging in [0, 1]. 
 
@@ -228,6 +251,14 @@ def inverse_projection(screen_coord: np.ndarray, linear_depth: np.ndarray, fovX:
     clip_coord = np.concatenate([ndc_xy, np.ones_like(ndc_xy[..., :1])], axis=-1) * linear_depth
     points = clip_coord * np.array([np.tan(fovX / 2), np.tan(fovY / 2), -1], dtype=clip_coord.dtype)
     return points
+
+def projection_cv(points: np.ndarray, extrinsic: np.ndarray, intrinsic: np.ndarray):
+    if points.shape[-1] == 3:
+        points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
+    image_coord = points @ np.swapaxes(intrinsic @ extrinsic[..., :3, :], -2, -1)
+    image_coord = points[..., :2] / points[..., 2:]
+    linear_depth = points[..., 2]
+    return image_coord, linear_depth
 
 def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
     """Compute face normals of a triangular mesh
