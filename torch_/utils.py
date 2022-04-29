@@ -1,7 +1,7 @@
 import torch
 from typing import Tuple
 
-from ..numpy.utils import (
+from ..numpy_.utils import (
     perspective_from_image as __perspective_from_image, 
     perspective_from_fov_xy as __perspective_from_fov_xy,
     image_uv as __image_uv,
