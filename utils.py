@@ -46,6 +46,45 @@ def intrinsic_from_fov_xy(fov_x: float, fov_y: float) -> np.ndarray:
         [0., 0., 1.],
     ], dtype=np.float32)
 
+def camera_from_window(view_point: np.ndarray, window_center: np.ndarray, window_x: np.ndarray, window_y: np.ndarray, near: float, far: float) -> Tuple[np.ndarray, np.ndarray]:
+    """Get camera view given a window in world space
+
+    Args:
+        view_point (np.ndarray): shape (3,)
+        window_center (np.ndarray): shape (3,), the center of window in world space
+        window_x (np.ndarray): shape (3,), the x axis (right) of window in world space
+        window_y (np.ndarray): shape (3,), the y axis (up) of window in world space
+        near (float): 
+        far (float): 
+
+    Returns:
+        view: camera view matrix
+        perspective: camera perspective matrix
+    """
+    x = window_x / np.sum(window_x ** 2, axis=-1, keepdims=True) ** 0.5
+    window_y = window_y - x * np.sum(window_y * x, axis=-1, keepdims=True)
+    y = window_y / np.sum(window_y ** 2, axis=-1, keepdims=True) ** 0.5
+    z = np.cross(window_x, window_y)
+    z = z / np.sum(z ** 2, axis=-1, keepdims=True) ** 0.5
+
+    view = np.concatenate([np.stack([x, y, z, view_point], axis=-1), np.array([[0, 0, 0, 1]], dtype=view_point.dtype)], axis=-2)
+    
+    screen_distance = np.sum((view_point - window_center) * z, axis=-1)
+    fx = screen_distance / np.sum(window_x ** 2, axis=-1) ** 0.5
+    fy = screen_distance / np.sum(window_y ** 2, axis=-1) ** 0.5
+    cx = np.sum((view_point - window_center) * x, axis=-1) / np.sum(window_x ** 2, axis=-1) ** 0.5
+    cy = np.sum((view_point - window_center) * y, axis=-1) / np.sum(window_y ** 2, axis=-1) ** 0.5
+    a = (near + far) / (near - far)
+    b = 2. * near * far / (near - far)
+    perspective = np.array([
+        [fx, 0,  cx, 0],
+        [ 0, fy, cy, 0], 
+        [ 0,  0,  a, b],
+        [ 0,  0, -1, 0]
+    ], dtype=view_point.dtype)
+
+    return view, perspective
+
 def perspective_to_intrinsic(perspective: np.ndarray) -> np.ndarray:
     """OpenGL convention perspective matrix to OpenCV convention intrinsic
 
