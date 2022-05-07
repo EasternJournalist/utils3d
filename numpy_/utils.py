@@ -288,11 +288,10 @@ def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
     face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((-1, 3))
     face_indices = faces.reshape((-1,))
     vertex_normal = np.zeros_like(vertices)
-    vertex_count = np.zeros(vertices.shape[0])
     while len(face_normal) > 0:
         v_id, f_i = np.unique(face_indices, return_index=True)
         vertex_normal[v_id] += face_normal[f_i]
-        vertex_count[v_id] += 1
-        face_normal = np.delete(face_indices, f_i)
+        face_normal = np.delete(face_normal, f_i, axis=0)
+        face_indices = np.delete(face_indices, f_i)
     vertex_normal = np.nan_to_num(vertex_normal / np.sum(vertex_normal ** 2, axis=-1, keepdims=True) ** 0.5)
     return vertex_normal

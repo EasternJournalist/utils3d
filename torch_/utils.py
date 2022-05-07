@@ -38,7 +38,7 @@ def compute_face_normal(vertices: torch.Tensor, faces: torch.Tensor):
     Returns:
         normals (np.ndarray): face normals of shape (..., T, 3)
     """
-    normal = torch.cross(torch.index_select(vertices, faces[:, 1]) - torch.index_select(vertices, faces[:, 0]), torch.index_select(vertices, faces[:, 2]) - torch.index_select(vertices, faces[:, 0]))
+    normal = torch.cross(torch.index_select(vertices, dim=-2, index=faces[:, 1]) - torch.index_select(vertices, dim=-2, index=faces[:, 0]), torch.index_select(vertices, dim=-2, index=faces[:, 2]) - torch.index_select(vertices, dim=-2, index=faces[:, 0]))
     normal = torch.nan_to_num(normal / torch.norm(normal, p=2, dim=-1, keepdim=True))
     return normal
 
@@ -53,7 +53,7 @@ def compute_vertex_normal(vertices: torch.Tensor, faces: torch.Tensor) -> torch.
         normals (np.ndarray): vertex normals of shape (..., N, 3)
     """
     face_normal = compute_face_normal(vertices, faces) # (..., T, 3)
-    face_normal = face_normal[..., None, :].repeat(*[1] * (len(vertices.shape) - 2), 3, 1).view(*face_normal.shape[:-2], -1, 3) # (..., T * 3, 3)
+    face_normal = face_normal[..., None, :].repeat(*[1] * (len(vertices.shape) - 1), 3, 1).view(*face_normal.shape[:-2], -1, 3) # (..., T * 3, 3)
     vertex_normal = torch.index_add(torch.zeros_like(vertices), dim=-2, index=faces.view(-1), source=face_normal)
     vertex_normal = torch.nan_to_num(vertex_normal / torch.norm(vertex_normal, p=2, dim=-1, keepdim=True))
     return vertex_normal
