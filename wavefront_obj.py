@@ -2,7 +2,7 @@ from io import TextIOWrapper
 from typing import Any, Union
 
 
-def read_obj(file : Any, encoding: Union[str, None] = None):
+def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool = False):
     """Read wavefront .obj file, without preprocessing.
     
     Why bothering having this read_obj() while we already have other libraries like `trimesh`? 
@@ -37,36 +37,44 @@ def read_obj(file : Any, encoding: Union[str, None] = None):
     vn = []
     vp = []
     f = []
+    o = []
+    s = []
     usemtl = []
 
     pad0 = lambda l: l + [0] * (3 - len(l))
 
     for line in lines:
-        s = line.strip().split()
-        if s[0] == 'v':
-            assert 4 <= len(s) <= 5
-            v.append([float(e) for e in s[1:]])
-        elif s[0] == 'vt':
-            assert 2 <= len(s) <= 4
-            vt.append([float(e) for e in s[1:]])
-        elif s[0] == 'vn':
-            assert len(s) == 4
-            vn.append([float(e) for e in s[1:]])
-        elif s[0] == 'vp':
-            assert 2 <= len(s) <= 4
-            vp.append([float(e) for e in s[1:]])
-        elif s[0] == 'f':
-            f.append([pad0([int(i) if i else 0 for i in e.split('/')]) for e in s[1:]])
-        elif s[0] == 'usemtl':
-            assert len(s) == 2
-            usemtl.append({'name': s[1], 'f':len(f)})
-        elif s[0] == 'mtllib':
-            assert len(s) == 2
-            mtllib.append(s[1])
-        elif s[0][0] == '#':
+        sq = line.strip().split()
+        if sq[0] == 'v':
+            assert 4 <= len(sq) <= 5
+            v.append([float(e) for e in sq[1:]])
+        elif sq[0] == 'vt':
+            assert 2 <= len(sq) <= 4
+            vt.append([float(e) for e in sq[1:]])
+        elif sq[0] == 'vn':
+            assert len(sq) == 4
+            vn.append([float(e) for e in sq[1:]])
+        elif sq[0] == 'vp':
+            assert 2 <= len(sq) <= 4
+            vp.append([float(e) for e in sq[1:]])
+        elif sq[0] == 'f':
+            f.append([pad0([int(i) if i else 0 for i in e.split('/')]) for e in sq[1:]])
+        elif sq[0] == 'usemtl':
+            assert len(sq) == 2
+            usemtl.append({'name': sq[1], 'f':len(f)})
+        elif sq[0] == 'o':
+            assert len(sq) == 2
+            o.append({'name': sq[1], 'f': len(f)})
+        elif sq[0] == 's':
+            s.append({'name': sq[1], 'f': len(f)})
+        elif sq[0] == 'mtllib':
+            assert len(sq) == 2
+            mtllib.append(sq[1])
+        elif sq[0][0] == '#':
             continue
         else:
-            raise Exception()
+            if not ignore_unknown:
+                raise Exception(f'Unknown keyword {sq[0]}')
     
     return {
         'mtllib': mtllib,
@@ -75,5 +83,7 @@ def read_obj(file : Any, encoding: Union[str, None] = None):
         'vn': vn,
         'vp': vp,
         'f': f,
+        'o': o,
+        's': s,
         'usemtl': usemtl,
     }
