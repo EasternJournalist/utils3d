@@ -1,7 +1,8 @@
 from io import TextIOWrapper
 from typing import Any, Union
 
-def read_obj(file : Any, encoding: str = ...):
+
+def read_obj(file : Any, encoding: Union[str, None] = None):
     """Read wavefront .obj file, without preprocessing.
     
     Why bothering having this read_obj() while we already have other libraries like `trimesh`? 
@@ -16,18 +17,13 @@ def read_obj(file : Any, encoding: str = ...):
     
     Returns:
         obj (dict): A dict containing .obj components
-        {
+        {   
+            'mtllib': [],
             'v': [[0,1, 0.2, 1.0], [1.2, 0.0, 0.0], ...],
             'vt': [[0.5, 0.5], ...],
-            'vn'
-            'f': [
-                {
-                    'usemtl': 'mtl1' ,
-                    'v': [[1, 2, 3], [2, 3, 4, 5], ...],
-                    'vt': [[4, 2, 3], [1, 7, 8, 9], ...],
-                    'vn': [[1, 2, 3], [2, 3, 4, 5], ...]
-                }
-            ]
+            'vn': [[0., 0.7, 0.7], [0., -0.7, 0.7], ...],
+            'f': [[[1, 0, 0], [2, 0, 0], [3, 0, 0]], ...]   # index in the order of (face, vertex, v/vt/vn). NOTE: Indices start from 1. 0 indicates skip.
+            'usemtl': [{'name': 'mtl1', 'f': 7}]
         }
     """
     if isinstance(file, TextIOWrapper):
@@ -35,16 +31,15 @@ def read_obj(file : Any, encoding: str = ...):
     else:
         with open(file, 'r', encoding=encoding) as fp:
             lines = fp.readlines()
+    mtllib = []
     v = []
     vt = []
     vn = []
     vp = []
-    faces = []
+    f = []
+    usemtl = []
 
-    current_matname = None
-    current_faces_v = []
-    current_faces_v = []
-    current_faces_v = []
+    pad0 = lambda l: l + [0] * (3 - len(l))
 
     for line in lines:
         s = line.strip().split()
@@ -61,16 +56,24 @@ def read_obj(file : Any, encoding: str = ...):
             assert 2 <= len(s) <= 4
             vp.append([float(e) for e in s[1:]])
         elif s[0] == 'f':
-            t = [e.split('/') for e in s[1:]]
-            len(t[0]) 
+            f.append([pad0([int(i) if i else 0 for i in e.split('/')]) for e in s[1:]])
         elif s[0] == 'usemtl':
             assert len(s) == 2
-            current_matname = s[1]
+            usemtl.append({'name': s[1], 'f':len(f)})
+        elif s[0] == 'mtllib':
+            assert len(s) == 2
+            mtllib.append(s[1])
         elif s[0][0] == '#':
             continue
         else:
             raise Exception()
     
-    obj = {}
-
-    
+    return {
+        'mtllib': mtllib,
+        'v': v,
+        'vt': vt,
+        'vn': vn,
+        'vp': vp,
+        'f': f,
+        'usemtl': usemtl,
+    }
