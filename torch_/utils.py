@@ -117,7 +117,7 @@ def extrinsic_to_view(extrinsic: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: shape (4, 4) or (..., 4, 4) OpenGL convention view matrix
     """
-    return torch.inverse(extrinsic) @ torch.diag([1, -1, -1, 1]).to(extrinsic)
+    return torch.inverse(extrinsic) @ torch.diag(torch.tensor([1, -1, -1, 1])).to(extrinsic)
 
 def view_to_extrinsic(view: torch.Tensor) -> torch.Tensor:
     """OpenCV convention camera extrinsic to OpenGL convention view matrix
@@ -128,7 +128,7 @@ def view_to_extrinsic(view: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: shape (4, 4) or (..., 4, 4) OpenCV convention camera extrinsic
     """
-    return torch.diag([1, -1, -1, 1]).to(view) @ torch.inverse(view)
+    return torch.diag(torch.tensor([1, -1, -1, 1])).to(view) @ torch.inverse(view)
 
 def camera_cv_to_gl(extrinsic: torch.Tensor, intrinsic: torch.Tensor, near: float, far: float):
     """Convert OpenCV convention camera extrinsic & intrinsic to OpenGL convention view matrix and perspective matrix

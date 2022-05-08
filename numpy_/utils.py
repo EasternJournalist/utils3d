@@ -110,7 +110,7 @@ def view_to_extrinsic(view: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: shape (4, 4) or (..., 4, 4) OpenCV convention camera extrinsic
     """
-    return np.diag([1, -1, -1, 1], dtype=view.dtype) @ np.linalg.inv(view)
+    return np.diag(np.array([1, -1, -1, 1], dtype=view.dtype)) @ np.linalg.inv(view)
 
 def camera_cv_to_gl(extrinsic: np.ndarray, intrinsic: np.ndarray, near: float, far: float):
     """Convert OpenCV convention camera extrinsic & intrinsic to OpenGL convention view matrix and perspective matrix
