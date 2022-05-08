@@ -99,7 +99,7 @@ def extrinsic_to_view(extrinsic: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: shape (4, 4) or (..., 4, 4) OpenGL convention view matrix
     """
-    return np.linalg.inv(extrinsic) @ np.diag([1, -1, -1, 1], dtype=extrinsic.dtype)
+    return np.linalg.inv(extrinsic) @ np.diag(np.array([1, -1, -1, 1], dtype=extrinsic.dtype))
 
 def view_to_extrinsic(view: np.ndarray) -> np.ndarray:
     """OpenCV convention camera extrinsic to OpenGL convention view matrix
@@ -127,7 +127,7 @@ def camera_cv_to_gl(extrinsic: np.ndarray, intrinsic: np.ndarray, near: float, f
     """
     return extrinsic_to_view(extrinsic), intrinsic_to_perspective(intrinsic, near, far)
 
-def camera_gl_to_cv(view, perspective):
+def camera_gl_to_cv(view: np.ndarray, perspective: np.ndarray):
     """Convert OpenGL convention view matrix & perspective matrix to OpenCV convention camera extrinsic & intrinsic 
 
     Args:
@@ -139,6 +139,24 @@ def camera_gl_to_cv(view, perspective):
         perspective (np.ndarrray): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
     """
     return view_to_extrinsic(view), perspective_to_intrinsic(perspective)
+
+def view_look_at(eye: np.ndarray, look_at: np.ndarray, up: np.ndarray) -> np.ndarray:
+    """Return a view matrix looking at something
+
+    Args:
+        eye (np.ndarray): shape (3,) eye position
+        look_at (np.ndarray): shape (3,) the point to look at
+        up (np.ndarray): shape (3,) head up direction (y axis in screen space). Not necessarily othogonal to view direction
+
+    Returns:
+        view: shape (4, 4), view matrix
+    """
+    z = eye - look_at
+    z = z / np.linalg.norm(z, keepdims=True)
+    y = up - np.sum(up * z, axis=-1, keepdims=True) * z
+    y = y / np.linalg.norm(y, keepdims=True)
+    x = np.cross(y, z)
+    return np.concatenate([np.stack([x, y, z, eye], axis=-1), np.array([[0., 0., 0., 1.]])], axis=-2).astype(np.float32)
 
 def pixel_to_uv(pixel: np.ndarray, width: int, height: int) -> np.ndarray:
     """

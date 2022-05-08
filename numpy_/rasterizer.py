@@ -195,7 +195,7 @@ class Context:
         height: int, 
         vertices: np.ndarray, 
         attributes: np.ndarray, 
-        triangle_faces: np.ndarray = None,  
+        faces: np.ndarray = None,  
         transform_matrix: np.ndarray = None, 
         image_buffer: np.ndarray = None, 
         depth_buffer: np.ndarray = None,
@@ -210,7 +210,7 @@ class Context:
             height (int): result image height
             vertices (np.ndarray): Vertex positions of shape (N, M), M = 2, 3 or 4. `transform_matrix` can be applied convert vertex positions to clip space. If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`. Note the dtype will always be converted to `float32`.
             attributes (np.ndarray): Vertex attrubutes shape shape (N, C), C = 1, 2, 3 or 4. 
-            triangle_faces (np.ndarray): Triangle vertices
+            faces (np.ndarray): shape (T, 3), triangular faces vertuces
             transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             image_buffer (np.ndarray, optional): The initial image to draw on. By default the image is initialized with zeros.
             depth_buffer (np.ndarray, optional): The initial depth to draw on. By default the depth is initialized with ones (infinitely far).
@@ -225,6 +225,7 @@ class Context:
         assert vertices.shape[0] == attributes.shape[0]
         assert 2 <= vertices.shape[1] <= 4
         assert 1 <= attributes.shape[1] <= 4
+        assert len(faces.shape) == 2 and faces.shape[1] == 3
         if image_buffer is not None:
             assert image_buffer.shape[0] == height and image_buffer.shape[1] == width
         if depth_buffer is not None:
@@ -246,9 +247,9 @@ class Context:
             attributes = np.concatenate([attributes, np.full((n_vertices, 4 - attr_size), one_value(attr_dtype), dtype=attr_dtype)], axis=-1)
 
         # Create vertex array
-        vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
+        vbo_vert = self.__ctx__.buffer(vertices.astype('f4', copy=False))
         vbo_attr = self.__ctx__.buffer(attributes)
-        ibo = self.__ctx__.buffer(triangle_faces.astype('i4')) if triangle_faces is not None else None
+        ibo = self.__ctx__.buffer(faces.astype('i4', copy=False)) if faces is not None else None
         if ibo is None:
             vao = self.__ctx__.vertex_array(self.__program_rasterize__, [(vbo_vert, '4f4', 'in_vert'), (vbo_attr, f'4{attr_dtype}', 'in_attr')])
         else:
@@ -313,7 +314,7 @@ class Context:
         elif interpolation == 'nearest':
             texture_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
         texture_tex.use(location=0)
-        texture_uv = self.__ctx__.texture((width, height), 2, dtype='f4', data=uv.astype('f4'))
+        texture_uv = self.__ctx__.texture((width, height), 2, dtype='f4', data=uv.astype('f4', copy=False))
         texture_uv.filter = (moderngl.NEAREST, moderngl.NEAREST)
         texture_uv.use(location=1)
 
@@ -343,7 +344,7 @@ class Context:
         vertices: np.ndarray, 
         vertices_uv: np.ndarray, 
         texture: np.ndarray, 
-        triangle_faces: np.ndarray = None,
+        faces: np.ndarray = None,
         transform_matrix: np.ndarray = None, 
         interpolation: str = 'linear', 
         image_buffer: np.ndarray = None, 
@@ -358,7 +359,7 @@ class Context:
             height (int): result image height
             vertices (np.ndarray): vertex positions of shape (N, M), `M` = 2, 3 or 4. `transform_matrix` can be applied convert vertex positions to clip space. If the dimension of vertices coordinate is less than 4, coordinates `z` will be padded with `0` and `w` will be padded with `1`. Note the dtype will always be converted to `float32`.
             vertices_uv (np.ndarray): vertices UV texture coordinates fo shape (N, 2). Note the dtype will always be converted to `float32`.
-            triangle_faces (np.ndarray): triangles' vertices faces of shape (T, 3). 
+            faces (np.ndarray): triangles' vertices faces of shape (T, 3). 
             texture (np.ndarray): The texture image
             transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             interpolation (Literal[&#39;nearest&#39;, &#39;linear&#39;], optional): texture interpolation method. Defaults to 'linear'.
@@ -372,7 +373,7 @@ class Context:
             depth_buffer (np.ndarray): shape (height, width). The depth buffer in screen space ranging from 0 to 1; 0 is the near plane, and 1 is the far plane. If you want the linear depth in view space (z value), you can use 'to_linear_depth'
         """
         # Check data type
-        assert len(vertices.shape) == 2 and len(vertices_uv.shape) == 2 and len(triangle_faces.shape) == 2 and len(texture.shape) == 3
+        assert len(vertices.shape) == 2 and len(vertices_uv.shape) == 2 and len(faces.shape) == 2 and len(texture.shape) == 3
         assert vertices.shape[0] == vertices_uv.shape[0]
         assert 2 <= vertices.shape[1] <= 4
         assert 1 <= texture.shape[2] <= 4
@@ -397,9 +398,9 @@ class Context:
             texture = np.concatenate([texture, np.full((*texture.shape[:2], 4 - tex_dsize), one_value(tex_dtype), dtype=tex_dtype)], axis=-1)
 
         # Create vertex array
-        vbo_vert = self.__ctx__.buffer(vertices.astype('f4'))
-        vbo_uv = self.__ctx__.buffer(vertices_uv.astype('f4'))
-        ibo = self.__ctx__.buffer(triangle_faces.astype('i4')) if triangle_faces is not None else None
+        vbo_vert = self.__ctx__.buffer(vertices.astype('f4', copy=False))
+        vbo_uv = self.__ctx__.buffer(vertices_uv.astype('f4', copy=False))
+        ibo = self.__ctx__.buffer(faces.astype('i4', copy=False)) if faces is not None else None
         if ibo is None:
             vao = self.__ctx__.vertex_array(self.__program_rasterize_texture__, [(vbo_vert, '4f4', 'in_vert'), (vbo_uv, f'2f4', 'in_uv')])
         else:
@@ -462,7 +463,7 @@ class Context:
         height: int, 
         vertices_source: np.ndarray, 
         vertices_target: np.ndarray, 
-        triangle_faces: np.ndarray = None,  
+        faces: np.ndarray = None,  
         transform_matrix_source: np.ndarray = None,
         transform_matrix_target: np.ndarray = None, 
         target_depth_buffer: np.ndarray = None,
@@ -477,7 +478,7 @@ class Context:
             height (int): image height
             vertices_source (np.ndarray): source vertices positions
             vertices_target (np.ndarray): target vertices positions
-            triangle_faces (np.ndarray, optional): shape (T, 3). Vertex faces of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help. Defaults to None.
+            faces (np.ndarray, optional): shape (T, 3). Vertex faces of each triangle. `T` is the number of triangles. If the mesh is not trianglular mesh, `trianglate()` can help. Defaults to None.
             transform_matrix_source (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             transform_matrix_target (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
             target_depth_buffer (np.ndarray, optional): _description_. Defaults to None.
@@ -513,9 +514,9 @@ class Context:
             vertices_target = np.concatenate([vertices_target, np.zeros((n_vertices, 1)), np.ones((n_vertices, 1))], axis=-1)
 
         # Create vertex array
-        vbo_vert_src = self.__ctx__.buffer(vertices_source.astype('f4'))
-        vbo_vert_tgt = self.__ctx__.buffer(vertices_target.astype('f4'))
-        ibo = self.__ctx__.buffer(triangle_faces.astype('i4')) if triangle_faces is not None else None
+        vbo_vert_src = self.__ctx__.buffer(vertices_source.astype('f4', copy=False))
+        vbo_vert_tgt = self.__ctx__.buffer(vertices_target.astype('f4', copy=False))
+        ibo = self.__ctx__.buffer(faces.astype('i4', copy=False)) if faces is not None else None
         if ibo is None:
             vao = self.__ctx__.vertex_array(self.__program_flow__, [(vbo_vert_src, '4f4', 'in_vert_src'), (vbo_vert_tgt, '4f4', 'in_vert_tgt')])
         else:
@@ -586,12 +587,12 @@ class Context:
 
         # Create vertex array
         im_uv, im_faces = utils.image_mesh(width, height)
-        vbo_uv = self.__ctx__.buffer(im_uv.astype('f4'))
-        ibo = self.__ctx__.buffer(utils.triangulate(im_faces).astype('i4'))
+        vbo_uv = self.__ctx__.buffer(im_uv.astype('f4', copy=False))
+        ibo = self.__ctx__.buffer(utils.triangulate(im_faces).astype('i4', copy=False))
         vao = self.__ctx__.vertex_array(self.__program_warp__, [(vbo_uv, '2f4', 'in_uv')], index_buffer=ibo, index_element_size=4)
 
         # Create texture
-        pixel_positions_tex = self.__ctx__.texture((width, height), 4, dtype='f4', data=pixel_positions.astype('f4'))
+        pixel_positions_tex = self.__ctx__.texture((width, height), 4, dtype='f4', data=pixel_positions.astype('f4', copy=False))
         pixel_positions_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
         image_tex = self.__ctx__.texture((width, height), n_channels, dtype=image_dtype, data=image)
         if interpolation == 'linear':

@@ -13,6 +13,7 @@ from .utils import (
     view_to_extrinsic,
     camera_cv_to_gl,
     camera_gl_to_cv,
+    view_look_at,
     pixel_to_uv,
     pixel_to_ndc,
     image_uv,
@@ -23,3 +24,4 @@ from .utils import (
     compute_face_normal,
     compute_vertex_normal
 )
+from . import shapes
