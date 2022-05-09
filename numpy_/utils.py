@@ -313,3 +313,22 @@ def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
         face_indices = np.delete(face_indices, f_i)
     vertex_normal = np.nan_to_num(vertex_normal / np.sum(vertex_normal ** 2, axis=-1, keepdims=True) ** 0.5)
     return vertex_normal
+
+def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, color_b: np.ndarray) -> np.ndarray:
+    """get a chessboard image
+
+    Args:
+        width (int): image width
+        height (int): image height
+        grid_size (int): size of chessboard grid
+        color_a (np.ndarray): color of the grid at the top-left corner
+        color_b (np.ndarray): color in complementary grids
+
+    Returns:
+        image (np.ndarray): shape (height, width, channels), chessboard image
+    """
+    x = np.arange(width) // grid_size
+    y = np.arange(height) // grid_size
+    mask = (x[None, :] + y[:, None]) % 2
+    image = (1 - mask[..., None]) * color_a + mask[..., None] * color_b
+    return image

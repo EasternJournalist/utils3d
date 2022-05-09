@@ -8,6 +8,7 @@ from ..numpy_.utils import (
     image_mesh as __image_mesh,
     to_linear_depth as __to_linear_depth,
     to_depth_buffer as __to_depth_buffer,
+    chessboard as __chessboard
 )
 
 def to_linear_depth(depth_buffer: torch.Tensor) -> torch.Tensor:
@@ -216,3 +217,21 @@ def projection_ndc(vertices: torch.Tensor, model_matrix: torch.Tensor = None, vi
     linear_depth = clip_coord[..., 3]
     return ndc_coord, linear_depth
 
+def chessboard(width: int, height: int, grid_size: int, color_a: torch.Tensor, color_b: torch.Tensor) -> torch.Tensor:
+    """get a chessboard image
+
+    Args:
+        width (int): image width
+        height (int): image height
+        grid_size (int): size of chessboard grid
+        color_a (torch.Tensor): shape (chanenls,), color of the grid at the top-left corner
+        color_b (torch.Tensor): shape (chanenls,), color in complementary grids
+
+    Returns:
+        image (np.ndarray): shape (height, width, channels), chessboard image
+    """
+    x = torch.div(torch.arange(width), grid_size, rounding_mode='floor')
+    y = torch.div(torch.arange(height), grid_size, rounding_mode='floor')
+    mask = ((x[None, :] + y[:, None]) % 2).to(color_a)
+    image = (1 - mask[..., None]) * color_a + mask[..., None] * color_b
+    return image

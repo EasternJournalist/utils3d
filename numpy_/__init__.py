@@ -22,6 +22,7 @@ from .utils import (
     inverse_projection,
     projection_cv,
     compute_face_normal,
-    compute_vertex_normal
+    compute_vertex_normal,
+    chessboard
 )
 from . import shapes

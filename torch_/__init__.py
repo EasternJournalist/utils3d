@@ -15,5 +15,6 @@ from .utils import (
     image_uv,
     image_mesh,
     projection,
-    projection_ndc
+    projection_ndc,
+    chessboard
 )
