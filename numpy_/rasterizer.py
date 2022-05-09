@@ -200,7 +200,8 @@ class Context:
         image_buffer: np.ndarray = None, 
         depth_buffer: np.ndarray = None,
         alpha_blend: bool = False,
-        cull_backface: bool = False
+        cull_backface: bool = False,
+        wireframe: bool = False
     ):
         """
         Rasterize triangles onto image with attributes attached to each vertex.\n
@@ -230,7 +231,7 @@ class Context:
             assert image_buffer.shape[0] == height and image_buffer.shape[1] == width
         if depth_buffer is not None:
             assert depth_buffer.dtype == np.float32 and len(depth_buffer.shape) == 2 and depth_buffer.shape[0] == height and depth_buffer.shape[1] == width 
-
+        
         # Pad vertices
         n_vertices = vertices.shape[0]
         if vertices.shape[1] == 3:
@@ -280,9 +281,10 @@ class Context:
             self.__ctx__.enable(self.__ctx__.BLEND)
         else:
             self.__ctx__.disable(self.__ctx__.BLEND)
+        self.__ctx__.wireframe = wireframe
         vao.render(moderngl.TRIANGLES)
         self.__ctx__.disable(self.__ctx__.DEPTH_TEST)
-
+        
         # Read result
         image_tex.read_into(image_buffer)
         depth_tex.read_into(depth_buffer)
