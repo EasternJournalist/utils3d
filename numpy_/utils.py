@@ -158,6 +158,36 @@ def view_look_at(eye: np.ndarray, look_at: np.ndarray, up: np.ndarray) -> np.nda
     x = np.cross(y, z)
     return np.concatenate([np.stack([x, y, z, eye], axis=-1), np.array([[0., 0., 0., 1.]])], axis=-2).astype(np.float32)
 
+def normalize_intrinsic(intrinsic: np.ndarray, width: int, height: int) -> np.ndarray:
+    """normalize camera intrinsic
+    Args:
+        intrinsic (torch.Tensor): shape (..., 3, 3) 
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        (torch.Tensor): shape (..., 3, 3), same as input intrinsic. Normalized intrinsic(s)
+    """
+    return (intrinsic + np.array([0.5, 0.5, 0.], dtype=intrinsic.dtype)[:, None]) * np.array([[1 / width, 1 / height, 1]], dtype=intrinsic.dtype)
+
+def crop_intrinsic(intrinsic: np.ndarray, width: int, height: int, left: int, top: int, crop_width: int, crop_height: int):
+    """Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:bottom, left:right]
+
+    Args:
+        intrinsic (torch.Tensor): shape (3, 3), a normalized camera intrinsic
+        width (int): 
+        height (int): 
+        top (int): 
+        left (int): 
+        bottom (int): 
+        right (int): 
+    """
+    s = np.array([
+        [width / crop_width, 0, -left / crop_width], 
+        [0, height / crop_height,  -top / crop_height], 
+        [0., 0., 1.]], dtype=intrinsic.dtype)
+    return s @ intrinsic
+
 def pixel_to_uv(pixel: np.ndarray, width: int, height: int) -> np.ndarray:
     """
     Args:

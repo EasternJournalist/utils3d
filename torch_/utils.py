@@ -1,5 +1,6 @@
 import torch
-from typing import Tuple
+from typing import Tuple, Union
+from numbers import Number
 
 from ..numpy_.utils import (
     perspective_from_fov as __perspective_from_fov, 
@@ -158,6 +159,36 @@ def camera_gl_to_cv(view, perspective):
         perspective (torch.Tensor): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
     """
     return view_to_extrinsic(view), perspective_to_intrinsic(perspective)
+
+def normalize_intrinsic(intrinsic: torch.Tensor, width: int, height: int) -> torch.Tensor:
+    """normalize camera intrinsic
+    Args:
+        intrinsic (torch.Tensor): shape (..., 3, 3) 
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        (torch.Tensor): shape (..., 3, 3), same as input intrinsic. Normalized intrinsic(s)
+    """
+    return intrinsic * torch.tensor([1 / width, 1 / height, 1])[:, None].to(intrinsic)
+
+def crop_intrinsic(intrinsic: torch.Tensor, width: int, height: int, left: int, top: int, crop_width: int, crop_height: int):
+    """Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:bottom, left:right]
+
+    Args:
+        intrinsic (torch.Tensor): shape (3, 3), a normalized camera intrinsic
+        width (int): 
+        height (int): 
+        top (int): 
+        left (int): 
+        bottom (int): 
+        right (int): 
+    """
+    s = torch.tensor([
+        [width / crop_width, 0, -left / crop_width], 
+        [0, height / crop_height,  -top / crop_height], 
+        [0., 0., 1.]]).to(intrinsic)
+    return s @ intrinsic
 
 def image_uv(width: int, height: int):
     return torch.from_numpy(__image_uv(width, height))
