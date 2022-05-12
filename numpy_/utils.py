@@ -168,7 +168,7 @@ def normalize_intrinsic(intrinsic: np.ndarray, width: int, height: int) -> np.nd
     Returns:
         (torch.Tensor): shape (..., 3, 3), same as input intrinsic. Normalized intrinsic(s)
     """
-    return (intrinsic + np.array([0.5, 0.5, 0.], dtype=intrinsic.dtype)[:, None]) * np.array([[1 / width, 1 / height, 1]], dtype=intrinsic.dtype)
+    return intrinsic * np.array([1 / width, 1 / height, 1], dtype=intrinsic.dtype)[:, None]
 
 def crop_intrinsic(intrinsic: np.ndarray, width: int, height: int, left: int, top: int, crop_width: int, crop_height: int):
     """Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:bottom, left:right]
