@@ -4,6 +4,8 @@ from .utils import (
     triangulate,
     compute_face_normal,
     compute_vertex_normal,
+    compute_face_tbn,
+    compute_vertex_tbn,
     perspective_from_image,
     perspective_from_fov_xy,
     perspective_to_intrinsic,
