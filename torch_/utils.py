@@ -104,6 +104,93 @@ def compute_vertex_tbn(faces_topo: torch.Tensor, pos: torch.Tensor, faces_pos: t
     vertex_tbn = vertex_tbn / (torch.norm(vertex_tbn, p=2, dim=-1, keepdim=True) + 1e-7)
     return vertex_tbn
 
+def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
+    """Laplacian smooth with cotangent weights
+
+    Args:
+        vertices (torch.Tensor): shape (..., N, 3)
+        faces (torch.Tensor): shape (T, 3)
+    """
+    sum_verts = torch.zeros_like(vertices)                          # (..., N, 3)
+    sum_weights = torch.zeros(*vertices.shape[:-1]).to(vertices)    # (..., N)
+    face_verts = torch.index_select(vertices, -2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, 3)   # (..., T, 3)
+    for i in range(3):
+        e1 = face_verts[..., (i + 1) % 3, :] - face_verts[..., i, :]
+        e2 = face_verts[..., (i + 2) % 3, :] - face_verts[..., i, :]
+        cos_angle = (e1 * e2).sum(dim=-1) / (e1.norm(p=2, dim=-1) * e2.norm(p=2, dim=-1))
+        cot_angle = cos_angle / (1 - cos_angle ** 2) ** 0.5         # (..., T, 3)
+        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 1) % 3], face_verts[..., (i + 2) % 3, :] * cot_angle[..., None])
+        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 1) % 3], cot_angle)
+        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 2) % 3], face_verts[..., (i + 1) % 3, :] * cot_angle[..., None])
+        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 2) % 3], cot_angle)
+    return sum_verts / (sum_weights[..., None] + 1e-7)
+
+def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
+    """Laplacian smooth with cotangent weights
+
+    Args:
+        vertices (torch.Tensor): shape (..., N, 3)
+        faces (torch.Tensor): shape (T, 3)
+    """
+    sum_verts = torch.zeros_like(vertices)                          # (..., N, 3)
+    sum_weights = torch.zeros(*vertices.shape[:-1]).to(vertices)    # (..., N)
+    face_verts = torch.index_select(vertices, -2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, 3)   # (..., T, 3)
+    for i in range(3):
+        e1 = face_verts[..., (i + 1) % 3, :] - face_verts[..., i, :]
+        e2 = face_verts[..., (i + 2) % 3, :] - face_verts[..., i, :]
+        cos_angle = (e1 * e2).sum(dim=-1) / (e1.norm(p=2, dim=-1) * e2.norm(p=2, dim=-1))
+        cot_angle = cos_angle / (1 - cos_angle ** 2) ** 0.5         # (..., T, 3)
+        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 1) % 3], face_verts[..., (i + 2) % 3, :] * cot_angle[..., None])
+        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 1) % 3], cot_angle)
+        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 2) % 3], face_verts[..., (i + 1) % 3, :] * cot_angle[..., None])
+        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 2) % 3], cot_angle)
+    return sum_verts / (sum_weights[..., None] + 1e-7)
+
+def taubin_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, lambda_: float = 0.5, mu_: float = -0.51) -> torch.Tensor:
+    """Taubin smooth mesh
+
+    Args:
+        vertices (torch.Tensor): _description_
+        faces (torch.Tensor): _description_
+        lambda_ (float, optional): _description_. Defaults to 0.5.
+        mu_ (float, optional): _description_. Defaults to -0.51.
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    pt = vertices + lambda_ * laplacian_smooth_mesh(vertices, faces)
+    p = pt + mu_ * laplacian_smooth_mesh(pt, faces)
+    return p
+
+def rodrigues(rot_vecs: torch.Tensor) -> torch.Tensor:
+    """Calculates the rotation matrices for a batch of rotation vectors. (code from SMPLX)
+
+    Args:
+        rot_vecs (torch.Tensor): shape (..., 3), axis-angle vetors
+
+    Returns:
+        torch.Tensor: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters
+    """
+    batch_shape = rot_vecs.shape[:-1]
+    device, dtype = rot_vecs.device, rot_vecs.dtype
+
+    angle = torch.norm(rot_vecs + 1e-8, dim=-1, keepdim=True)
+    rot_dir = rot_vecs / angle
+
+    cos = torch.cos(angle)[..., None, :]
+    sin = torch.sin(angle)[..., None, :]
+
+    # Bx1 arrays
+    rx, ry, rz = torch.split(rot_dir, 1, dim=-1)
+    K = torch.zeros((*batch_shape, 3, 3), dtype=dtype, device=device)
+
+    zeros = torch.zeros((*batch_shape, 1), dtype=dtype, device=device)
+    K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=1).view((*batch_shape, 3, 3))
+
+    ident = torch.eye(3, dtype=dtype, device=device)
+    rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
+    return rot_mat
+
 def perspective_from_image(fov: float, width: int, height: int, near: float, far: float) -> torch.Tensor:
     return torch.from_numpy(__perspective_from_fov(fov, width, height, near, far))
 
