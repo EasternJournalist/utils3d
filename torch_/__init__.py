@@ -9,10 +9,11 @@ from .utils import (
     compute_vertex_tbn,
     laplacian_smooth_mesh,
     taubin_smooth_mesh,
+    laplacian_hc_smooth_mesh,
 
     rodrigues,
 
-    perspective_from_image,
+    perspective_from_fov,
     perspective_from_fov_xy,
     perspective_to_intrinsic,
     intrinsic_to_perspective,
@@ -22,6 +23,7 @@ from .utils import (
     camera_gl_to_cv,
     normalize_intrinsic,
     crop_intrinsic,
+    view_look_at,
     
     image_uv,
     image_mesh,
