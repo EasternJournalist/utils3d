@@ -16,13 +16,14 @@ from .mesh import (
     compute_vertex_tbn,
     laplacian_smooth_mesh,
     taubin_smooth_mesh,
+    laplacian_hc_smooth_mesh,
 )
 
 from .transforms import (
     euler_angles_to_matrix,
     rodrigues,
 
-    perspective_from_image,
+    perspective_from_fov,
     perspective_from_fov_xy,
     perspective_to_intrinsic,
     intrinsic_to_perspective,
@@ -32,6 +33,7 @@ from .transforms import (
     camera_gl_to_cv,
     normalize_intrinsic,
     crop_intrinsic,
+    view_look_at,
     
     projection,
     projection_ndc,

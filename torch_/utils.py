@@ -1,24 +1,37 @@
 import torch
-from typing import Tuple, Union
+from typing import Tuple, Union, Literal
 from numbers import Number
 
 from ..numpy_.utils import (
-    perspective_from_fov as __perspective_from_fov, 
-    perspective_from_fov_xy as __perspective_from_fov_xy,
     image_uv as __image_uv,
     image_mesh as __image_mesh,
     to_linear_depth as __to_linear_depth,
     to_depth_buffer as __to_depth_buffer,
-    chessboard as __chessboard
 )
 
-def to_linear_depth(depth_buffer: torch.Tensor) -> torch.Tensor:
-    return __to_linear_depth(depth_buffer)
+def to_linear_depth(depth_buffer: torch.Tensor, near: float, far: float) -> torch.Tensor:
+    return __to_linear_depth(depth_buffer, near, far)
 
 def to_depth_buffer(linear_depth: torch.Tensor) -> torch.Tensor:
     return __to_depth_buffer(linear_depth)
 
+def view_look_at(eye: torch.Tensor, look_at: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+    """Return a view matrix looking at something
 
+    Args:
+        eye (torch.Tensor): shape (3,) eye position
+        look_at (torch.Tensor): shape (3,) the point to look at
+        up (torch.Tensor): shape (3,) head up direction (y axis in screen space). Not necessarily othogonal to view direction
+
+    Returns:
+        view: shape (4, 4), view matrix
+    """
+    z = eye - look_at
+    z = z / z.norm(keepdim=True)
+    y = up - torch.sum(up * z, dim=-1, keepdim=True) * z
+    y = y / y.norm(keepdim=True)
+    x = torch.cross(y, z)
+    return torch.cat([torch.stack([x, y, z, eye], axis=-1), torch.tensor([[0., 0., 0., 1.]])], axis=-2)
 
 def image_uv(width: int, height: int):
     return torch.from_numpy(__image_uv(width, height))
@@ -29,8 +42,6 @@ def image_mesh(width: int, height: int, mask: torch.Tensor = None):
     if mask is not None:
         uv, faces= uv.to(mask.device), faces.to(mask.device)
     return uv, faces
-
-
 
 def chessboard(width: int, height: int, grid_size: int, color_a: torch.Tensor, color_b: torch.Tensor) -> torch.Tensor:
     """get a chessboard image

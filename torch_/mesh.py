@@ -1,5 +1,5 @@
 import torch
-
+from typing import Literal
 
 def triangulate(faces: torch.Tensor) -> torch.Tensor:
     assert len(faces.shape) == 2
@@ -87,7 +87,29 @@ def compute_vertex_tbn(faces_topo: torch.Tensor, pos: torch.Tensor, faces_pos: t
     vertex_tbn = vertex_tbn / (torch.norm(vertex_tbn, p=2, dim=-1, keepdim=True) + 1e-7)
     return vertex_tbn
 
-def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
+def compute_vertex_tbn(faces_topo: torch.Tensor, pos: torch.Tensor, faces_pos: torch.Tensor, uv: torch.Tensor, faces_uv: torch.Tensor) -> torch.Tensor:
+    """compute TBN matrix for each face
+
+    Args:
+        faces_topo (torch.Tensor): (T, 3), face indice of topology
+        pos (torch.Tensor): shape (..., N_pos, 3), positions
+        faces_pos (torch.Tensor): shape(T, 3) 
+        uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
+        faces_uv (torch.Tensor): shape(T, 3) 
+        
+    Returns:
+        torch.Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors is normalized but not orthognal
+    """
+    n_vertices = faces_topo.max().item() + 1
+    n_tri = faces_topo.shape[-2]
+    batch_shape = pos.shape[:-2]
+    face_tbn = compute_face_tbn(pos, faces_pos, uv, faces_uv)    # (..., T, 3, 3)
+    face_tbn = face_tbn[..., :, None, :, :].repeat(*[1] * len(batch_shape), 1, 3, 1, 1).view(*batch_shape, n_tri * 3, 3, 3)   # (..., T * 3, 3, 3)
+    vertex_tbn = torch.index_add(torch.zeros(*batch_shape, n_vertices, 3, 3).to(face_tbn), dim=-3, index=faces_topo.view(-1), source=face_tbn)
+    vertex_tbn = vertex_tbn / (torch.norm(vertex_tbn, p=2, dim=-2, keepdim=True) + 1e-7)
+    return vertex_tbn
+
+def laplacian(vertices: torch.Tensor, faces: torch.Tensor, weight: Literal['uniform', 'cotangent'] = 'uniform') -> torch.Tensor:
     """Laplacian smooth with cotangent weights
 
     Args:
@@ -96,38 +118,34 @@ def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor) -> torch.
     """
     sum_verts = torch.zeros_like(vertices)                          # (..., N, 3)
     sum_weights = torch.zeros(*vertices.shape[:-1]).to(vertices)    # (..., N)
-    face_verts = torch.index_select(vertices, -2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, 3)   # (..., T, 3)
-    for i in range(3):
-        e1 = face_verts[..., (i + 1) % 3, :] - face_verts[..., i, :]
-        e2 = face_verts[..., (i + 2) % 3, :] - face_verts[..., i, :]
-        cos_angle = (e1 * e2).sum(dim=-1) / (e1.norm(p=2, dim=-1) * e2.norm(p=2, dim=-1))
-        cot_angle = cos_angle / (1 - cos_angle ** 2) ** 0.5         # (..., T, 3)
-        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 1) % 3], face_verts[..., (i + 2) % 3, :] * cot_angle[..., None])
-        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 1) % 3], cot_angle)
-        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 2) % 3], face_verts[..., (i + 1) % 3, :] * cot_angle[..., None])
-        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 2) % 3], cot_angle)
+    face_verts = torch.index_select(vertices, -2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., T, 3)
+    if weight == 'cotangent':
+        for i in range(3):
+            e1 = face_verts[..., (i + 1) % 3, :] - face_verts[..., i, :]
+            e2 = face_verts[..., (i + 2) % 3, :] - face_verts[..., i, :]
+            cot_angle = (e1 * e2).sum(dim=-1) / torch.cross(e1, e2, dim=-1).norm(p=2, dim=-1)   # (..., T, 3)
+            sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 1) % 3], face_verts[..., (i + 2) % 3, :] * cot_angle[..., None])
+            sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 1) % 3], cot_angle)
+            sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 2) % 3], face_verts[..., (i + 1) % 3, :] * cot_angle[..., None])
+            sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 2) % 3], cot_angle)
+    elif weight == 'uniform':
+        for i in range(3):
+            sum_verts = torch.index_add(sum_verts, -2, faces[:, i], face_verts[..., (i + 1) % 3, :])
+            sum_weights = torch.index_add(sum_weights, -1, faces[:, i], torch.ones_like(face_verts[..., i, 0]))
+    else:
+        raise NotImplementedError
     return sum_verts / (sum_weights[..., None] + 1e-7)
 
-def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor) -> torch.Tensor:
+def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, weight: Literal['uniform', 'cotangent'] = 'uniform', times: int = 5) -> torch.Tensor:
     """Laplacian smooth with cotangent weights
 
     Args:
         vertices (torch.Tensor): shape (..., N, 3)
         faces (torch.Tensor): shape (T, 3)
     """
-    sum_verts = torch.zeros_like(vertices)                          # (..., N, 3)
-    sum_weights = torch.zeros(*vertices.shape[:-1]).to(vertices)    # (..., N)
-    face_verts = torch.index_select(vertices, -2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, 3)   # (..., T, 3)
-    for i in range(3):
-        e1 = face_verts[..., (i + 1) % 3, :] - face_verts[..., i, :]
-        e2 = face_verts[..., (i + 2) % 3, :] - face_verts[..., i, :]
-        cos_angle = (e1 * e2).sum(dim=-1) / (e1.norm(p=2, dim=-1) * e2.norm(p=2, dim=-1))
-        cot_angle = cos_angle / (1 - cos_angle ** 2) ** 0.5         # (..., T, 3)
-        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 1) % 3], face_verts[..., (i + 2) % 3, :] * cot_angle[..., None])
-        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 1) % 3], cot_angle)
-        sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 2) % 3], face_verts[..., (i + 1) % 3, :] * cot_angle[..., None])
-        sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 2) % 3], cot_angle)
-    return sum_verts / (sum_weights[..., None] + 1e-7)
+    for _ in range(times):
+        vertices = laplacian(vertices, faces, weight)
+    return vertices
 
 def taubin_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, lambda_: float = 0.5, mu_: float = -0.51) -> torch.Tensor:
     """Taubin smooth mesh
@@ -143,4 +161,15 @@ def taubin_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, lambda_: flo
     """
     pt = vertices + lambda_ * laplacian_smooth_mesh(vertices, faces)
     p = pt + mu_ * laplacian_smooth_mesh(pt, faces)
+    return p
+
+def laplacian_hc_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, times: int = 5, alpha: float = 0.5, beta: float = 0.5, weight: Literal['uniform', 'cotangent'] = 'uniform'):
+    """HC algorithm from Improved Laplacian Smoothing of Noisy Surface Meshes by J.Vollmer et al.
+    """
+    p = vertices
+    for i in range(times):
+        q = p
+        p = laplacian_smooth_mesh(vertices, faces, weight)
+        b = p - (alpha * vertices + (1 - alpha) * q)
+        p = p - (beta * b + (1 - beta) * laplacian_smooth_mesh(b, faces, weight)) * 0.8
     return p
