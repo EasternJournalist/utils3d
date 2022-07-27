@@ -2,6 +2,13 @@ from .utils import (
     to_linear_depth,
     to_depth_buffer,
     
+    image_uv,
+    image_mesh,
+    
+    chessboard
+)
+
+from .mesh import (
     triangulate,
     compute_face_normal,
     compute_vertex_normal,
@@ -9,7 +16,10 @@ from .utils import (
     compute_vertex_tbn,
     laplacian_smooth_mesh,
     taubin_smooth_mesh,
+)
 
+from .transforms import (
+    euler_angles_to_matrix,
     rodrigues,
 
     perspective_from_image,
@@ -23,10 +33,6 @@ from .utils import (
     normalize_intrinsic,
     crop_intrinsic,
     
-    image_uv,
-    image_mesh,
-    
     projection,
     projection_ndc,
-    chessboard
 )
