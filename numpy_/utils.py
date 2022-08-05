@@ -138,7 +138,7 @@ def extrinsic_to_view(extrinsic: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: shape (4, 4) or (..., 4, 4) OpenGL convention view matrix
     """
-    return np.linalg.inv(extrinsic) @ np.diag([1, -1, -1, 1], dtype=extrinsic.dtype)
+    return np.linalg.inv(extrinsic) @ np.diag(np.array([1, -1, -1, 1], dtype=extrinsic.dtype))
 
 def view_to_extrinsic(view: np.ndarray) -> np.ndarray:
     """OpenCV convention camera extrinsic to OpenGL convention view matrix
@@ -149,7 +149,7 @@ def view_to_extrinsic(view: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: shape (4, 4) or (..., 4, 4) OpenCV convention camera extrinsic
     """
-    return np.diag([1, -1, -1, 1], dtype=view.dtype) @ np.linalg.inv(view)
+    return np.diag(np.array([1, -1, -1, 1], dtype=view.dtype)) @ np.linalg.inv(view)
 
 def camera_cv_to_gl(extrinsic: np.ndarray, intrinsic: np.ndarray, near: float, far: float):
     """Convert OpenCV convention camera extrinsic & intrinsic to OpenGL convention view matrix and perspective matrix
@@ -166,7 +166,7 @@ def camera_cv_to_gl(extrinsic: np.ndarray, intrinsic: np.ndarray, near: float, f
     """
     return extrinsic_to_view(extrinsic), intrinsic_to_perspective(intrinsic, near, far)
 
-def camera_gl_to_cv(view, perspective):
+def camera_gl_to_cv(view: np.ndarray, perspective: np.ndarray):
     """Convert OpenGL convention view matrix & perspective matrix to OpenCV convention camera extrinsic & intrinsic 
 
     Args:
@@ -178,6 +178,54 @@ def camera_gl_to_cv(view, perspective):
         perspective (np.ndarrray): shape (3, 3) or (..., 3, 3), OpenCV convention intrinsic
     """
     return view_to_extrinsic(view), perspective_to_intrinsic(perspective)
+
+def view_look_at(eye: np.ndarray, look_at: np.ndarray, up: np.ndarray) -> np.ndarray:
+    """Return a view matrix looking at something
+
+    Args:
+        eye (np.ndarray): shape (3,) eye position
+        look_at (np.ndarray): shape (3,) the point to look at
+        up (np.ndarray): shape (3,) head up direction (y axis in screen space). Not necessarily othogonal to view direction
+
+    Returns:
+        view: shape (4, 4), view matrix
+    """
+    z = eye - look_at
+    z = z / np.linalg.norm(z, keepdims=True)
+    y = up - np.sum(up * z, axis=-1, keepdims=True) * z
+    y = y / np.linalg.norm(y, keepdims=True)
+    x = np.cross(y, z)
+    return np.concatenate([np.stack([x, y, z, eye], axis=-1), np.array([[0., 0., 0., 1.]])], axis=-2).astype(np.float32)
+
+def normalize_intrinsic(intrinsic: np.ndarray, width: int, height: int) -> np.ndarray:
+    """normalize camera intrinsic
+    Args:
+        intrinsic (torch.Tensor): shape (..., 3, 3) 
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        (torch.Tensor): shape (..., 3, 3), same as input intrinsic. Normalized intrinsic(s)
+    """
+    return intrinsic * np.array([1 / width, 1 / height, 1], dtype=intrinsic.dtype)[:, None]
+
+def crop_intrinsic(intrinsic: np.ndarray, width: int, height: int, left: int, top: int, crop_width: int, crop_height: int):
+    """Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:bottom, left:right]
+
+    Args:
+        intrinsic (torch.Tensor): shape (3, 3), a normalized camera intrinsic
+        width (int): 
+        height (int): 
+        top (int): 
+        left (int): 
+        bottom (int): 
+        right (int): 
+    """
+    s = np.array([
+        [width / crop_width, 0, -left / crop_width], 
+        [0, height / crop_height,  -top / crop_height], 
+        [0., 0., 1.]], dtype=intrinsic.dtype)
+    return s @ intrinsic
 
 def pixel_to_uv(pixel: np.ndarray, width: int, height: int) -> np.ndarray:
     """
@@ -327,11 +375,29 @@ def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
     face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((-1, 3))
     face_indices = faces.reshape((-1,))
     vertex_normal = np.zeros_like(vertices)
-    vertex_count = np.zeros(vertices.shape[0])
     while len(face_normal) > 0:
         v_id, f_i = np.unique(face_indices, return_index=True)
         vertex_normal[v_id] += face_normal[f_i]
-        vertex_count[v_id] += 1
-        face_normal = np.delete(face_indices, f_i)
+        face_normal = np.delete(face_normal, f_i, axis=0)
+        face_indices = np.delete(face_indices, f_i)
     vertex_normal = np.nan_to_num(vertex_normal / np.sum(vertex_normal ** 2, axis=-1, keepdims=True) ** 0.5)
     return vertex_normal
+
+def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, color_b: np.ndarray) -> np.ndarray:
+    """get a chessboard image
+
+    Args:
+        width (int): image width
+        height (int): image height
+        grid_size (int): size of chessboard grid
+        color_a (np.ndarray): color of the grid at the top-left corner
+        color_b (np.ndarray): color in complementary grids
+
+    Returns:
+        image (np.ndarray): shape (height, width, channels), chessboard image
+    """
+    x = np.arange(width) // grid_size
+    y = np.arange(height) // grid_size
+    mask = (x[None, :] + y[:, None]) % 2
+    image = (1 - mask[..., None]) * color_a + mask[..., None] * color_b
+    return image
