@@ -2,7 +2,7 @@ from typing import Tuple
 import numpy as np
 import moderngl
 
-from . import utils
+from ..numpy_ import utils
 
 def map_np_dtype(dtype) -> str:
     if dtype == int:
@@ -26,7 +26,6 @@ def one_value(dtype):
 
 class Context:
     def __init__(self, standalone: bool = True, backend: str = None):
-        # TODO: create context
         if backend is None:
             self.__ctx__ = moderngl.create_context(standalone=standalone)
         else:

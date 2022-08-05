@@ -1,5 +1,5 @@
 from io import TextIOWrapper
-from typing import Any, Union
+from typing import Dict, Any, Union, Iterable
 
 
 def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool = False):
@@ -45,6 +45,8 @@ def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool
 
     for line in lines:
         sq = line.strip().split()
+        if len(sq) == 0: 
+            continue
         if sq[0] == 'v':
             assert 4 <= len(sq) <= 5
             v.append([float(e) for e in sq[1:]])
@@ -61,12 +63,12 @@ def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool
             f.append([pad0([int(i) if i else 0 for i in e.split('/')]) for e in sq[1:]])
         elif sq[0] == 'usemtl':
             assert len(sq) == 2
-            usemtl.append({'name': sq[1], 'f':len(f)})
+            usemtl.append((sq[1], len(f)))
         elif sq[0] == 'o':
             assert len(sq) == 2
-            o.append({'name': sq[1], 'f': len(f)})
+            o.append((sq[1], len(f)))
         elif sq[0] == 's':
-            s.append({'name': sq[1], 'f': len(f)})
+            s.append((sq[1], len(f)))
         elif sq[0] == 'mtllib':
             assert len(sq) == 2
             mtllib.append(sq[1])
@@ -87,3 +89,13 @@ def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool
         's': s,
         'usemtl': usemtl,
     }
+
+def write_obj(obj: Dict[str, Any], file : Any, encoding: Union[str, None] = None):
+    with open(file, 'w', encoding=encoding) as fp:
+        for k in ['v', 'vt', 'vn', 'vp']:
+            if k not in obj:
+                continue
+            for v in obj[k]:
+                print(k, *map(float, v), file=fp)
+        for f in obj['f']:
+            print('f', *((str('/').join(map(int, i)) if isinstance(int(i), Iterable) else i) for i in f), file=fp)

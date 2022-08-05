@@ -94,7 +94,7 @@ def rodrigues(rot_vecs: torch.Tensor) -> torch.Tensor:
     rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
     return rot_mat
 
-def perspective_from_image(fov: float, width: int, height: int, near: float, far: float) -> torch.Tensor:
+def perspective_from_fov(fov: float, width: int, height: int, near: float, far: float) -> torch.Tensor:
     return torch.from_numpy(__perspective_from_fov(fov, width, height, near, far))
 
 def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float) -> torch.Tensor:

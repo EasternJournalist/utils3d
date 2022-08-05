@@ -1,4 +1,3 @@
-from .rasterizer import Context
 from .utils import (
     to_linear_depth,
     to_depth_buffer,
