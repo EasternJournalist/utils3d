@@ -1,6 +1,6 @@
 import torch
 
-from ..numpy_.utils import (
+from ..numpy_.transforms import (
     perspective_from_fov as __perspective_from_fov, 
     perspective_from_fov_xy as __perspective_from_fov_xy,
 )
