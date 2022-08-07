@@ -1,7 +1,14 @@
 from .utils import (
     to_linear_depth,
     to_depth_buffer,
-    triangulate,
+
+    image_uv,
+    image_mesh,
+
+    chessboard
+)
+
+from .transforms import (
     perspective_from_fov,
     perspective_from_fov_xy,
     instrinsic_from_fov,
@@ -17,13 +24,16 @@ from .utils import (
     view_look_at,
     pixel_to_uv,
     pixel_to_ndc,
-    image_uv,
-    image_mesh,
+
     projection,
     inverse_projection,
     projection_cv,
+)
+
+from .mesh import (
     compute_face_normal,
     compute_vertex_normal,
-    chessboard
+    triangulate,
 )
+
 from . import shapes
