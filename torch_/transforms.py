@@ -37,13 +37,12 @@ def _axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
 
 def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str) -> torch.Tensor:
     """
-    Code from pytorch3d
+    Code MODIFIED from pytorch3d
     Convert rotations given as Euler angles in radians to rotation matrices.
 
     Args:
-        euler_angles: Euler angles in radians as tensor of shape (..., 3).
-        convention: Convention string of three uppercase letters from
-            {"X", "Y", and "Z"}.
+        euler_angles: Euler angles in radians as tensor of shape (..., 3), XYZ
+        convention: permutation of "X", "Y" or "Z", representing the order of Euler rotations to apply.
 
     Returns:
         Rotation matrices as tensor of shape (..., 3, 3).
@@ -58,11 +57,11 @@ def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str) -> torch
         if letter not in ("X", "Y", "Z"):
             raise ValueError(f"Invalid letter {letter} in convention string.")
     matrices = [
-        _axis_angle_rotation(c, e)
-        for c, e in zip(convention, torch.unbind(euler_angles, -1))
+        _axis_angle_rotation(c, euler_angles[..., 'XYZ'.index(c)])
+        for c in convention
     ]
     # return functools.reduce(torch.matmul, matrices)
-    return torch.matmul(torch.matmul(matrices[0], matrices[1]), matrices[2])
+    return matrices[2] @ matrices[1] @ matrices[0]
 
 
 def rodrigues(rot_vecs: torch.Tensor) -> torch.Tensor:
@@ -88,10 +87,10 @@ def rodrigues(rot_vecs: torch.Tensor) -> torch.Tensor:
     K = torch.zeros((*batch_shape, 3, 3), dtype=dtype, device=device)
 
     zeros = torch.zeros((*batch_shape, 1), dtype=dtype, device=device)
-    K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=1).view((*batch_shape, 3, 3))
+    K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=-1).view((*batch_shape, 3, 3))
 
     ident = torch.eye(3, dtype=dtype, device=device)
-    rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
+    rot_mat = ident + sin * K + (1 - cos) * torch.matmul(K, K)
     return rot_mat
 
 def perspective_from_fov(fov: float, width: int, height: int, near: float, far: float) -> torch.Tensor:
