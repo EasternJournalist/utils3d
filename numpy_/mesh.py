@@ -26,9 +26,9 @@ def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
 def index_add_(input: np.ndarray, axis: int, index: np.ndarray, source: np.ndarray):
     i_sort = np.argsort(index)
     index = index[i_sort]
-    input = input[i_sort]
+    source = source[i_sort]
     uni, uni_i = np.unique(index, return_index=True)
-    input[(slice(None),)*axis + (uni,)] += np.add.reduceat(source, uni_i, axis)
+    input[(slice(None),)*(axis % len(input.shape)) + (uni,)] += np.add.reduceat(source, uni_i, axis)
     return input
 
 def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
@@ -42,14 +42,9 @@ def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
         normals (np.ndarray): vertex normals of shape (N, 3)
     """
     face_normal = compute_face_normal(vertices, faces)
-    face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((-1, 3))
+    face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((*face_normal.shape[:-2], -1, 3))
     indices = faces.reshape((-1,))
     vertex_normal = np.zeros_like(vertices)
-    vertex_normal = index_add_(vertex_normal, 0, indices, face_normal)
-    # while len(face_normal) > 0:
-    #     v_id, f_i = np.unique(face_indices, return_index=True)
-    #     vertex_normal[v_id] += face_normal[f_i]
-    #     face_normal = np.delete(face_normal, f_i, axis=0)
-    #     face_indices = np.delete(face_indices, f_i)
+    vertex_normal = index_add_(vertex_normal, axis=-2, index=indices, source=face_normal)
     vertex_normal = np.nan_to_num(vertex_normal / np.sum(vertex_normal ** 2, axis=-1, keepdims=True) ** 0.5)
     return vertex_normal
