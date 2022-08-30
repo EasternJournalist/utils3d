@@ -31,6 +31,54 @@ class Context:
         else:
             self.__ctx__ = moderngl.create_context(standalone=standalone, backend=backend)
 
+        # self.__program_rasterize__ = self.__ctx__.program(
+        #     vertex_shader='''
+        #     #version 410
+
+        #     in vec4 in_vert;
+
+        #     uniform mat4 transform_matrix;
+
+        #     void main() {
+        #         gl_Position = transform_matrix * in_vert;
+        #         v_attr = in_attr; 
+        #     }
+        #     ''',
+        #     tess_control_shader='''
+        #     #version 410
+
+        #     layout (vertices = 3) out;
+
+        #     void main() {
+        #         if (gl_InvocationID == 0)
+        #         {
+        #             gl_TessLevelInner[0] = 1.0;
+        #             gl_TessLevelOuter[0] = 1.0;
+        #             gl_TessLevelOuter[1] = 1.0;
+        #             gl_TessLevelOuter[2] = 1.0;
+        #         }
+        #         gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
+        #     }
+        #     '''
+        #     tess_evaluation_shader='''
+        #     #version 330
+
+        #     void main() {
+        #         gl_PrimitiveID
+        #         gl_TessCoord
+        #     }
+        #     '''
+        #     fragment_shader='''
+        #     #version 330
+
+        #     in vec4 v_attr;
+        #     out vec4 f_attr;
+        #     void main() {
+        #         f_attr = v_attr;
+        #     }
+        #     '''
+        # )
+
         self.__program_rasterize__ = self.__ctx__.program(
             vertex_shader='''
             #version 330
@@ -188,6 +236,20 @@ class Context:
         self.screen_quad_vbo = self.__ctx__.buffer(np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], dtype='f4'))
         self.screen_quad_ibo = self.__ctx__.buffer(np.array([0, 1, 2, 0, 2, 3], dtype=np.int32))
         self.screen_quad_vao = self.__ctx__.vertex_array(self.__program_texture__, [(self.screen_quad_vbo, '2f4', 'in_vert')], index_buffer=self.screen_quad_ibo, index_element_size=4)
+
+    # def rasterize(self, 
+    #     width: int, 
+    #     height: int, 
+    #     vertices: np.ndarray, 
+    #     faces: np.ndarray = None,  
+    #     transform_matrix: np.ndarray = None, 
+    #     image_buffer: np.ndarray = None, 
+    #     depth_buffer: np.ndarray = None,
+    #     alpha_blend: bool = False,
+    #     cull_backface: bool = False,
+    #     wireframe: bool = False
+    # ):
+    #     pass
 
     def rasterize(self, 
         width: int, 
@@ -363,7 +425,7 @@ class Context:
             faces (np.ndarray): triangles' vertices faces of shape (T, 3). 
             texture (np.ndarray): The texture image
             transform_matrix (np.ndarray, optional): row major matrix of shape (4, 4). Transform matrix to multiplicate with vertices and convert them into clip space coordinates. (Usually the Projection * View * Model). Defaults to None, that is to use identity matrix.
-            interpolation (Literal[&#39;nearest&#39;, &#39;linear&#39;], optional): texture interpolation method. Defaults to 'linear'.
+            interpolation (str, optional): texture interpolation method, 'linear' or 'nearest'. Defaults to 'linear'.
             image_buffer (np.ndarray, optional): The initial image to draw on. By default the image is initialized with zeros.
             depth_buffer (np.ndarray, optional): The initial depth to draw on. By default the depth is initialized with ones (infinitely far).
             alpha_blend (bool, optional): whether to enable alpha blend. Defaults to False.

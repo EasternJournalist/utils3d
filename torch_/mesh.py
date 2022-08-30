@@ -1,5 +1,4 @@
 import torch
-from typing import Literal
 
 def triangulate(faces: torch.Tensor) -> torch.Tensor:
     assert len(faces.shape) == 2
@@ -109,12 +108,13 @@ def compute_vertex_tbn(faces_topo: torch.Tensor, pos: torch.Tensor, faces_pos: t
     vertex_tbn = vertex_tbn / (torch.norm(vertex_tbn, p=2, dim=-2, keepdim=True) + 1e-7)
     return vertex_tbn
 
-def laplacian(vertices: torch.Tensor, faces: torch.Tensor, weight: Literal['uniform', 'cotangent'] = 'uniform') -> torch.Tensor:
+def laplacian(vertices: torch.Tensor, faces: torch.Tensor, weight: str = 'uniform') -> torch.Tensor:
     """Laplacian smooth with cotangent weights
 
     Args:
         vertices (torch.Tensor): shape (..., N, 3)
         faces (torch.Tensor): shape (T, 3)
+        weight (str): 'uniform' or 'cotangent'
     """
     sum_verts = torch.zeros_like(vertices)                          # (..., N, 3)
     sum_weights = torch.zeros(*vertices.shape[:-1]).to(vertices)    # (..., N)
@@ -136,12 +136,13 @@ def laplacian(vertices: torch.Tensor, faces: torch.Tensor, weight: Literal['unif
         raise NotImplementedError
     return sum_verts / (sum_weights[..., None] + 1e-7)
 
-def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, weight: Literal['uniform', 'cotangent'] = 'uniform', times: int = 5) -> torch.Tensor:
+def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, weight: str = 'uniform', times: int = 5) -> torch.Tensor:
     """Laplacian smooth with cotangent weights
 
     Args:
         vertices (torch.Tensor): shape (..., N, 3)
         faces (torch.Tensor): shape (T, 3)
+        weight (str): 'uniform' or 'cotangent'
     """
     for _ in range(times):
         vertices = laplacian(vertices, faces, weight)
@@ -163,7 +164,7 @@ def taubin_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, lambda_: flo
     p = pt + mu_ * laplacian_smooth_mesh(pt, faces)
     return p
 
-def laplacian_hc_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, times: int = 5, alpha: float = 0.5, beta: float = 0.5, weight: Literal['uniform', 'cotangent'] = 'uniform'):
+def laplacian_hc_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, times: int = 5, alpha: float = 0.5, beta: float = 0.5, weight: str = 'uniform'):
     """HC algorithm from Improved Laplacian Smoothing of Noisy Surface Meshes by J.Vollmer et al.
     """
     p = vertices

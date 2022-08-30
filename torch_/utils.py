@@ -1,6 +1,4 @@
 import torch
-from typing import Tuple, Union, Literal
-from numbers import Number
 
 from ..numpy_.utils import (
     image_uv as __image_uv,
