@@ -1,6 +1,7 @@
 from .utils import (
     to_linear_depth,
     to_depth_buffer,
+    interpolate,
 
     image_uv,
     image_mesh,

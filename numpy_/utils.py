@@ -1,6 +1,31 @@
 import numpy as np
 from typing import Tuple
 
+__all__ = [
+    'interpolate',
+    'to_linear_depth',
+    'to_depth_buffer',
+    'image_uv',
+    'image_mesh',
+    'chessboard'
+]
+
+def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Interpolate with given barycentric coordinates and triangle indices
+
+    Args:
+        bary (np.ndarray): shape (..., 3), barycentric coordinates
+        tri_id (np.ndarray): int array of shape (...), triangle indices
+        attr (np.ndarray): shape (N, M), vertices attributes
+        faces (np.ndarray): int array of shape (T, 3), face vertex indices
+
+    Returns:
+        np.ndarray: shape (..., M) interpolated result
+    """
+    faces_ = np.concatenate([np.zeros((1, 3), dtype=faces.dtype), faces + 1], axis=0)
+    attr_ = np.concatenate([np.zeros((1, attr.shape[1]), dtype=attr.dtype), attr], axis=0)
+    return np.sum(bary[..., None] * attr_[faces_[tri_id + 1]], axis=-2)
+
 def to_linear_depth(depth_buffer: np.ndarray, near: float, far: float) -> np.ndarray:
     return (2 * near * far) / (far + near - (2 * depth_buffer - 1) * (far - near))
 
