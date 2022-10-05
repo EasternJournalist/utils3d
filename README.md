@@ -11,8 +11,17 @@ Some functionalities included:
 
 ## Install
 
+Install by git
+
 ```bash
-pip install -e https://github.com/EasternJournalist/utils3d.git 
+pip install git+https://github.com/EasternJournalist/utils3d.git#egg=utils3d
+```
+
+or clone the repo and install with `-e` option for convenient updating and modifying.
+
+```bash
+git clone https://github.com/EasternJournalist/utils3d.git
+pip install -e ./utils3d
 ```
 
 ## Rasterization 
