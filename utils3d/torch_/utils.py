@@ -4,14 +4,14 @@ from ..numpy_.utils import (
     image_uv as __image_uv,
     image_mesh as __image_mesh,
     to_linear_depth as __to_linear_depth,
-    to_depth_buffer as __to_depth_buffer,
+    to_screen_depth as __to_screen_depth,
 )
 
 def to_linear_depth(depth_buffer: torch.Tensor, near: float, far: float) -> torch.Tensor:
     return __to_linear_depth(depth_buffer, near, far)
 
 def to_depth_buffer(linear_depth: torch.Tensor) -> torch.Tensor:
-    return __to_depth_buffer(linear_depth)
+    return to_screen_depth(linear_depth)
 
 def view_look_at(eye: torch.Tensor, look_at: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
     """Return a view matrix looking at something

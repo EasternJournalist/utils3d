@@ -1,6 +1,7 @@
 from io import TextIOWrapper
 from typing import Dict, Any, Union, Iterable
 
+__all__ = ['read_obj', 'write_obj']
 
 def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool = False):
     """Read wavefront .obj file, without preprocessing.

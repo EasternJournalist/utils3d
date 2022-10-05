@@ -84,8 +84,6 @@ def rodrigues(rot_vecs: torch.Tensor) -> torch.Tensor:
 
     # Bx1 arrays
     rx, ry, rz = torch.split(rot_dir, 1, dim=-1)
-    K = torch.zeros((*batch_shape, 3, 3), dtype=dtype, device=device)
-
     zeros = torch.zeros((*batch_shape, 1), dtype=dtype, device=device)
     K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=-1).view((*batch_shape, 3, 3))
 
@@ -209,7 +207,7 @@ def crop_intrinsic(intrinsic: torch.Tensor, width: int, height: int, left: int, 
     """Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:bottom, left:right]
 
     Args:
-        intrinsic (torch.Tensor): shape (3, 3), a normalized camera intrinsic
+        intrinsic (torch.Tensor): shape (3, 3), normalized camera intrinsic
         width (int): 
         height (int): 
         top (int): 

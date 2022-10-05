@@ -2,10 +2,10 @@ from typing import Tuple
 import numpy as np
 import moderngl
 
-from ..numpy_.utils import image_mesh, image_uv
-from ..numpy_.mesh import triangulate
+from .numpy_.utils import image_mesh, image_uv
+from .numpy_.mesh import triangulate
 
-__all__ = ['Context']
+__all__ = ['GLContext']
 
 def map_np_dtype(dtype) -> str:
     if dtype == int:
@@ -27,7 +27,7 @@ def one_value(dtype):
     else:
         return 1
 
-class Context:
+class GLContext:
     def __init__(self, standalone: bool = True, backend: str = None):
         if backend is None:
             self.mgl_ctx = moderngl.create_context(standalone=standalone)
@@ -602,7 +602,7 @@ class Context:
 
         return image_buffer, depth_buffer
 
-    def render_flow(self, 
+    def rasterize_flow(self, 
         width: int, 
         height: int, 
         vertices_source: np.ndarray, 

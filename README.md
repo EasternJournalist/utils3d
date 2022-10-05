@@ -1,34 +1,18 @@
 # utils3d
 Easy rasterization and useful tool functions for researchers.
 
-It could be helpful when you want to:
+Some functionalities included:
 
-* **rasterize** a simple mesh but don't want get into OpenGL chores
+* **rasterize** with OpenGL but in one single line
 * **warp** an image as either a 2D or 3D mesh (eg. optical-flow-based warping)
 * **project** following either OpenCV or OpenGL conventions
-* render a optical **flow** image
-
-This tool sets could help you finish them in a few lines, just two save time and keep code clean.
-
-It is **NOT** what you are looking for when you want:
-
-* a differentiable rasterization tool. You should turn to `nvdiffrast`, `pytorch3d`, `SoftRas`.
-* a real-time graphics application. Though as fast as it could be, the expected performance of `util3d` rasterization is to be around 10 ~ 100 ms. It is not expected to fully make use of GPU performance because of the overhead of buffering every time calling rasterzation. If the best performance withou any overhead is demanded, You will have to manage buffer objects like VBO, VAO and FBO. I personally recommand `moderngl` as an alternative python OpenGL library. 
-
+* Some mesh processing (e.g. computing vertex normal, computing laplacian smooth), which can be differentiable with pytorch.
+* Convert OpenCV extrinsics and intrinsics from or to OpenGL view matrix and projection matrix
 
 ## Install
 
-The folder of repo is a package. Clone the repo.
-
 ```bash
-git clone https://github.com/EasternJournalist/utils3d.git 
-```
-
-Install requirements
-
-```bash
-pip install numpy
-pip install moderngl
+pip install -e https://github.com/EasternJournalist/utils3d.git 
 ```
 
 ## Rasterization 
@@ -37,12 +21,12 @@ At first, one step to initialize a OpenGL context. It depends on your platform a
 ```python
 import utils3d
 
-ctx = utils3d.gl.Context(standalone=True)                   # Recommanded for a standalone python program. The machine must have a display device (virtual display like X11 is also okay)
-ctx = utils3d.gl.Context(standalone=False)                  # Recommanded for a nested python script running in a windowed opengl program to share the OpenGL context, eg. Blender.
-ctx = utils3d.gl.Context(standalone=True, backend='egl')    # Recommanded for a program running on a headless linux server (without any display device)
+ctx = utils3d.GLContext(standalone=True)                   # Recommanded for a standalone python program. The machine must have a display device (virtual display like X11 is also okay)
+ctx = utils3d.GLContext(standalone=False)                  # Recommanded for a nested python script running in a windowed opengl program to share the OpenGL context, eg. Blender.
+ctx = utils3d.GLContext(standalone=True, backend='egl')    # Recommanded for a program running on a headless linux server (without any display device)
 ```
 
-Then a number of rasterization functions of `ctx` can be used. The functions the most probably you would like to use
+A number of rasterization functions of `ctx` can be used. The functions the most probably you would like to use
 
 * `ctx.rasterize_barycentric(...)`: rasterize trianglular mesh and get the barycentric coordinates map
 * `ctx.rasterize_attribute(...)`: rasterize trianglular mesh with vertex attributes
@@ -51,38 +35,44 @@ Then a number of rasterization functions of `ctx` can be used. The functions the
 
 Some other functions that could be helpful for certain purposes
 
-* `ctx.render_flow(...)`: render an optical flow image given source and target geometry
+* `ctx.rasterize_flow(...)`: render an optical flow image given source and target geometry
 * `ctx.warp_image_3d(image, pixel_positions, transform_matrix)`
 * `ctx.warp_image_by_flow(image, flow, occlusion_mask)`
 
 ## Useful tool functions
 
-* Image based tool functions
-    * `image_uv(...)` : return a numpy array of shape `[height, width, 2]`, the image uv of each pixel. 
-    * `image_mesh(...)` : return a quad mesh connecting all neighboring pixels as vertices. A boolean array of shape `[height, width]` or  `[height, width, 1]` mask is optional. If a mask is provided, only pixels where mask value is `True` are involved in the mesh.
-* Geometric tools
-    * `triangulate(...)` : convert a polygonal mesh into a triangular mesh (naively).
-    * `compute_face_normal(...)`
-    * `compute_vertex_normal(...)` 
-    * `compute_face_tbn()`
-    * `laplacian(...)`: 
-    * `laplacian_smooth_mesh(...)`
-    * `laplacian_hc_smooth()`
-* OpenGL convention projection
-    * `perspective_from_fov(...)`
-    * `perspective_from_fov_xy(...)`
-    * `projection(...)`: project 3D points to 2D screen space following the OpenGL convention (except for using row major matrix). 
-    * `inverse_projection(...)`: reconstruct 3D position in view space given screen space coordinates and linear depth. to be updated (2020-04-29)
-* OpenCV convention projection
-    * `intrinsic_from_fov(...)`
-    * `intrinsic_from_fov_xy(...)`
-    * `projection_cv(...)`
-    * `inverse_projection_cv(...)`: to be updated (2020-04-29)
-* OpenGL↔OpenCV convention camera conversion
-    * `extrinsic_to_view(...)`
-    * `view_to_extrinsic(...)`
-    * `intrinsic_to_perspective(...)`
-    * `perspective_to_extrinsic(...)`
-    * `camera_cv_to_gl(...)`
-    * `camera_gl_to_cv(...)`
+Most of the functions have both Numpy and Pytorch implementations, but not all of them are differentiable. Please check the table below. For column Pytorch, "yes/diff" means that the function is differentiable; "yes/indiff" means that it is indifferentiable; "yes/-" means it is naturally indifferentiable.
 
+|  function             | Numpy     | Pytorch   |
+|  ----                 | ----      | ----      | 
+| triangulate           | yes       | yes/-     | 
+| compute_face_normal   | yes       | yes/diff  |
+| compute_vertex_normal | yes       | yes/diff  | 
+| compute_face_tbn      | yes       | yes/diff  | 
+| compute_vertex_tbn    | yes       | yes/diff  |
+| compute_vertex_tbn    | yes       | yes/diff  |
+| laplacian             | yes       | yes/diff  |
+| laplacian_smooth_mesh | yes       | yes/diff  |
+| taubin_smooth_mesh    | yes       | yes/diff  |
+| laplacian_hc_smooth_mesh | yes    | yes/diff  |
+| _axis_angle_rotation  | yes       | yes/diff  |
+| euler_angles_to_matrix| yes       | yes/diff  |
+| rodrigues             | yes       | yes/diff  |
+| perspective_from_fov  | yes       | yes/indiff|
+| perspective_from_fov_yx| yes      | yes/indiff|
+| perspective_to_intrinsic| yes     | yes/diff  |
+| intrinsic_to_perspective| yes     | yes/diff  |
+| view_to_extrinsic     | yes       | yes/diff  |
+| extrinsic_to_view     | yes       | yes/diff  |
+| camera_cv_to_gl       | yes       | yes/diff  |
+| camera_gl_to_cv       | yes       | yes/diff  |
+| normalize_intrinsic   | yes       | yes/diff  |
+| crop_intrinsic        | yes       | yes/diff  |
+| projection            | yes       | yes/diff  |
+| projection_ndc        | yes       | yes/diff  |
+| to_linear_depth       | yes       | yes/diff  |
+| to_screen_depth       | yes       | yes/diff  |
+| view_look_at          | yes       | yes/diff  | 
+| image_uv              | yes       | yes/-     |
+| image_mesh            | yes       | yes/-     |
+| chess_board           | yes       | yes/-     | 

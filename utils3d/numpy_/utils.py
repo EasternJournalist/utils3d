@@ -26,11 +26,11 @@ def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: n
     attr_ = np.concatenate([np.zeros((1, attr.shape[1]), dtype=attr.dtype), attr], axis=0)
     return np.sum(bary[..., None] * attr_[faces_[tri_id + 1]], axis=-2)
 
-def to_linear_depth(depth_buffer: np.ndarray, near: float, far: float) -> np.ndarray:
-    return (2 * near * far) / (far + near - (2 * depth_buffer - 1) * (far - near))
+def to_linear_depth(screen_depth: np.ndarray, near: float, far: float) -> np.ndarray:
+    return (2 * near * far) / (far + near - (2 * screen_depth - 1) * (far - near))
 
-def to_depth_buffer(linear_depth: np.ndarray, near: float, far: float) -> np.ndarray:
-    ndc_depth =(near + far - 2. * near * far / linear_depth) / (far - near)
+def to_screen_depth(linear_depth: np.ndarray, near: float, far: float) -> np.ndarray:
+    ndc_depth = (near + far - 2. * near * far / linear_depth) / (far - near)
     return 0.5 * ndc_depth + 0.5
 
 def image_uv(width: int, height: int) -> np.ndarray:

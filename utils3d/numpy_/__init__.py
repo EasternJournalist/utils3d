@@ -1,6 +1,6 @@
 from .utils import (
     to_linear_depth,
-    to_depth_buffer,
+    to_screen_depth,
     interpolate,
 
     image_uv,
