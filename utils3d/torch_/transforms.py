@@ -109,7 +109,7 @@ def perspective_to_intrinsic(perspective: torch.Tensor) -> torch.Tensor:
     fx, fy = perspective[..., 0, 0], perspective[..., 1, 1]
     cx, cy = perspective[..., 0, 2], perspective[..., 1, 2]
     zero = torch.zeros_like(fx)
-    one = torch.full_like(fx, -1)
+    one = torch.full_like(fx, 1)
 
     matrix = [
         [0.5 * fx,     zero, -0.5 * cx + 0.5],

@@ -46,5 +46,5 @@ def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
     indices = faces.reshape((-1,))
     vertex_normal = np.zeros_like(vertices)
     vertex_normal = index_add_(vertex_normal, axis=-2, index=indices, source=face_normal)
-    vertex_normal = np.nan_to_num(vertex_normal / np.sum(vertex_normal ** 2, axis=-1, keepdims=True) ** 0.5)
+    vertex_normal = np.nan_to_num(vertex_normal / np.linalg.norm(vertex_normal, axis=-1, keepdims=True))
     return vertex_normal

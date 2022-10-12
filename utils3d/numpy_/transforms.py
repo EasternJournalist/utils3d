@@ -83,7 +83,7 @@ def perspective_to_intrinsic(perspective: np.ndarray) -> np.ndarray:
     fx, fy = perspective[..., 0, 0], perspective[..., 1, 1]
     cx, cy = perspective[..., 0, 2], perspective[..., 1, 2]
     zero = np.zeros_like(fx)
-    one = np.full_like(fx, -1)
+    one = np.full_like(fx, 1)
 
     matrix = [
         [0.5 * fx,     zero, -0.5 * cx + 0.5],
