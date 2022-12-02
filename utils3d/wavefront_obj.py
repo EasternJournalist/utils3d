@@ -1,7 +1,9 @@
 from io import TextIOWrapper
 from typing import Dict, Any, Union, Iterable
+import numpy as np
 
-__all__ = ['read_obj', 'write_obj']
+
+__all__ = ['read_obj', 'write_obj', 'simple_write_obj']
 
 def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool = False):
     """Read wavefront .obj file, without preprocessing.
@@ -100,3 +102,19 @@ def write_obj(obj: Dict[str, Any], file : Any, encoding: Union[str, None] = None
                 print(k, *map(float, v), file=fp)
         for f in obj['f']:
             print('f', *((str('/').join(map(int, i)) if isinstance(int(i), Iterable) else i) for i in f), file=fp)
+
+
+def simple_write_obj(vertices: np.ndarray, faces: np.ndarray, file: Any, encoding: Union[str, None] = None):
+    """Write wavefront .obj file, without preprocessing.
+    
+    Args:
+        vertices (np.ndarray): [N, 3]
+        faces (np.ndarray): [T, 3]
+        file (Any): filepath
+        encoding (str, optional): 
+    """
+    with open(file, 'w', encoding=encoding) as fp:
+        for v in vertices:
+            print('v', *map(float, v), file=fp)
+        for f in faces:
+            print('f', *map(int, f + 1), file=fp)

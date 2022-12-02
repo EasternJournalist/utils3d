@@ -4,10 +4,11 @@ from typing import Tuple
 __all__ = [
     'interpolate',
     'to_linear_depth',
-    'to_depth_buffer',
+    'to_screen_depth',
     'image_uv',
     'image_mesh',
-    'chessboard'
+    'chessboard',
+    'cube'
 ]
 
 def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
@@ -97,3 +98,27 @@ def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, col
     mask = (x[None, :] + y[:, None]) % 2
     image = (1 - mask[..., None]) * color_a + mask[..., None] * color_b
     return image
+
+def cube():
+    """
+    Get a cube mesh of size 1 centered at origin.
+
+    Returns:
+        vertices (np.ndarray): shape (8, 3) 
+        faces (np.ndarray): shape (12, 3)
+    """
+    vertices = np.array([
+        [-0.5, 0.5, 0.5],   [0.5, 0.5, 0.5],   [0.5, -0.5, 0.5],   [-0.5, -0.5, 0.5], # v0-v1-v2-v3
+        [-0.5, 0.5, -0.5],  [0.5, 0.5, -0.5],  [0.5, -0.5, -0.5],  [-0.5, -0.5, -0.5] # v4-v5-v6-v7
+    ], dtype=np.float32).reshape((-1, 3))
+
+    faces = np.array([
+        [0, 1, 2, 3], # v0-v1-v2-v3 (front)
+        [4, 5, 1, 0], # v4-v5-v1-v0 (top)
+        [3, 2, 6, 7], # v3-v2-v6-v7 (bottom)
+        [5, 4, 7, 6], # v5-v4-v7-v6 (back)
+        [1, 5, 6, 2], # v1-v5-v6-v2 (right)
+        [4, 0, 3, 7]  # v4-v0-v3-v7 (left)
+    ], dtype=np.int32)
+
+    return vertices, faces

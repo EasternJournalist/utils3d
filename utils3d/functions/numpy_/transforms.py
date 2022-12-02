@@ -18,12 +18,13 @@ def perspective_from_fov_xy(fov_x: float, fov_y: float, near: float, far: float)
         [0., 0., -1., 0.] 
     ], dtype=np.float32)
 
-def instrinsic_from_fov(fov: float, width: int, height: int) -> np.ndarray:
-    return np.array([
+def intrinsic_from_fov(fov: float, width: int, height: int) -> np.ndarray:
+    normed_int =  np.array([
         [0.5 / (np.tan(fov / 2) * (width / max(width, height))), 0., 0.5],
         [0., 0.5 / (np.tan(fov / 2) * (height / max(width, height))), 0.5],
         [0., 0., 1.],
     ], dtype=np.float32)
+    return normed_int * np.array([width, height, 1], dtype=np.float32).reshape(3, 1)
 
 def intrinsic_from_fov_xy(fov_x: float, fov_y: float) -> np.ndarray:
     return np.array([
