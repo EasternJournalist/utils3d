@@ -167,7 +167,7 @@ def merge_duplicate_vertices(vertices: torch.Tensor, faces: torch.Tensor, tol: f
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: vertices, faces
     """
-    vertices_round = np.round(vertices / tol) * tol
+    vertices_round = torch.round(vertices / tol) * tol
     uni_vertices_round, uni_inv = torch.unique(vertices_round, dim=0, return_inverse=True)
     vertices = torch.index_reduce('mean', torch.zeros_like(uni_vertices_round), 0, uni_inv)
     faces = uni_inv[faces]
