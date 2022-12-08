@@ -18,6 +18,9 @@ from .mesh import (
     laplacian_smooth_mesh,
     taubin_smooth_mesh,
     laplacian_hc_smooth_mesh,
+
+    merge_duplicate_vertices,
+    subdivide_mesh_simple,
 )
 
 from .transforms import (

@@ -85,3 +85,5 @@ Most of the functions have both Numpy and Pytorch implementations, but not all o
 | image_uv              | yes       | yes/-     |
 | image_mesh            | yes       | yes/-     |
 | chess_board           | yes       | yes/-     | 
+| merge_duplicate_vertices| yes     | yes/-     |
+| subdive_triangular_mesh_simple| yes | yes/diff|

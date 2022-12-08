@@ -2,8 +2,8 @@ from typing import Tuple
 import numpy as np
 import moderngl
 
-from .functions.numpy_.utils import image_mesh, image_uv
-from .functions.numpy_.mesh import triangulate
+from .numpy_.utils import image_mesh, image_uv
+from .numpy_.mesh import triangulate
 
 __all__ = ['GLContext']
 

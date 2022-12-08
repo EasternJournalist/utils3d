@@ -36,4 +36,6 @@ from .mesh import (
     compute_face_normal,
     compute_vertex_normal,
     triangulate,
+    merge_duplicate_vertices,
+    subdivide_mesh_simple
 )
