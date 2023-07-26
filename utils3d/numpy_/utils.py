@@ -34,7 +34,7 @@ def to_screen_depth(linear_depth: np.ndarray, near: float, far: float) -> np.nda
     ndc_depth = (near + far - 2. * near * far / linear_depth) / (far - near)
     return 0.5 * ndc_depth + 0.5
 
-def image_uv(width: int, height: int) -> np.ndarray:
+def image_uv(width: int, height: int, left: int = None, top: int = None, right: int = None, bottom: int = None) -> np.ndarray:
     """Get image space UV grid, ranging in [0, 1]. 
 
     >>> image_uv(10, 10):
@@ -50,9 +50,13 @@ def image_uv(width: int, height: int) -> np.ndarray:
     Returns:
         np.ndarray: shape (height, width, 2)
     """
-    u = np.linspace(0.5 / width, 1. - 0.5 / width, width, dtype=np.float32)
-    v = np.linspace(0.5 / height, 1. - 0.5 / height, height, dtype=np.float32)
-    return np.concatenate([u[None, :, None].repeat(height, axis=0), v[:, None, None].repeat(width, axis=1)], axis=2)
+    if left is None: left = 0
+    if top is None: top = 0
+    if right is None: right = width
+    if bottom is None: bottom = height
+    u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=np.float32)
+    v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=np.float32)
+    return np.concatenate([u[None, :, None].repeat(bottom - top, axis=0), v[:, None, None].repeat(right - left, axis=1)], axis=2)
 
 def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
     """Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.

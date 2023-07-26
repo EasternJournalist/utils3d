@@ -31,8 +31,8 @@ def view_look_at(eye: torch.Tensor, look_at: torch.Tensor, up: torch.Tensor) -> 
     x = torch.cross(y, z)
     return torch.cat([torch.stack([x, y, z, eye], axis=-1), torch.tensor([[0., 0., 0., 1.]])], axis=-2)
 
-def image_uv(width: int, height: int):
-    return torch.from_numpy(__image_uv(width, height))
+def image_uv(width: int, height: int, left: int = None, top: int = None, right: int = None, bottom: int = None):
+    return torch.from_numpy(__image_uv(width, height, left, top, right, bottom))
 
 def image_mesh(width: int, height: int, mask: torch.Tensor = None):
     uv, faces = __image_mesh(width, height, mask.cpu().numpy() if mask is not None else None)

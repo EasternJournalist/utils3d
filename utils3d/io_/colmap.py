@@ -43,10 +43,10 @@ def write_intrinsics_as_colmap(file: Union[str, Path], intrinsics: np.ndarray, w
             print(f'{i + 1} PINHOLE {width:d} {height:d} {fx:f} {fy:f} {cx:f} {cy:f}', file=fp)
 
 
-def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, List[int]]:
+def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, List[int], List[str]]:
     with open(file) as fp:
         lines = fp.readlines()
-    quats, trans, camera_ids = [], [], []
+    image_names, quats, trans, camera_ids = [], [], [], []
     i_line = 0
     for line in lines:
         line = line.strip()
@@ -59,6 +59,7 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
         quats.append([float(qx), float(qy), float(qz), float(qw)])
         trans.append([float(tx), float(ty), float(tz)])
         camera_ids.append(int(camera_id))
+        image_names.append(name)
     
     quats = np.array(quats, dtype=np.float32)
     trans = np.array(trans, dtype=np.float32)
@@ -68,20 +69,29 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
         np.array([0, 0, 0, 1], dtype=np.float32)[None, None, :].repeat(len(quats), axis=0)
     ], axis=-2)
 
-    return extrinsics, camera_ids
+    return extrinsics, camera_ids, image_names
 
 
-def read_intrinsics_from_colmap(file: Union[str, Path]) -> np.ndarray:
+def read_intrinsics_from_colmap(file: Union[str, Path]) -> Tuple[np.ndarray, np.ndarray]:
     with open(file) as fp:
         lines = fp.readlines()
-    intrinsics = []
+    intrinsics, distortions = [], []
     for line in lines:
         line = line.strip()
         if not line or line.startswith('#'):
             continue
         camera_id, model, width, height, *params = line.split()
-        if model == 'PINHOLE' or model == 'OPENCV':
+        if model == 'PINHOLE':
             fx, fy, cx, cy = map(float, params[:4])
-            intrinsics.append([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+            k1 = k2 = k3 = p1 = p2 = 0.0
+        elif model == 'OPENCV':
+            fx, fy, cx, cy, k1, k2, p1, p2, k3 = *map(float, params[:8]), 0.0
+        elif model == 'SIMPLE_RADIAL':
+            f, cx, cy, k = map(float, params[:4])
+            fx = fy = f
+            k1, k2, p1, p2, k3 = k, 0.0, 0.0, 0.0, 0.0
+        intrinsics.append([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+        distortions.append([k1, k2, p1, p2, k3])
     intrinsics = np.array(intrinsics, dtype=np.float32)
-    return intrinsics
+    distortions = np.array(distortions, dtype=np.float32)
+    return intrinsics, distortions
