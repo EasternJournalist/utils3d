@@ -1,5 +1,8 @@
 import numpy as np
 from typing import Tuple
+from ._helpers import batched
+from . import transforms
+from . import mesh
 
 __all__ = [
     'interpolate',
@@ -10,6 +13,7 @@ __all__ = [
     'chessboard',
     'cube'
 ]
+
 
 def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
     """Interpolate with given barycentric coordinates and triangle indices
@@ -27,15 +31,40 @@ def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: n
     attr_ = np.concatenate([np.zeros((1, attr.shape[1]), dtype=attr.dtype), attr], axis=0)
     return np.sum(bary[..., None] * attr_[faces_[tri_id + 1]], axis=-2)
 
-def to_linear_depth(screen_depth: np.ndarray, near: float, far: float) -> np.ndarray:
-    return (2 * near * far) / (far + near - (2 * screen_depth - 1) * (far - near))
 
-def to_screen_depth(linear_depth: np.ndarray, near: float, far: float) -> np.ndarray:
-    ndc_depth = (near + far - 2. * near * far / linear_depth) / (far - near)
-    return 0.5 * ndc_depth + 0.5
+def image_scrcoord(
+        width: int,
+        height: int,
+    ) -> np.ndarray:
+    """
+    Get image space coordinates, ranging in [0, 1].
+    [0, 0] is the bottom-left corner of the image.
 
-def image_uv(width: int, height: int, left: int = None, top: int = None, right: int = None, bottom: int = None) -> np.ndarray:
-    """Get image space UV grid, ranging in [0, 1]. 
+    Args:
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        (np.ndarray): shape (height, width, 2)
+    """
+    x, y = np.meshgrid(
+        np.linspace(0.5 / width, 1 - 0.5 / width, width, dtype=np.float32),
+        np.linspace(1 - 0.5 / height, 0.5 / height, height, dtype=np.float32),
+        indexing='xy'
+    )
+    return np.stack([x, y], axis=2)
+
+
+def image_uv(
+        width: int,
+        height: int,
+        left: int = None,
+        top: int = None,
+        right: int = None,
+        bottom: int = None
+    ) -> np.ndarray:
+    """
+    Get image space UV grid, ranging in [0, 1]. 
 
     >>> image_uv(10, 10):
     [[[0.05, 0.05], [0.15, 0.05], ..., [0.95, 0.05]],
@@ -56,10 +85,19 @@ def image_uv(width: int, height: int, left: int = None, top: int = None, right: 
     if bottom is None: bottom = height
     u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=np.float32)
     v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=np.float32)
-    return np.concatenate([u[None, :, None].repeat(bottom - top, axis=0), v[:, None, None].repeat(right - left, axis=1)], axis=2)
+    return np.concatenate([
+        u[None, :, None].repeat(bottom - top, axis=0),
+        v[:, None, None].repeat(right - left, axis=1)
+    ], axis=2)
 
-def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.ndarray, np.ndarray]:
-    """Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
+
+def image_mesh(
+        width: int,
+        height: int,
+        mask: np.ndarray = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
     Args:
         width (int): image width
@@ -79,10 +117,72 @@ def image_mesh(width: int, height: int, mask: np.ndarray = None) -> Tuple[np.nda
     if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
-        fewer_indices, inv_map = np.unique(faces, return_inverse=True)
-        faces = inv_map.reshape((-1, 4))
-        uv = uv[fewer_indices]
+        faces, uv = mesh.remove_unreferenced_vertices(faces, uv)
     return uv, faces
+
+
+def image_mesh_from_depth(
+        depth: np.ndarray,
+        extrinsic: np.ndarray = None,
+        intrinsic: np.ndarray = None,
+        *vertice_attrs: np.ndarray,
+        atol: float = None,
+        rtol: float = None,
+        remove_by_depth: bool = False,
+        return_uv: bool = False,
+        return_indices: bool = False
+    ) -> Tuple[np.ndarray, ...]:
+    """
+    Get a triangle mesh by lifting depth map to 3D.
+
+    Args:
+        depth (np.ndarray): [H, W] depth map
+        extrinsic (np.ndarray, optional): [4, 4] extrinsic matrix. Defaults to None.
+        intrinsic (np.ndarray, optional): [3, 3] intrinsic matrix. Defaults to None.
+        *vertice_attrs (np.ndarray): [H, W, C] vertex attributes. Defaults to None.
+        atol (float, optional): absolute tolerance. Defaults to None.
+        rtol (float, optional): relative tolerance. Defaults to None.
+            triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
+        remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
+        return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
+        return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
+
+    Returns:
+        vertices (np.ndarray): [N, 3] vertices
+        faces (np.ndarray): [T, 3] faces
+        *vertice_attrs (np.ndarray): [N, C] vertex attributes
+        image_uv (np.ndarray, optional): [N, 2] uv coordinates
+        ref_indices (np.ndarray, optional): [N] indices of vertices in the original mesh
+    """
+    height, width = depth.shape
+    image_uv, image_face = image_mesh(width, height)
+    depth = depth.reshape(-1)
+    pts = transforms.unproject_cv(image_uv, depth, extrinsic, intrinsic)
+    image_face = mesh.triangulate(image_face, vertices=pts)
+    ref_indices = None
+    ret = []
+    if atol is not None or rtol is not None:
+        atol = 0 if atol is None else atol
+        rtol = 0 if rtol is None else rtol
+        mean = depth[image_face].mean(axis=1)
+        diff = np.max(np.abs(depth[image_face] - depth[image_face[:, [1, 2, 0]]]), axis=1)
+        mask = (diff <= atol + rtol * mean)
+        image_face_ = image_face[mask]
+        image_face_, ref_indices = mesh.remove_unreferenced_vertices(image_face_, return_indices=True)
+
+    remove = remove_by_depth and ref_indices is not None
+    if remove:
+        pts = pts[ref_indices]
+        image_face = image_face_
+    ret += [pts, image_face]
+    for attr in vertice_attrs:
+        ret.append(attr.reshape(-1, attr.shape[-1]) if not remove else attr.reshape(-1, attr.shape[-1])[ref_indices])
+    if return_uv:
+        ret.append(image_uv if not remove else image_uv[ref_indices])
+    if return_indices and ref_indices is not None:
+        ret.append(ref_indices)
+    return tuple(ret)
+
 
 def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, color_b: np.ndarray) -> np.ndarray:
     """get a chessboard image
