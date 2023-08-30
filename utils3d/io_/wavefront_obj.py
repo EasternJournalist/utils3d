@@ -3,11 +3,15 @@ from typing import Dict, Any, Union, Iterable
 import numpy as np
 from pathlib import Path
 
-
 __all__ = ['read_obj', 'write_obj', 'simple_write_obj']
 
-def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool = False):
-    """Read wavefront .obj file, without preprocessing.
+def read_obj(
+        file : Any,
+        encoding: Union[str, None] = None,
+        ignore_unknown: bool = False
+    ):
+    """
+    Read wavefront .obj file, without preprocessing.
     
     Why bothering having this read_obj() while we already have other libraries like `trimesh`? 
     This function read the raw format from .obj file and keeps the order of vertices and faces, 
@@ -94,7 +98,12 @@ def read_obj(file : Any, encoding: Union[str, None] = None, ignore_unknown: bool
         'usemtl': usemtl,
     }
 
-def write_obj(file: Union[str, Path], obj: Dict[str, Any], encoding: Union[str, None] = None):
+
+def write_obj(
+        file: Union[str, Path],
+        obj: Dict[str, Any],
+        encoding: Union[str, None] = None
+    ):
     with open(file, 'w', encoding=encoding) as fp:
         for k in ['v', 'vt', 'vn', 'vp']:
             if k not in obj:
@@ -105,8 +114,14 @@ def write_obj(file: Union[str, Path], obj: Dict[str, Any], encoding: Union[str, 
             print('f', *((str('/').join(map(int, i)) if isinstance(int(i), Iterable) else i) for i in f), file=fp)
 
 
-def simple_write_obj(file: Union[str, Path], vertices: np.ndarray, faces: np.ndarray, encoding: Union[str, None] = None):
-    """Write wavefront .obj file, without preprocessing.
+def simple_write_obj(
+        file: Union[str, Path],
+        vertices: np.ndarray,
+        faces: np.ndarray,
+        encoding: Union[str, None] = None
+    ):
+    """
+    Write wavefront .obj file, without preprocessing.
     
     Args:
         vertices (np.ndarray): [N, 3]

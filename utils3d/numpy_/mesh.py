@@ -1,84 +1,269 @@
 import numpy as np
-from typing import Tuple
+from typing import *
+from ._helpers import batched
 
-def triangulate(faces: np.ndarray) -> np.ndarray:
-    assert len(faces.shape) == 2
-    if faces.shape[1] == 3:
-        return faces
-    n = faces.shape[1]
-    loop_indice = np.stack([np.zeros(n - 2, dtype=int), np.arange(1, n - 1, 1, dtype=int), np.arange(2, n, 1, dtype=int)], axis=1)
-    return faces[:, loop_indice].reshape(-1, 3)
 
-def compute_face_normal(vertices: np.ndarray, faces: np.ndarray):
-    """Compute face normals of a triangular mesh
+@batched(2,2,1)
+def triangulate(
+        faces: np.ndarray,
+        vertices: np.ndarray = None,
+        backslash: np.ndarray = None
+    ) -> np.ndarray:
+    """
+    Triangulate a polygonal mesh.
 
     Args:
-        vertices (np.ndarray):  3-dimensional vertices of shape (N, 3)
-        faces (np.ndarray): triangular face indices of shape (T, 3)
+        faces (np.ndarray): [..., L, P] polygonal faces
+        vertices (np.ndarray, optional): [..., N, 3] 3-dimensional vertices.
+            If given, the triangulation is performed according to the distance
+            between vertices. Defaults to None.
+        backslash (np.ndarray, optional): [..., L] boolean array indicating
+            how to triangulate the quad faces. Defaults to None.
 
     Returns:
-        normals (np.ndarray): face normals of shape (T, 3)
+        (np.ndarray): [..., L * (N - 2), 3] triangular faces
     """
-    normal = np.cross(vertices[faces[..., 1]] - vertices[faces[..., 0]], vertices[faces[..., 2]] - vertices[faces[..., 0]])
-    normal = np.nan_to_num(normal / np.sum(normal ** 2, axis=-1, keepdims=True) ** 0.5)
+    if faces.shape[-1] == 3:
+        return faces
+    N = faces.shape[0]
+    P = faces.shape[-1]
+    if vertices is not None:
+        assert faces.shape[-1] == 4, "now only support quad mesh"
+        if backslash is None:
+            backslash = np.linalg.norm(vertices[np.arange(N)[:, None], faces[..., 0]] - vertices[np.arange(N)[:, None], faces[..., 2]], axis=-1) < \
+                        np.linalg.norm(vertices[np.arange(N)[:, None], faces[..., 1]] - vertices[np.arange(N)[:, None], faces[..., 3]], axis=-1)
+    if backslash is None:
+        loop_indice = np.stack([
+            np.zeros(P - 2, dtype=int),
+            np.arange(1, P - 1, 1, dtype=int),
+            np.arange(2, P, 1, dtype=int)
+        ], axis=1)
+        return faces[..., loop_indice].reshape((*faces.shape[:-2], -1, 3))
+    else:
+        assert faces.shape[-1] == 4, "now only support quad mesh"
+        faces = np.where(
+            backslash[..., None],
+            faces[..., [0, 1, 2, 0, 2, 3]],
+            faces[..., [0, 1, 3, 3, 1, 2]]
+        ).reshape((*faces.shape[:-2], -1, 3))
+        return faces
+
+
+@batched(2, 2)
+def compute_face_normal(
+        vertices: np.ndarray,
+        faces: np.ndarray
+    ) -> np.ndarray:
+    """
+    Compute face normals of a triangular mesh
+
+    Args:
+        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
+        faces (np.ndarray): [..., T, 3] triangular face indices
+
+    Returns:
+        normals (np.ndarray): [..., T, 3] face normals
+    """
+    N = vertices.shape[0]
+    normal = np.cross(
+        vertices[np.arange(N)[:, None], faces[..., 1]] - vertices[np.arange(N)[:, None], faces[..., 0]],
+        vertices[np.arange(N)[:, None], faces[..., 2]] - vertices[np.arange(N)[:, None], faces[..., 0]]
+    )
+    normal_norm = np.linalg.norm(normal, axis=-1, keepdims=True)
+    normal_norm[normal_norm == 0] = 1
+    normal /= normal_norm
     return normal
 
-def index_add_(input: np.ndarray, axis: int, index: np.ndarray, source: np.ndarray):
-    i_sort = np.argsort(index)
-    index, source = index[i_sort], source[i_sort]
-    uni, uni_i = np.unique(index, return_index=True)
-    input[(slice(None),)*(axis % len(input.shape)) + (uni,)] += np.add.reduceat(source, uni_i, axis)
-    return input
 
-def compute_vertex_normal(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
-    """Compute vertex normals of a triangular mesh by averaging neightboring face normals
+@batched(2, 2)
+def compute_face_angle(
+        vertices: np.ndarray,
+        faces: np.ndarray
+    ) -> np.ndarray:
+    """
+    Compute face angles of a triangular mesh
 
     Args:
-        vertices (np.ndarray): 3-dimensional vertices of shape (N, 3)
-        faces (np.ndarray): triangular face indices of shape (T, 3)
+        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
+        faces (np.ndarray): [..., T, 3] triangular face indices
 
     Returns:
-        normals (np.ndarray): vertex normals of shape (N, 3)
+        angles (np.ndarray): [..., T, 3] face angles
     """
-    face_normal = compute_face_normal(vertices, faces)
-    face_normal = np.repeat(face_normal[..., None, :], 3, -2).reshape((*face_normal.shape[:-2], -1, 3))
-    indices = faces.reshape((-1,))
-    vertex_normal = np.zeros_like(vertices)
-    vertex_normal = index_add_(vertex_normal, axis=-2, index=indices, source=face_normal)
-    vertex_normal = np.nan_to_num(vertex_normal / np.linalg.norm(vertex_normal, axis=-1, keepdims=True))
+    N = vertices.shape[0]
+    face_angle = np.zeros_like(faces, dtype=vertices.dtype)
+    for i in range(3):
+        edge1 = vertices[np.arange(N)[:, None], faces[..., (i + 1) % 3]] - vertices[np.arange(N)[:, None], faces[..., i]]
+        edge2 = vertices[np.arange(N)[:, None], faces[..., (i + 2) % 3]] - vertices[np.arange(N)[:, None], faces[..., i]]
+        face_angle[..., i] = np.arccos(np.sum(
+            edge1 / np.linalg.norm(edge1, axis=-1, keepdims=True) *
+            edge2 / np.linalg.norm(edge2, axis=-1, keepdims=True),
+            axis=-1
+        ))
+    return face_angle
+
+
+@batched(2, 2, 2)
+def compute_vertex_normal(
+        vertices: np.ndarray,
+        faces: np.ndarray,
+        face_normal: np.ndarray = None
+    ) -> np.ndarray:
+    """
+    Compute vertex normals of a triangular mesh by averaging neightboring face normals
+
+    Args:
+        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
+        faces (np.ndarray): [..., T, 3] triangular face indices
+        face_normal (np.ndarray, optional): [..., T, 3] face normals.
+            None to compute face normals from vertices and faces. Defaults to None.
+
+    Returns:
+        normals (np.ndarray): [..., N, 3] vertex normals
+    """
+    if face_normal is None:
+        face_normal = compute_face_normal(vertices, faces)
+    vertex_normal = np.zeros_like(vertices, dtype=vertices.dtype)
+    for n in range(vertices.shape[0]):
+        for i in range(3):
+            vertex_normal[n, :, 0] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 0], minlength=vertices.shape[1])
+            vertex_normal[n, :, 1] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 1], minlength=vertices.shape[1])
+            vertex_normal[n, :, 2] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 2], minlength=vertices.shape[1])
+    vertex_normal_norm = np.linalg.norm(vertex_normal, axis=-1, keepdims=True)
+    vertex_normal_norm[vertex_normal_norm == 0] = 1
+    vertex_normal /= vertex_normal_norm
     return vertex_normal
 
-def merge_duplicate_vertices(vertices: np.ndarray, faces: np.ndarray, tol: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
-    """Merge duplicate vertices of a triangular mesh. 
+
+@batched(2, 2, 2)
+def compute_vertex_normal_weighted(
+        vertices: np.ndarray,
+        faces: np.ndarray,
+        face_normal: np.ndarray = None
+    ) -> np.ndarray:
+    """
+    Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
+    according to the angles
+
+    Args:
+        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
+        faces (np.ndarray): [..., T, 3] triangular face indices
+        face_normal (np.ndarray, optional): [..., T, 3] face normals.
+            None to compute face normals from vertices and faces. Defaults to None.
+
+    Returns:
+        normals (np.ndarray): [..., N, 3] vertex normals
+    """
+    if face_normal is None:
+        face_normal = compute_face_normal(vertices, faces)
+    face_angle = np.zeros_like(faces, dtype=vertices.dtype)
+    for i in range(3):
+        edge1 = vertices[np.arange(vertices.shape[0])[:, None], faces[..., (i + 1) % 3]] - vertices[np.arange(vertices.shape[0])[:, None], faces[..., i]]
+        edge2 = vertices[np.arange(vertices.shape[0])[:, None], faces[..., (i + 2) % 3]] - vertices[np.arange(vertices.shape[0])[:, None], faces[..., i]]
+        face_angle[..., i] = np.arccos(np.sum(
+            edge1 / np.linalg.norm(edge1, axis=-1, keepdims=True) *
+            edge2 / np.linalg.norm(edge2, axis=-1, keepdims=True),
+            axis=-1
+        ))
+    vertex_normal = np.zeros_like(vertices)
+    for n in range(vertices.shape[0]):
+        for i in range(3):
+            vertex_normal[n, :, 0] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 0] * face_angle[n, :, i], minlength=vertices.shape[1])
+            vertex_normal[n, :, 1] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 1] * face_angle[n, :, i], minlength=vertices.shape[1])
+            vertex_normal[n, :, 2] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 2] * face_angle[n, :, i], minlength=vertices.shape[1])
+    vertex_normal_norm = np.linalg.norm(vertex_normal, axis=-1, keepdims=True)
+    vertex_normal_norm[vertex_normal_norm == 0] = 1
+    vertex_normal /= vertex_normal_norm
+    return vertex_normal
+    
+
+def remove_corrupted_faces(
+        faces: np.ndarray
+    ) -> np.ndarray:
+    """
+    Remove corrupted faces (faces with duplicated vertices)
+
+    Args:
+        faces (np.ndarray): [T, 3] triangular face indices
+
+    Returns:
+        np.ndarray: [T_, 3] triangular face indices
+    """
+    corrupted = (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
+    return faces[~corrupted]
+
+
+def merge_duplicate_vertices(
+        vertices: np.ndarray, 
+        faces: np.ndarray,
+        tol: float = 1e-6
+    ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Merge duplicate vertices of a triangular mesh. 
     Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
     Args:
-        vertices (np.ndarray): 3-dimensional vertices of shape (N, 3)
-        faces (np.ndarray): triangular face indices of shape (T, 3)
+        vertices (np.ndarray): [N, 3] 3-dimensional vertices
+        faces (np.ndarray): [T, 3] triangular face indices
         tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
     Returns:
-        vertices (np.ndarray): 3-dimensional vertices of shape (N, 3)
-        faces (np.ndarray): triangular face indices of shape (T, 3)
+        vertices (np.ndarray): [N_, 3] 3-dimensional vertices
+        faces (np.ndarray): [T, 3] triangular face indices
     """
-    vertices_round = np.round(vertices / tol) * tol
+    vertices_round = np.round(vertices / tol)
     _, uni_i, uni_inv = np.unique(vertices_round, return_index=True, return_inverse=True, axis=0)
     vertices = vertices[uni_i]
     faces = uni_inv[faces]
     return vertices, faces
 
-def subdivide_mesh_simple(vertices: np.ndarray, faces: np.ndarray, n: int = 1) -> Tuple[np.ndarray, np.ndarray]:
-    """Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
+
+def remove_unreferenced_vertices(
+        faces: np.ndarray,
+        *vertice_attrs,
+        return_indices: bool = False
+    ) -> Tuple[np.ndarray, ...]:
+    """
+    Remove unreferenced vertices of a mesh. 
+    Unreferenced vertices are removed, and the face indices are updated accordingly.
+
+    Args:
+        faces (np.ndarray): [T, P] face indices
+        *vertice_attrs: vertex attributes
+
+    Returns:
+        faces (np.ndarray): [T, P] face indices
+        *vertice_attrs: vertex attributes
+        indices (np.ndarray, optional): [N] indices of vertices that are kept. Defaults to None.
+    """
+    P = faces.shape[-1]
+    fewer_indices, inv_map = np.unique(faces, return_inverse=True)
+    faces = inv_map.astype(np.int32).reshape(-1, P)
+    ret = [faces]
+    for attr in vertice_attrs:
+        ret.append(attr[fewer_indices])
+    if return_indices:
+        ret.append(fewer_indices)
+    return tuple(ret)
+
+
+def subdivide_mesh_simple(
+        vertices: np.ndarray,
+        faces: np.ndarray, 
+        n: int = 1
+    ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
     NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
     
     Args:
-        vertices (np.ndarray): 3-dimensional vertices of shape (N, 3)
-        faces (np.ndarray): triangular face indices of shape (T, 3)
+        vertices (np.ndarray): [N, 3] 3-dimensional vertices
+        faces (np.ndarray): [T, 3] triangular face indices
         n (int, optional): number of subdivisions. Defaults to 1.
 
     Returns:
-        vertices (np.ndarray): 3-dimensional vertices of shape (N + ?, 3)
-        faces (np.ndarray): triangular face indices of shape (4 * T, 3)
+        vertices (np.ndarray): [N_, 3] subdivided 3-dimensional vertices
+        faces (np.ndarray): [4 * T, 3] subdivided triangular face indices
     """
     for _ in range(n):
         edges = np.stack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=0)
