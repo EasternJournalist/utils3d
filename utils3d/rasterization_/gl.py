@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from types import *
+from typing import *
 import moderngl
 
 
@@ -75,8 +75,9 @@ class GLContext:
             height: int,
             mvp: np.ndarray = None,
             cull_backface: bool = True,
+            return_depth: bool = False,
             ssaa: int = 1,
-        ) -> np.ndarray:
+        ) -> Tuple[np.ndarray, ...]:
         """
         Rasterize vertex attribute.
 
@@ -140,11 +141,20 @@ class GLContext:
         self.mgl_ctx.disable(self.mgl_ctx.DEPTH_TEST)
 
         # Read
+        ret = []
         attr_map = np.zeros((height, width, C), dtype='f4')
         attr_tex.read_into(attr_map)
         if ssaa > 1:
             attr_map = attr_map.reshape(height // ssaa, ssaa, width // ssaa, ssaa, C).mean(axis=(1, 3))
         attr_map = attr_map[::-1, :, :]
+        ret.append(attr_map)
+        if return_depth:
+            depth_map = np.zeros((height, width), dtype='f4')
+            depth_tex.read_into(depth_map)
+            if ssaa > 1:
+                depth_map = depth_map.reshape(height // ssaa, ssaa, width // ssaa, ssaa).mean(axis=(1, 3))
+            depth_map = depth_map[::-1, :]
+            ret.append(depth_map)
 
         # Release
         vao.release()
@@ -155,7 +165,7 @@ class GLContext:
         attr_tex.release()
         depth_tex.release()
 
-        return attr_map
+        return tuple(ret)
 
 
 

@@ -112,3 +112,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+.vscode
+test/results_to_check
+timetest.py
