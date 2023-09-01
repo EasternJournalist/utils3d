@@ -16,7 +16,7 @@ def run():
         backend='egl',
         device_index=0,
     )
-    uv = utils3d.numpy.rasterization.warp_image_uv(
+    uv = utils3d.numpy.rasterization.warp_image_by_depth(
         ctx,
         depth,
         perspective=perspective,

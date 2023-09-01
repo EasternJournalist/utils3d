@@ -21,7 +21,7 @@ def one_value(dtype):
     if dtype == 'u1':
         return 255
     elif dtype == 'u2':
-        return 65536
+        return 65535
     else:
         return 1
     
