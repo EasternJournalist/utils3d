@@ -3,6 +3,32 @@ from typing import *
 from ._helpers import batched
 
 
+__all__ = [
+    'perspective',
+    'perspective_from_fov',
+    'perspective_from_fov_xy',
+    'intrinsic',
+    'intrinsic_from_fov',
+    'intrinsic_from_fov_xy',
+    'view_look_at',
+    'extrinsic_look_at',
+    'perspective_to_intrinsic',
+    'intrinsic_to_perspective',
+    'extrinsic_to_view',
+    'view_to_extrinsic',
+    'normalize_intrinsic',
+    'crop_intrinsic',
+    'pixel_to_uv',
+    'pixel_to_ndc',
+    'project_depth',
+    'linearize_depth',
+    'project_gl',
+    'project_cv',
+    'unproject_gl',
+    'unproject_cv',
+]
+
+
 @batched(0,0,0,0)
 def perspective(
         fov_y: Union[float, torch.Tensor],
@@ -189,12 +215,12 @@ def view_look_at(
     return ret
 
 
-@batched(1,1,1)
+@batched(1, 1, 1)
 def extrinsic_look_at(
-        eye: torch.Tensor,
-        look_at: torch.Tensor,
-        up: torch.Tensor
-    ) -> torch.Tensor:
+    eye: torch.Tensor,
+    look_at: torch.Tensor,
+    up: torch.Tensor
+) -> torch.Tensor:
     """
     Get OpenCV extrinsic matrix looking at something
 
@@ -239,7 +265,7 @@ def perspective_to_intrinsic(
     N = perspective.shape[0]
     fx, fy = perspective[:, 0, 0], perspective[:, 1, 1]
     cx, cy = perspective[:, 0, 2], perspective[:, 1, 2]
-    ret = torch.zeros((N, 3, 3), dtype=perspective.dtype)
+    ret = torch.zeros((N, 3, 3), dtype=perspective.dtype, device=perspective.device)
     ret[:, 0, 0] = 0.5 * fx
     ret[:, 1, 1] = 0.5 * fy
     ret[:, 0, 2] = -0.5 * cx + 0.5
@@ -267,7 +293,7 @@ def intrinsic_to_perspective(
     N = intrinsic.shape[0]
     fx, fy = intrinsic[:, 0, 0], intrinsic[:, 1, 1]
     cx, cy = intrinsic[:, 0, 2], intrinsic[:, 1, 2]
-    ret = torch.zeros((N, 4, 4), dtype=intrinsic.dtype)
+    ret = torch.zeros((N, 4, 4), dtype=intrinsic.dtype, device=intrinsic.device)
     ret[:, 0, 0] = 2 * fx
     ret[:, 1, 1] = 2 * fy
     ret[:, 0, 2] = -2 * cx + 1
@@ -445,18 +471,18 @@ def linearize_depth(
     return near * far / (far - (far - near) * depth)
 
 
-@batched(1,2,2,2)
+@batched(2, 2, 2, 2)
 def project_gl(
-        points: torch.Tensor,
-        model: torch.Tensor = None,
-        view: torch.Tensor = None,
-        perspective: torch.Tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    points: torch.Tensor,
+    model: torch.Tensor = None,
+    view: torch.Tensor = None,
+    perspective: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Project 3D points to 2D following the OpenGL convention (except for row major matrice)
 
     Args:
-        points (torch.Tensor): [..., 3] or [..., 4] 3D points to project, if the last 
+        points (torch.Tensor): [..., N, 3 or 4] 3D points to project, if the last 
             dimension is 4, the points are assumed to be in homogeneous coordinates
         model (torch.Tensor): [..., 4, 4] model matrix
         view (torch.Tensor): [..., 4, 4] view matrix
@@ -468,31 +494,32 @@ def project_gl(
         linear_depth (torch.Tensor): [...] linear depth
     """
     assert perspective is not None, "perspective matrix is required"
+
     if points.shape[-1] == 3:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
-    points = points[..., None]
-    if model is not None:
-        points = model @ points
+    mvp = perspective if perspective is not None else torch.eye(4).to(points)
     if view is not None:
-        points = view @ points
-    clip_coord = (perspective @ points)[..., 0]
+        mvp = mvp @ view
+    if model is not None:
+        mvp = mvp @ model
+    clip_coord = points @ mvp.transpose(-1, -2)
     ndc_coord = clip_coord[..., :3] / clip_coord[..., 3:]
     scr_coord = ndc_coord * 0.5 + 0.5
     linear_depth = clip_coord[..., 3]
     return scr_coord, linear_depth
 
 
-@batched(1,2,2)
+@batched(2, 2, 2)
 def project_cv(
-        points: torch.Tensor,
-        extrinsic: torch.Tensor = None,
-        intrinsic: torch.Tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    points: torch.Tensor,
+    extrinsic: torch.Tensor = None,
+    intrinsic: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Project 3D points to 2D following the OpenCV convention
 
     Args:
-        points (torch.Tensor): [..., 3] or [..., 4] 3D points to project, if the last
+        points (torch.Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last
             dimension is 4, the points are assumed to be in homogeneous coordinates
         extrinsic (torch.Tensor): [..., 4, 4] extrinsic matrix
         intrinsic (torch.Tensor): [..., 3, 3] intrinsic matrix
@@ -505,16 +532,15 @@ def project_cv(
     assert intrinsic is not None, "intrinsic matrix is required"
     if points.shape[-1] == 3:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
-    points = points[..., None]
     if extrinsic is not None:
-        points = extrinsic @ points
-    points = (intrinsic @ points[..., :3, :])[..., 0]
+        points = points @ extrinsic.transpose(-1, -2)
+    points = points[..., :3] @ intrinsic.transpose(-2, -1)
     uv_coord = points[..., :2] / points[..., 2:]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
 
 
-@batched(1,2,2,2)
+@batched(2, 2, 2, 2)
 def unproject_gl(
         screen_coord: torch.Tensor,
         model: torch.Tensor = None,
@@ -525,7 +551,7 @@ def unproject_gl(
     Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
 
     Args:
-        screen_coord (torch.Tensor): [..., 3] screen space coordinates, value ranging in [0, 1].
+        screen_coord (torch.Tensor): [... N, 3] screen space coordinates, value ranging in [0, 1].
             The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
         model (torch.Tensor): [..., 4, 4] model matrix
         view (torch.Tensor): [..., 4, 4] view matrix
@@ -543,42 +569,40 @@ def unproject_gl(
     if model is not None:
         transform = transform @ model
     transform = torch.inverse(transform)
-    points = (transform @ clip_coord[..., None])[..., 0]
+    points = clip_coord @ transform.transpose(-1, -2)
     points = points[..., :3] / points[..., 3:]
     return points
     
 
-@batched(1,0,2,2)
+@batched(2, 1, 2, 2)
 def unproject_cv(
-        uv_coord: torch.Tensor,
-        depth: torch.Tensor,
-        extrinsic: torch.Tensor = None,
-        intrinsic: torch.Tensor = None
-    ) -> torch.Tensor:
+    uv_coord: torch.Tensor,
+    depth: torch.Tensor,
+    extrinsic: torch.Tensor = None,
+    intrinsic: torch.Tensor = None
+) -> torch.Tensor:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention
 
     Args:
-        uv_coord (torch.Tensor): [..., 2] uv coordinates, value ranging in [0, 1].
+        uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
-        depth (torch.Tensor): [...] depth value
+        depth (torch.Tensor): [..., N] depth value
         extrinsic (torch.Tensor): [..., 4, 4] extrinsic matrix
         intrinsic (torch.Tensor): [..., 3, 3] intrinsic matrix
 
     Returns:
-        points (torch.Tensor): [..., 3] 3d points
+        points (torch.Tensor): [..., N, 3] 3d points
     """
     assert intrinsic is not None, "intrinsic matrix is required"
     points = torch.cat([uv_coord, torch.ones_like(uv_coord[..., :1])], dim=-1)
-    points = (torch.inverse(intrinsic) @ points[..., None])[..., 0]
+    points = points @ torch.inverse(intrinsic).transpose(-2, -1)
     points = points * depth[..., None]
     if extrinsic is not None:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
-        points = (torch.inverse(extrinsic) @ points[..., None])[:, :3, 0]
+        points = (points @ torch.inverse(extrinsic).transpose(-2, -1))[..., :3]
     return points
 
-
-# FANCY
 
 def _axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
     """
