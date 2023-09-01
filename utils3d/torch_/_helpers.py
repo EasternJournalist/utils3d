@@ -69,10 +69,10 @@ def batched(*dims):
             # convert to torch tensor
             device = get_device(args, kwargs) or device
             for i, arg in enumerate(args):
-                if isinstance(arg, (Number, list, tuple)) and args_dim[i] >= 0:
+                if args_dim[i] is not None and isinstance(arg, (Number, list, tuple)) and args_dim[i] >= 0:
                     args[i] = torch.tensor(arg, device=device)
             for key, arg in kwargs.items():
-                if isinstance(arg, (Number, list, tuple)) and kwargs_dim[key] >= 0:
+                if kwargs_dim[key] is not None and isinstance(arg, (Number, list, tuple)) and kwargs_dim[key] >= 0:
                     kwargs[key] = torch.tensor(arg, device=device)
             # broadcast arguments
             args, kwargs, spatial = broadcast_args(args, kwargs, args_dim, kwargs_dim)

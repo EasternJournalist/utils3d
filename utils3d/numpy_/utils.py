@@ -6,12 +6,12 @@ from . import mesh
 
 __all__ = [
     'interpolate',
-    'to_linear_depth',
-    'to_screen_depth',
+    'image_scrcoord',
     'image_uv',
     'image_mesh',
+    'image_mesh_from_depth',
     'chessboard',
-    'cube'
+    'cube',
 ]
 
 

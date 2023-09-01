@@ -7,6 +7,13 @@ import moderngl
 from . import transforms, utils, mesh
 
 
+__all__ = [
+    'RastContext',
+    'rasterize_vertex_attr',
+    'warp_image_by_depth',
+]
+
+
 def map_np_dtype(dtype) -> str:
     if dtype == int:
         return 'i4'

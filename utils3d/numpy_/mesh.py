@@ -3,6 +3,19 @@ from typing import *
 from ._helpers import batched
 
 
+__all__ = [
+    'triangulate',
+    'compute_face_normal',
+    'compute_face_angle',
+    'compute_vertex_normal',
+    'compute_vertex_normal_weighted',
+    'remove_corrupted_faces',
+    'merge_duplicate_vertices',
+    'remove_unreferenced_vertices',
+    'subdivide_mesh_simple'
+]
+
+
 @batched(2,2,1)
 def triangulate(
         faces: np.ndarray,
