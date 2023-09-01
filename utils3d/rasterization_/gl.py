@@ -77,7 +77,7 @@ class GLContext:
             cull_backface: bool = True,
             return_depth: bool = False,
             ssaa: int = 1,
-        ) -> Tuple[np.ndarray, ...]:
+        ) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
         """
         Rasterize vertex attribute.
 
@@ -89,10 +89,13 @@ class GLContext:
             height (int): height of rendered image
             mvp (np.ndarray): [4, 4] model-view-projection matrix
             cull_backface (bool): whether to cull backface
+            return_depth (bool): whether to return depth map, default False
+                if set to True, return (vertex_attr, depth)
             ssaa (int): super sampling anti-aliasing
 
         Returns:
-            np.ndarray: [H, W, 2]
+            vertex_attr (np.ndarray): [H, W, C]
+            depth (np.ndarray, optional): [H, W]
         """
         assert vertices.ndim == 2 and vertices.shape[1] == 3
         assert faces.ndim == 2 and faces.shape[1] == 3
@@ -165,7 +168,7 @@ class GLContext:
         attr_tex.release()
         depth_tex.release()
 
-        return tuple(ret)
+        return tuple(ret) if len(ret) > 1 else ret[0]
 
 
 
