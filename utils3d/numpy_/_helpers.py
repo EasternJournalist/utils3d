@@ -25,7 +25,7 @@ def get_args_order(func, args, kwargs):
 def broadcast_args(args, kwargs, args_dim, kwargs_dim):
     spatial = []
     for arg, arg_dim in zip(args + list(kwargs.values()), args_dim + list(kwargs_dim.values())):
-        if isinstance(arg, np.ndarray):
+        if isinstance(arg, np.ndarray) and arg_dim is not None:
             arg_spatial = arg.shape[:arg.ndim-arg_dim]
             if len(arg_spatial) > len(spatial):
                 spatial = [1] * (len(arg_spatial) - len(spatial)) + spatial
@@ -36,10 +36,10 @@ def broadcast_args(args, kwargs, args_dim, kwargs_dim):
                     else:
                         raise ValueError("Cannot broadcast arguments.")
     for i, arg in enumerate(args):
-        if isinstance(arg, np.ndarray):
+        if isinstance(arg, np.ndarray) and args_dim[i] is not None:
             args[i] = np.broadcast_to(arg, [*spatial, *arg.shape[arg.ndim-args_dim[i]:]])
     for key, arg in kwargs.items():
-        if isinstance(arg, np.ndarray):
+        if isinstance(arg, np.ndarray) and kwargs_dim[key] is not None:
             kwargs[key] = np.broadcast_to(arg, [*spatial, *arg.shape[arg.ndim-kwargs_dim[key]:]])
     return args, kwargs, spatial
 
@@ -57,18 +57,18 @@ def batched(*dims):
             kwargs_dim = {key: dims[i] for key, i in kwargs_order.items()}
             # convert to numpy array
             for i, arg in enumerate(args):
-                if isinstance(arg, (Number, list, tuple)) and args_dim[i] >= 0:
+                if isinstance(arg, (Number, list, tuple)) and args_dim[i] is not None:
                     args[i] = np.array(arg)
             for key, arg in kwargs.items():
-                if isinstance(arg, (Number, list, tuple)) and kwargs_dim[key] >= 0:
+                if isinstance(arg, (Number, list, tuple)) and kwargs_dim[key] is not None:
                     kwargs[key] = np.array(arg)
             # broadcast arguments
             args, kwargs, spatial = broadcast_args(args, kwargs, args_dim, kwargs_dim)
             for i, (arg, arg_dim) in enumerate(zip(args, args_dim)):
-                if isinstance(arg, np.ndarray):
+                if isinstance(arg, np.ndarray) and arg_dim is not None:
                     args[i] = arg.reshape([-1, *arg.shape[arg.ndim-arg_dim:]])
             for key, arg in kwargs.items():
-                if isinstance(arg, np.ndarray):
+                if isinstance(arg, np.ndarray) and kwargs_dim[key] is not None:
                     kwargs[key] = arg.reshape([-1, *arg.shape[arg.ndim-kwargs_dim[key]:]])
             # call function
             results = func(*args, **kwargs)
