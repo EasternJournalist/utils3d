@@ -1,6 +1,10 @@
+import warnings
+import importlib
+
 from . import utils
 from . import transforms
 from . import mesh
+
 
 from .utils import (    
     image_uv,
@@ -53,3 +57,8 @@ from .mesh import (
     taubin_smooth_mesh,
     laplacian_hc_smooth_mesh,
 )
+
+if importlib.find_loader('nvdiffrast'):
+    from .rasterization import *
+else:
+    warnings.warn('nvdiffrast not found, rasterization functions are not available.')

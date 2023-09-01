@@ -1,5 +1,4 @@
 from typing import *
-import warnings
 
 import torch
 import nvdiffrast.torch as dr
@@ -7,9 +6,16 @@ import nvdiffrast.torch as dr
 from . import utils, transforms, mesh
 
 
+__all__ = [
+    'RastContext',
+    'rasterize_vertex_attr', 
+    'warp_image_by_depth'
+]
+
+
 class RastContext:
     """
-    A wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext
+    Create a rasterization context. Nothing but a wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext.
     """
     def __init__(self, nvd_ctx: Union[dr.RasterizeCudaContext, dr.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'gl',  device: Union[str, torch.device] = None):
         if nvd_ctx is not None:
@@ -56,11 +62,14 @@ def rasterize_vertex_attr(
         image: (torch.Tensor): (B, C, H, W)
         depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 to 1
     """
-    if vertices.shape[0] == 2:
+    assert vertices.ndim == 3
+    assert faces.ndim == 2
+
+    if vertices.shape[-1] == 2:
         vertices = torch.cat([vertices, torch.zeros_like(vertices[..., :1]), torch.ones_like(vertices[..., :1])], dim=-1)
-    elif vertices.shape[0] == 3:
+    elif vertices.shape[-1] == 3:
         vertices = torch.cat([vertices, torch.ones_like(vertices[..., :1])], dim=-1)
-    elif vertices.shape[0] == 4:
+    elif vertices.shape[-1] == 4:
         pass
     else:
         raise ValueError(f'Wrong shape of vertices: {vertices.shape}')
@@ -73,13 +82,14 @@ def rasterize_vertex_attr(
     
     pos_clip = vertices @ mvp.transpose(-1, -2)
     
-    rast_out, rast_db = dr.rasterize(ctx, pos_clip, faces, resolution=[height, width], grad_db=True)
+    rast_out, rast_db = dr.rasterize(ctx.nvd_ctx, pos_clip, faces, resolution=[height, width], grad_db=True)
     image, image_dr = dr.interpolate(attr, rast_out, faces, rast_db)
     if antialiasing:
         image = dr.antialias(image, rast_out, pos_clip, faces)
+    image = image.flip(1).permute(0, 3, 1, 2)
     
     depth = rast_out[..., 2]
-    return image.permute(0, 3, 1, 2), depth
+    return image, depth
 
 
 def warp_image_by_depth(
@@ -94,10 +104,14 @@ def warp_image_by_depth(
     intrinsic_src: torch.Tensor = None,
     intrinsic_tgt: torch.Tensor = None,
     near: float = 0.1,
-    far: float = 100.0
+    far: float = 100.0,
+    antialiasing: bool = True,
+    backslash: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Warp image by depth. You may provide either view and perspective (OpenGL convention), or extrinsic and intrinsic (OpenCV convention).
+    NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
+    Otherwise, image mesh will be triangulated simply for batch rendering.
 
     Args:
         ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
@@ -136,21 +150,26 @@ def warp_image_by_depth(
     view_tgt = transforms.extrinsic_to_view(extrinsic_tgt)
     perspective_tgt = transforms.intrinsic_to_perspective(intrinsic_tgt, near=near, far=far)
         
-    uv, faces = utils.image_mesh(width=image.shape[-1], height=image.shape[-2])
-    uv, faces = uv.to(image.device), faces.to(image.device)
+    uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
+    uv, faces = uv.to(depth.device), faces.to(depth.device)
     pts = transforms.unproject_cv(
         uv,
         depth.flatten(-2, -1),
         extrinsic_src,
         intrinsic_src,
     )
-    faces = mesh.triangulate(faces, vertices=pts)
+
+    # triangulate
+    if batch_size == 1:
+        faces = mesh.triangulate(faces, vertices=pts[0])
+    else:
+        faces = mesh.triangulate(faces, backslash=backslash)
 
     # rasterize attributes
     if image is not None:
         attr = image.permute(0, 2, 3, 1).flatten(1, 2)
     else:
-        attr = uv.expand(batch_size, -1, -1).flatten(1, 2)
+        attr = uv.expand(batch_size, -1, -1)
 
     return rasterize_vertex_attr(
         ctx,
@@ -161,5 +180,6 @@ def warp_image_by_depth(
         height,
         view=view_tgt,
         perspective=perspective_tgt,
+        antialiasing=antialiasing
     )
 

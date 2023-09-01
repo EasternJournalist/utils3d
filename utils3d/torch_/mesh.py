@@ -4,11 +4,11 @@ from typing import *
 from ._helpers import batched
 
 
-@batched(2,2,1)
+@batched(2, 2, 1)
 def triangulate(
         faces: torch.Tensor,
         vertices: torch.Tensor = None,
-        backslash: torch.Tensor = None
+        backslash: bool = None
     ) -> torch.Tensor:
     """
     Triangulate a polygonal mesh.
@@ -32,8 +32,8 @@ def triangulate(
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
-            backslash = torch.norm(vertices[torch.arange(N)[:, None], faces[..., 0]] - vertices[torch.arange(N)[:, None], faces[..., 2]], p=2, dim=-1) < torch.norm(vertices[torch.arange(N)[:, None], faces[..., 1]] - vertices[torch.arange(N)[:, None], faces[..., 3]], p=2, dim=-1) < \
-                        torch.norm(vertices[torch.arange(N)[:, None], faces[..., 1]] - vertices[torch.arange(N)[:, None], faces[..., 3]], p=2, dim=-1) + torch.norm(vertices[torch.arange(N)[:, None], faces[..., 1]] - vertices[torch.arange(N)[:, None], faces[..., 3]], p=2, dim=-1)
+            index = torch.arange(N)[:, None]
+            backslash = torch.norm(vertices[index, faces[..., 0]] - vertices[index, faces[..., 2]], p=2, dim=-1) < torch.norm(vertices[index, faces[..., 1]] - vertices[torch.arange(N)[:, None], faces[..., 3]], p=2, dim=-1)
     if backslash is None:
         loop_indice = torch.stack([
             torch.zeros(P - 2, dtype=int),
@@ -43,11 +43,17 @@ def triangulate(
         return faces[..., loop_indice].reshape((*faces.shape[:-2], -1, 3))
     else:
         assert faces.shape[-1] == 4, "now only support quad mesh"
-        faces = torch.where(
-            backslash[..., None],
-            faces[..., [0, 1, 2, 0, 2, 3]],
-            faces[..., [0, 1, 3, 3, 1, 2]]
-        ).reshape((*faces.shape[:-2], -1, 3))
+        if isinstance(backslash, bool):
+            if backslash:
+                faces = faces[..., [0, 1, 2, 0, 2, 3]].reshape((*faces.shape[:-2], -1, 3))
+            else:
+                faces = faces[..., [0, 1, 3, 3, 1, 2]].reshape((*faces.shape[:-2], -1, 3))
+        else:
+            faces = torch.where(
+                backslash[..., None],
+                faces[..., [0, 1, 2, 0, 2, 3]],
+                faces[..., [0, 1, 3, 3, 1, 2]]
+            ).reshape((*faces.shape[:-2], -1, 3))
         return faces
 
 

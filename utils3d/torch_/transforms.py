@@ -189,12 +189,12 @@ def view_look_at(
     return ret
 
 
-@batched(1,1,1)
+@batched(1, 1, 1)
 def extrinsic_look_at(
-        eye: torch.Tensor,
-        look_at: torch.Tensor,
-        up: torch.Tensor
-    ) -> torch.Tensor:
+    eye: torch.Tensor,
+    look_at: torch.Tensor,
+    up: torch.Tensor
+) -> torch.Tensor:
     """
     Get OpenCV extrinsic matrix looking at something
 
@@ -239,7 +239,7 @@ def perspective_to_intrinsic(
     N = perspective.shape[0]
     fx, fy = perspective[:, 0, 0], perspective[:, 1, 1]
     cx, cy = perspective[:, 0, 2], perspective[:, 1, 2]
-    ret = torch.zeros((N, 3, 3), dtype=perspective.dtype)
+    ret = torch.zeros((N, 3, 3), dtype=perspective.dtype, device=perspective.device)
     ret[:, 0, 0] = 0.5 * fx
     ret[:, 1, 1] = 0.5 * fy
     ret[:, 0, 2] = -0.5 * cx + 0.5
@@ -267,7 +267,7 @@ def intrinsic_to_perspective(
     N = intrinsic.shape[0]
     fx, fy = intrinsic[:, 0, 0], intrinsic[:, 1, 1]
     cx, cy = intrinsic[:, 0, 2], intrinsic[:, 1, 2]
-    ret = torch.zeros((N, 4, 4), dtype=intrinsic.dtype)
+    ret = torch.zeros((N, 4, 4), dtype=intrinsic.dtype, device=intrinsic.device)
     ret[:, 0, 0] = 2 * fx
     ret[:, 1, 1] = 2 * fy
     ret[:, 0, 2] = -2 * cx + 1
@@ -447,16 +447,16 @@ def linearize_depth(
 
 @batched(2, 2, 2, 2)
 def project_gl(
-        points: torch.Tensor,
-        model: torch.Tensor = None,
-        view: torch.Tensor = None,
-        perspective: torch.Tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    points: torch.Tensor,
+    model: torch.Tensor = None,
+    view: torch.Tensor = None,
+    perspective: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Project 3D points to 2D following the OpenGL convention (except for row major matrice)
 
     Args:
-        points (torch.Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
+        points (torch.Tensor): [..., N, 3 or 4] 3D points to project, if the last 
             dimension is 4, the points are assumed to be in homogeneous coordinates
         model (torch.Tensor): [..., 4, 4] model matrix
         view (torch.Tensor): [..., 4, 4] view matrix
@@ -485,10 +485,10 @@ def project_gl(
 
 @batched(2, 2, 2)
 def project_cv(
-        points: torch.Tensor,
-        extrinsic: torch.Tensor = None,
-        intrinsic: torch.Tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    points: torch.Tensor,
+    extrinsic: torch.Tensor = None,
+    intrinsic: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Project 3D points to 2D following the OpenCV convention
 
@@ -548,25 +548,25 @@ def unproject_gl(
     return points
     
 
-@batched(2, 0, 2, 2)
+@batched(2, 1, 2, 2)
 def unproject_cv(
-        uv_coord: torch.Tensor,
-        depth: torch.Tensor,
-        extrinsic: torch.Tensor = None,
-        intrinsic: torch.Tensor = None
-    ) -> torch.Tensor:
+    uv_coord: torch.Tensor,
+    depth: torch.Tensor,
+    extrinsic: torch.Tensor = None,
+    intrinsic: torch.Tensor = None
+) -> torch.Tensor:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention
 
     Args:
         uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
-        depth (torch.Tensor): [...] depth value
+        depth (torch.Tensor): [..., N] depth value
         extrinsic (torch.Tensor): [..., 4, 4] extrinsic matrix
         intrinsic (torch.Tensor): [..., 3, 3] intrinsic matrix
 
     Returns:
-        points (torch.Tensor): [..., 3] 3d points
+        points (torch.Tensor): [..., N, 3] 3d points
     """
     assert intrinsic is not None, "intrinsic matrix is required"
     points = torch.cat([uv_coord, torch.ones_like(uv_coord[..., :1])], dim=-1)
@@ -574,7 +574,7 @@ def unproject_cv(
     points = points * depth[..., None]
     if extrinsic is not None:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
-        points = (points[..., None] @ torch.inverse(extrinsic).transpose(-2, -1))[:, :3, 0]
+        points = (points @ torch.inverse(extrinsic).transpose(-2, -1))[..., :3]
     return points
 
 
