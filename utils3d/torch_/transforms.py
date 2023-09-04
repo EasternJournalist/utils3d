@@ -489,9 +489,9 @@ def project_gl(
         perspective (torch.Tensor): [..., 4, 4] perspective matrix
 
     Returns:
-        scr_coord (torch.Tensor): [..., 3] screen space coordinates, value ranging in [0, 1].
+        scr_coord (torch.Tensor): [..., N, 3] screen space coordinates, value ranging in [0, 1].
             The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
-        linear_depth (torch.Tensor): [...] linear depth
+        linear_depth (torch.Tensor): [..., N] linear depth
     """
     assert perspective is not None, "perspective matrix is required"
 
@@ -525,9 +525,9 @@ def project_cv(
         intrinsic (torch.Tensor): [..., 3, 3] intrinsic matrix
 
     Returns:
-        uv_coord (torch.Tensor): [..., 2] uv coordinates, value ranging in [0, 1].
+        uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
-        linear_depth (torch.Tensor): [...] linear depth
+        linear_depth (torch.Tensor): [..., N] linear depth
     """
     assert intrinsic is not None, "intrinsic matrix is required"
     if points.shape[-1] == 3:
@@ -558,7 +558,7 @@ def unproject_gl(
         perspective (torch.Tensor): [..., 4, 4] perspective matrix
 
     Returns:
-        points (torch.Tensor): [..., 3] 3d points
+        points (torch.Tensor): [..., N, 3] 3d points
     """
     assert perspective is not None, "perspective matrix is required"
     ndc_xy = screen_coord * 2 - 1

@@ -40,11 +40,12 @@ def triangulate(
         return faces
     N = faces.shape[0]
     P = faces.shape[-1]
+    index = np.arange(N)[:, None]
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
-            backslash = np.linalg.norm(vertices[np.arange(N)[:, None], faces[..., 0]] - vertices[np.arange(N)[:, None], faces[..., 2]], axis=-1) < \
-                        np.linalg.norm(vertices[np.arange(N)[:, None], faces[..., 1]] - vertices[np.arange(N)[:, None], faces[..., 3]], axis=-1)
+            backslash = np.linalg.norm(vertices[index, faces[..., 0]] - vertices[index, faces[..., 2]], axis=-1) < \
+                        np.linalg.norm(vertices[index, faces[..., 1]] - vertices[index, faces[..., 3]], axis=-1)
     if backslash is None:
         loop_indice = np.stack([
             np.zeros(P - 2, dtype=int),
@@ -78,9 +79,10 @@ def compute_face_normal(
         normals (np.ndarray): [..., T, 3] face normals
     """
     N = vertices.shape[0]
+    index = np.arange(N)[:, None]
     normal = np.cross(
-        vertices[np.arange(N)[:, None], faces[..., 1]] - vertices[np.arange(N)[:, None], faces[..., 0]],
-        vertices[np.arange(N)[:, None], faces[..., 2]] - vertices[np.arange(N)[:, None], faces[..., 0]]
+        vertices[index, faces[..., 1]] - vertices[index, faces[..., 0]],
+        vertices[index, faces[..., 2]] - vertices[index, faces[..., 0]]
     )
     normal_norm = np.linalg.norm(normal, axis=-1, keepdims=True)
     normal_norm[normal_norm == 0] = 1
@@ -105,9 +107,10 @@ def compute_face_angle(
     """
     N = vertices.shape[0]
     face_angle = np.zeros_like(faces, dtype=vertices.dtype)
+    index = np.arange(N)[:, None]
     for i in range(3):
-        edge1 = vertices[np.arange(N)[:, None], faces[..., (i + 1) % 3]] - vertices[np.arange(N)[:, None], faces[..., i]]
-        edge2 = vertices[np.arange(N)[:, None], faces[..., (i + 2) % 3]] - vertices[np.arange(N)[:, None], faces[..., i]]
+        edge1 = vertices[index, faces[..., (i + 1) % 3]] - vertices[index, faces[..., i]]
+        edge2 = vertices[index, faces[..., (i + 2) % 3]] - vertices[index, faces[..., i]]
         face_angle[..., i] = np.arccos(np.sum(
             edge1 / np.linalg.norm(edge1, axis=-1, keepdims=True) *
             edge2 / np.linalg.norm(edge2, axis=-1, keepdims=True),

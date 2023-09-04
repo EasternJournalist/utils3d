@@ -22,6 +22,10 @@ __all__ = [
     'pixel_to_ndc',
     'project_depth',
     'linearize_depth',
+    'unproject_cv',
+    'unproject_gl',
+    'project_cv',
+    'project_gl',
 ]
 
 
@@ -463,7 +467,7 @@ def linearize_depth(
     return near * far / (far - (far - near) * depth)
 
 
-@batched(1,2,2,2)
+@batched(2,2,2,2)
 def project_gl(
         points: np.ndarray,
         model: np.ndarray = None,
@@ -474,33 +478,32 @@ def project_gl(
     Project 3D points to 2D following the OpenGL convention (except for row major matrice)
 
     Args:
-        points (np.ndarray): [..., 3] or [..., 4] 3D points to project, if the last 
+        points (np.ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
             dimension is 4, the points are assumed to be in homogeneous coordinates
         model (np.ndarray): [..., 4, 4] model matrix
         view (np.ndarray): [..., 4, 4] view matrix
         perspective (np.ndarray): [..., 4, 4] perspective matrix
 
     Returns:
-        scr_coord (np.ndarray): [..., 3] screen space coordinates, value ranging in [0, 1].
+        scr_coord (np.ndarray): [..., N, 3] screen space coordinates, value ranging in [0, 1].
             The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
-        linear_depth (np.ndarray): [...] linear depth
+        linear_depth (np.ndarray): [..., N] linear depth
     """
     assert perspective is not None, "perspective matrix is required"
     if points.shape[-1] == 3:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
-    points = points[..., None]
     if model is not None:
-        points = model @ points
+        points = points @ model.swapaxes(-1, -2)
     if view is not None:
-        points = view @ points
-    clip_coord = (perspective @ points)[..., 0]
+        points = points @ view.swapaxes(-1, -2)
+    clip_coord = points @ perspective.swapaxes(-1, -2)
     ndc_coord = clip_coord[..., :3] / clip_coord[..., 3:]
     scr_coord = ndc_coord * 0.5 + 0.5
     linear_depth = clip_coord[..., 3]
     return scr_coord, linear_depth
 
 
-@batched(1,2,2)
+@batched(2,2,2)
 def project_cv(
         points: np.ndarray,
         extrinsic: np.ndarray = None,
@@ -510,29 +513,28 @@ def project_cv(
     Project 3D points to 2D following the OpenCV convention
 
     Args:
-        points (np.ndarray): [..., 3] or [..., 4] 3D points to project, if the last
+        points (np.ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last
             dimension is 4, the points are assumed to be in homogeneous coordinates
         extrinsic (np.ndarray): [..., 4, 4] extrinsic matrix
         intrinsic (np.ndarray): [..., 3, 3] intrinsic matrix
 
     Returns:
-        uv_coord (np.ndarray): [..., 2] uv coordinates, value ranging in [0, 1].
+        uv_coord (np.ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
-        linear_depth (np.ndarray): [...] linear depth
+        linear_depth (np.ndarray): [..., N] linear depth
     """
     assert intrinsic is not None, "intrinsic matrix is required"
     if points.shape[-1] == 3:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
-    points = points[..., None]
     if extrinsic is not None:
-        points = extrinsic @ points
-    points = (intrinsic @ points[..., :3, :])[..., 0]
+        points = points @ extrinsic.swapaxes(-1, -2)
+    points = points[..., :3] @ intrinsic.swapaxes(-1, -2)
     uv_coord = points[..., :2] / points[..., 2:]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
 
 
-@batched(1,2,2,2)
+@batched(2,2,2,2)
 def unproject_gl(
         screen_coord: np.ndarray,
         model: np.ndarray = None,
@@ -543,14 +545,14 @@ def unproject_gl(
     Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
 
     Args:
-        screen_coord (np.ndarray): [..., 3] screen space coordinates, value ranging in [0, 1].
+        screen_coord (np.ndarray): [..., N, 3] screen space coordinates, value ranging in [0, 1].
             The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
         model (np.ndarray): [..., 4, 4] model matrix
         view (np.ndarray): [..., 4, 4] view matrix
         perspective (np.ndarray): [..., 4, 4] perspective matrix
 
     Returns:
-        points (np.ndarray): [..., 3] 3d points
+        points (np.ndarray): [..., N, 3] 3d points
     """
     assert perspective is not None, "perspective matrix is required"
     ndc_xy = screen_coord * 2 - 1
@@ -561,12 +563,12 @@ def unproject_gl(
     if model is not None:
         transform = transform @ model
     transform = np.linalg.inv(transform)
-    points = (transform @ clip_coord[..., None])[..., 0]
+    points = clip_coord @ transform.swapaxes(-1, -2)
     points = points[..., :3] / points[..., 3:]
     return points
     
 
-@batched(1,0,2,2)
+@batched(2,1,2,2)
 def unproject_cv(
         uv_coord: np.ndarray,
         depth: np.ndarray,
@@ -577,20 +579,20 @@ def unproject_cv(
     Unproject uv coordinates to 3D view space following the OpenCV convention
 
     Args:
-        uv_coord (np.ndarray): [..., 2] uv coordinates, value ranging in [0, 1].
+        uv_coord (np.ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
-        depth (np.ndarray): [...] depth value
+        depth (np.ndarray): [..., N] depth value
         extrinsic (np.ndarray): [..., 4, 4] extrinsic matrix
         intrinsic (np.ndarray): [..., 3, 3] intrinsic matrix
 
     Returns:
-        points (np.ndarray): [..., 3] 3d points
+        points (np.ndarray): [..., N, 3] 3d points
     """
     assert intrinsic is not None, "intrinsic matrix is required"
     points = np.concatenate([uv_coord, np.ones_like(uv_coord[..., :1])], axis=-1)
-    points = (np.linalg.inv(intrinsic) @ points[..., None])[..., 0]
+    points = points @ np.linalg.inv(intrinsic).swapaxes(-1, -2)
     points = points * depth[..., None]
     if extrinsic is not None:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
-        points = (np.linalg.inv(extrinsic) @ points[..., None])[:, :3, 0]
+        points = (points @ np.linalg.inv(extrinsic).swapaxes(-1, -2))[..., :3]
     return points

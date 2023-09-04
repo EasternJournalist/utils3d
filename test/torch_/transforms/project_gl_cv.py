@@ -9,9 +9,11 @@ def run():
     for i in range(100):
         if i == 0:
             spatial = []
+            N = 1
         else:
             dim = np.random.randint(4)
             spatial = [np.random.randint(1, 10) for _ in range(dim)]
+            N = np.random.randint(1, 10)
         fovy = np.random.uniform(5 / 180 * np.pi, 175 / 180 * np.pi, spatial)
         aspect = np.random.uniform(0.01, 100, spatial)
         focal_x = 0.5 / (np.tan(fovy / 2) * aspect)
@@ -21,7 +23,7 @@ def run():
         eye = np.random.uniform(-10, 10, [*spatial, 3])
         lookat = np.random.uniform(-10, 10, [*spatial, 3])
         up = np.random.uniform(-10, 10, [*spatial, 3])
-        points = np.random.uniform(-10, 10, [*spatial, 3])
+        points = np.random.uniform(-10, 10, [*spatial, N, 3])
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
         fovy = torch.tensor(fovy, device=device)

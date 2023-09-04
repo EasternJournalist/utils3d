@@ -20,21 +20,21 @@ def run():
     
     perspective = utils3d.numpy.transforms.perspective(1.0, 1.0, 0.1, 10)
     view = utils3d.numpy.transforms.view_look_at([1, 0, 1], [0, 0, 0], [0, 1, 0])
-    ctx = utils3d.rastctx.GLContext(
+    mvp = np.matmul(perspective, view)
+    ctx = utils3d.numpy.rasterization.RastContext(
         standalone=True,
         backend='egl',
         device_index=0,
     )
-    uv = utils3d.numpy.rasterization.rasterize_attr(
+    uv = utils3d.numpy.rasterization.rasterize_vertex_attr(
         ctx,
         pts,
         image_mesh,
         image_uv,
         width=128,
         height=128,
-        view=view,
-        perspective=perspective,
-    )
+        mvp=mvp,
+    )[0]
     uv = (np.concatenate([uv, np.zeros((128, 128, 1), dtype=np.float32)], axis=-1) * 255).astype(np.uint8)
     imageio.imwrite(os.path.join(os.path.dirname(__file__), '..', '..', 'results_to_check', 'rasterize_uv.png'), uv)
 
