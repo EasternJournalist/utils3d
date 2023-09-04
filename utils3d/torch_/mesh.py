@@ -22,6 +22,7 @@ __all__ = [
 ]
 
 
+@batched(2, 2, 1)
 def triangulate(
     faces: torch.Tensor,
     vertices: torch.Tensor = None,
@@ -31,11 +32,11 @@ def triangulate(
     Triangulate a polygonal mesh.
 
     Args:
-        faces (torch.Tensor): [L, P] polygonal faces
-        vertices (torch.Tensor, optional): [N, 3] 3-dimensional vertices.
+        faces (torch.Tensor): [..., L, P] polygonal faces
+        vertices (torch.Tensor, optional): [..., N, 3] 3-dimensional vertices.
             If given, the triangulation is performed according to the distance
             between vertices. Defaults to None.
-        backslash (torch.Tensor, optional): [L] boolean array indicating
+        backslash (torch.Tensor, optional): [..., L] boolean array indicating
             how to triangulate the quad faces. Defaults to None.
 
 
@@ -48,7 +49,8 @@ def triangulate(
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
-            backslash = torch.norm(vertices[faces[..., 0]] - vertices[faces[..., 2]], p=2, dim=-1) < torch.norm(vertices[faces[..., 1]] - vertices[faces[..., 3]], p=2, dim=-1)
+            backslash = torch.norm(vertices[faces[..., 0]] - vertices[faces[..., 2]], p=2, dim=-1) < \
+                        torch.norm(vertices[faces[..., 1]] - vertices[faces[..., 3]], p=2, dim=-1)
     if backslash is None:
         loop_indice = torch.stack([
             torch.zeros(P - 2, dtype=int),
@@ -82,7 +84,7 @@ def compute_face_normal(
 
     Args:
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-        faces (torch.Tensor): [T, 3] triangular face indices
+        faces (torch.Tensor): [..., T, 3] triangular face indices
 
     Returns:
         normals (torch.Tensor): [..., T, 3] face normals
@@ -90,8 +92,8 @@ def compute_face_normal(
     N = vertices.shape[0]
     index = torch.arange(N)[:, None]
     normal = torch.cross(
-        vertices[index, faces[..., 1]] - vertices[index, faces[..., 0]],
-        vertices[index, faces[..., 2]] - vertices[index, faces[..., 0]],
+        vertices[index, faces[..., 1].long()] - vertices[index, faces[..., 0].long()],
+        vertices[index, faces[..., 2].long()] - vertices[index, faces[..., 0].long()],
         dim=-1
     )
     return F.normalize(normal, p=2, dim=-1)

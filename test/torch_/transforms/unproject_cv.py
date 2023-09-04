@@ -9,9 +9,11 @@ def run():
     for i in range(100):
         if i == 0:
             spatial = []
+            N = 1
         else:
             dim = np.random.randint(4)
             spatial = [np.random.randint(1, 10) for _ in range(dim)]
+            N = np.random.randint(1, 10)
         focal_x = np.random.uniform(0, 10, spatial)
         focal_y = np.random.uniform(0, 10, spatial)
         center_x = np.random.uniform(0, 1, spatial)
@@ -19,10 +21,10 @@ def run():
         eye = np.random.uniform(-10, 10, [*spatial, 3])
         lookat = np.random.uniform(-10, 10, [*spatial, 3])
         up = np.random.uniform(-10, 10, [*spatial, 3])
-        points = np.random.uniform(-10, 10, [*spatial, 3])
+        points = np.random.uniform(-10, 10, [*spatial, N, 3])
         
-        expected = utils3d.numpy.unproject_cv(
-            *utils3d.numpy.project_cv(points,
+        expected = utils3d.numpy.transforms.unproject_cv(
+            *utils3d.numpy.transforms.project_cv(points,
                                      utils3d.numpy.extrinsic_look_at(eye, lookat, up),
                                      utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y)),
             utils3d.numpy.extrinsic_look_at(eye, lookat, up),

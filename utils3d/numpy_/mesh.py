@@ -38,6 +38,7 @@ def triangulate(
     if faces.shape[-1] == 3:
         return faces
     P = faces.shape[-1]
+    index = np.arange(N)[:, None]
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
@@ -120,7 +121,8 @@ def compute_vertex_normal(
 ) -> np.ndarray:
     """
     Compute vertex normals of a triangular mesh by averaging neightboring face normals
-
+    TODO: can be improved.
+    
     Args:
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
