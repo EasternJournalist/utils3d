@@ -16,71 +16,68 @@ __all__ = [
 ]
 
 
-@batched(2,2,1)
 def triangulate(
-        faces: np.ndarray,
-        vertices: np.ndarray = None,
-        backslash: np.ndarray = None
-    ) -> np.ndarray:
+    faces: np.ndarray,
+    vertices: np.ndarray = None,
+    backslash: np.ndarray = None
+) -> np.ndarray:
     """
     Triangulate a polygonal mesh.
 
     Args:
-        faces (np.ndarray): [..., L, P] polygonal faces
-        vertices (np.ndarray, optional): [..., N, 3] 3-dimensional vertices.
+        faces (np.ndarray): [L, P] polygonal faces
+        vertices (np.ndarray, optional): [N, 3] 3-dimensional vertices.
             If given, the triangulation is performed according to the distance
             between vertices. Defaults to None.
-        backslash (np.ndarray, optional): [..., L] boolean array indicating
+        backslash (np.ndarray, optional): [L] boolean array indicating
             how to triangulate the quad faces. Defaults to None.
 
     Returns:
-        (np.ndarray): [..., L * (N - 2), 3] triangular faces
+        (np.ndarray): [L * (P - 2), 3] triangular faces
     """
     if faces.shape[-1] == 3:
         return faces
-    N = faces.shape[0]
     P = faces.shape[-1]
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
-            backslash = np.linalg.norm(vertices[np.arange(N)[:, None], faces[..., 0]] - vertices[np.arange(N)[:, None], faces[..., 2]], axis=-1) < \
-                        np.linalg.norm(vertices[np.arange(N)[:, None], faces[..., 1]] - vertices[np.arange(N)[:, None], faces[..., 3]], axis=-1)
+            backslash = np.linalg.norm(vertices[faces[:, 0]] - vertices[faces[:, 2]], axis=-1) < \
+                        np.linalg.norm(vertices[faces[:, 1]] - vertices[faces[:, 3]], axis=-1)
     if backslash is None:
         loop_indice = np.stack([
             np.zeros(P - 2, dtype=int),
             np.arange(1, P - 1, 1, dtype=int),
             np.arange(2, P, 1, dtype=int)
         ], axis=1)
-        return faces[..., loop_indice].reshape((*faces.shape[:-2], -1, 3))
+        return faces[:, loop_indice].reshape((-1, 3))
     else:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         faces = np.where(
-            backslash[..., None],
-            faces[..., [0, 1, 2, 0, 2, 3]],
-            faces[..., [0, 1, 3, 3, 1, 2]]
-        ).reshape((*faces.shape[:-2], -1, 3))
+            backslash[:, None],
+            faces[:, [0, 1, 2, 0, 2, 3]],
+            faces[:, [0, 1, 3, 3, 1, 2]]
+        ).reshape((-1, 3))
         return faces
 
 
-@batched(2, 2)
+@batched(2, None)
 def compute_face_normal(
-        vertices: np.ndarray,
-        faces: np.ndarray
-    ) -> np.ndarray:
+    vertices: np.ndarray,
+    faces: np.ndarray
+) -> np.ndarray:
     """
     Compute face normals of a triangular mesh
 
     Args:
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [..., T, 3] triangular face indices
+        faces (np.ndarray): [T, 3] triangular face indices
 
     Returns:
         normals (np.ndarray): [..., T, 3] face normals
     """
-    N = vertices.shape[0]
     normal = np.cross(
-        vertices[np.arange(N)[:, None], faces[..., 1]] - vertices[np.arange(N)[:, None], faces[..., 0]],
-        vertices[np.arange(N)[:, None], faces[..., 2]] - vertices[np.arange(N)[:, None], faces[..., 0]]
+        vertices[..., faces[:, 1], :] - vertices[..., faces[:, 0], :],
+        vertices[..., faces[:, 2], :] - vertices[..., faces[:, 0], :]
     )
     normal_norm = np.linalg.norm(normal, axis=-1, keepdims=True)
     normal_norm[normal_norm == 0] = 1
@@ -88,7 +85,7 @@ def compute_face_normal(
     return normal
 
 
-@batched(2, 2)
+@batched(2, None)
 def compute_face_angle(
         vertices: np.ndarray,
         faces: np.ndarray
@@ -98,16 +95,15 @@ def compute_face_angle(
 
     Args:
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [..., T, 3] triangular face indices
+        faces (np.ndarray): [T, 3] triangular face indices
 
     Returns:
         angles (np.ndarray): [..., T, 3] face angles
     """
-    N = vertices.shape[0]
     face_angle = np.zeros_like(faces, dtype=vertices.dtype)
     for i in range(3):
-        edge1 = vertices[np.arange(N)[:, None], faces[..., (i + 1) % 3]] - vertices[np.arange(N)[:, None], faces[..., i]]
-        edge2 = vertices[np.arange(N)[:, None], faces[..., (i + 2) % 3]] - vertices[np.arange(N)[:, None], faces[..., i]]
+        edge1 = vertices[..., faces[:, (i + 1) % 3], :] - vertices[..., faces[:, i], :]
+        edge2 = vertices[..., faces[:, (i + 2) % 3], :] - vertices[..., faces[:, i], :]
         face_angle[..., i] = np.arccos(np.sum(
             edge1 / np.linalg.norm(edge1, axis=-1, keepdims=True) *
             edge2 / np.linalg.norm(edge2, axis=-1, keepdims=True),
@@ -116,18 +112,18 @@ def compute_face_angle(
     return face_angle
 
 
-@batched(2, 2, 2)
+@batched(2, None, 2)
 def compute_vertex_normal(
-        vertices: np.ndarray,
-        faces: np.ndarray,
-        face_normal: np.ndarray = None
-    ) -> np.ndarray:
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    face_normal: np.ndarray = None
+) -> np.ndarray:
     """
     Compute vertex normals of a triangular mesh by averaging neightboring face normals
 
     Args:
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [..., T, 3] triangular face indices
+        faces (np.ndarray): [T, 3] triangular face indices
         face_normal (np.ndarray, optional): [..., T, 3] face normals.
             None to compute face normals from vertices and faces. Defaults to None.
 
@@ -139,21 +135,21 @@ def compute_vertex_normal(
     vertex_normal = np.zeros_like(vertices, dtype=vertices.dtype)
     for n in range(vertices.shape[0]):
         for i in range(3):
-            vertex_normal[n, :, 0] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 0], minlength=vertices.shape[1])
-            vertex_normal[n, :, 1] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 1], minlength=vertices.shape[1])
-            vertex_normal[n, :, 2] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 2], minlength=vertices.shape[1])
+            vertex_normal[n, :, 0] += np.bincount(faces[:, i], weights=face_normal[n, :, 0], minlength=vertices.shape[1])
+            vertex_normal[n, :, 1] += np.bincount(faces[:, i], weights=face_normal[n, :, 1], minlength=vertices.shape[1])
+            vertex_normal[n, :, 2] += np.bincount(faces[:, i], weights=face_normal[n, :, 2], minlength=vertices.shape[1])
     vertex_normal_norm = np.linalg.norm(vertex_normal, axis=-1, keepdims=True)
     vertex_normal_norm[vertex_normal_norm == 0] = 1
     vertex_normal /= vertex_normal_norm
     return vertex_normal
 
 
-@batched(2, 2, 2)
+@batched(2, None, 2)
 def compute_vertex_normal_weighted(
-        vertices: np.ndarray,
-        faces: np.ndarray,
-        face_normal: np.ndarray = None
-    ) -> np.ndarray:
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    face_normal: np.ndarray = None
+) -> np.ndarray:
     """
     Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
     according to the angles
@@ -169,15 +165,7 @@ def compute_vertex_normal_weighted(
     """
     if face_normal is None:
         face_normal = compute_face_normal(vertices, faces)
-    face_angle = np.zeros_like(faces, dtype=vertices.dtype)
-    for i in range(3):
-        edge1 = vertices[np.arange(vertices.shape[0])[:, None], faces[..., (i + 1) % 3]] - vertices[np.arange(vertices.shape[0])[:, None], faces[..., i]]
-        edge2 = vertices[np.arange(vertices.shape[0])[:, None], faces[..., (i + 2) % 3]] - vertices[np.arange(vertices.shape[0])[:, None], faces[..., i]]
-        face_angle[..., i] = np.arccos(np.sum(
-            edge1 / np.linalg.norm(edge1, axis=-1, keepdims=True) *
-            edge2 / np.linalg.norm(edge2, axis=-1, keepdims=True),
-            axis=-1
-        ))
+    face_angle = compute_face_angle(vertices, faces)
     vertex_normal = np.zeros_like(vertices)
     for n in range(vertices.shape[0]):
         for i in range(3):

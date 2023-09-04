@@ -7,7 +7,7 @@ from ._helpers import batched
 __all__ = [
     'triangulate',
     'compute_face_normal',
-    'compute_face_angle',
+    'compute_face_angles',
     'compute_vertex_normal',
     'compute_vertex_normal_weighted',
     'remove_corrupted_faces',
@@ -40,45 +40,43 @@ def triangulate(
 
 
     Returns:
-        (torch.Tensor): [L * (N - 2), 3] triangular faces
+        (torch.Tensor): [L * (P - 2), 3] triangular faces
     """
     if faces.shape[-1] == 3:
         return faces
-    N = faces.shape[0]
     P = faces.shape[-1]
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
-            index = torch.arange(N)[:, None]
-            backslash = torch.norm(vertices[index, faces[..., 0]] - vertices[index, faces[..., 2]], p=2, dim=-1) < torch.norm(vertices[index, faces[..., 1]] - vertices[torch.arange(N)[:, None], faces[..., 3]], p=2, dim=-1)
+            backslash = torch.norm(vertices[faces[..., 0]] - vertices[faces[..., 2]], p=2, dim=-1) < torch.norm(vertices[faces[..., 1]] - vertices[faces[..., 3]], p=2, dim=-1)
     if backslash is None:
         loop_indice = torch.stack([
             torch.zeros(P - 2, dtype=int),
             torch.arange(1, P - 1, 1, dtype=int),
             torch.arange(2, P, 1, dtype=int)
         ], axis=1)
-        return faces[..., loop_indice].reshape((*faces.shape[:-2], -1, 3))
+        return faces[:, loop_indice].reshape(-1, 3)
     else:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if isinstance(backslash, bool):
             if backslash:
-                faces = faces[..., [0, 1, 2, 0, 2, 3]].reshape((*faces.shape[:-2], -1, 3))
+                faces = faces[:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
             else:
-                faces = faces[..., [0, 1, 3, 3, 1, 2]].reshape((*faces.shape[:-2], -1, 3))
+                faces = faces[:, [0, 1, 3, 3, 1, 2]].reshape(-1, 3)
         else:
             faces = torch.where(
-                backslash[..., None],
-                faces[..., [0, 1, 2, 0, 2, 3]],
-                faces[..., [0, 1, 3, 3, 1, 2]]
-            ).reshape((*faces.shape[:-2], -1, 3))
+                backslash[:, None],
+                faces[:, [0, 1, 2, 0, 2, 3]],
+                faces[:, [0, 1, 3, 3, 1, 2]]
+            ).reshape(-1, 3)
         return faces
 
 
-@batched(2, 2)
+@batched(2, None)
 def compute_face_normal(
-        vertices: torch.Tensor,
-        faces: torch.Tensor
-    ) -> torch.Tensor:
+    vertices: torch.Tensor,
+    faces: torch.Tensor
+) -> torch.Tensor:
     """
     Compute face normals of a triangular mesh
 
@@ -99,39 +97,37 @@ def compute_face_normal(
     return F.normalize(normal, p=2, dim=-1)
 
 
-@batched(2, 2)
-def compute_face_angle(
-        vertices: torch.Tensor,
-        faces: torch.Tensor
-    ) -> torch.Tensor:
+@batched(2, None)
+def compute_face_angles(
+    vertices: torch.Tensor,
+    faces: torch.Tensor
+) -> torch.Tensor:
     """
     Compute face angles of a triangular mesh
 
     Args:
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-        faces (torch.Tensor): [..., T, 3] triangular face indices
+        faces (torch.Tensor): [T, 3] triangular face indices
 
     Returns:
         angles (torch.Tensor): [..., T, 3] face angles
     """
-    N = vertices.shape[0]
-    face_angle = torch.zeros_like(faces, dtype=vertices.dtype)
+    face_angles = []
     for i in range(3):
-        edge1 = vertices[torch.arange(N)[:, None], faces[..., (i + 1) % 3]] - vertices[torch.arange(N)[:, None], faces[..., i]]
-        edge2 = vertices[torch.arange(N)[:, None], faces[..., (i + 2) % 3]] - vertices[torch.arange(N)[:, None], faces[..., i]]
-        face_angle[..., i] = torch.arccos(torch.sum(
-            F.normalize(edge1, p=2, dim=-1) * F.normalize(edge2, p=2, dim=-1),
-            dim=-1
-        ))
-    return face_angle
+        edge1 = torch.index_select(vertices, dim=-2, index=faces[:, (i + 1) % 3]) - torch.index_select(vertices, dim=-2, index=faces[:, i])
+        edge2 = torch.index_select(vertices, dim=-2, index=faces[:, (i + 2) % 3]) - torch.index_select(vertices, dim=-2, index=faces[:, i])
+        face_angle = torch.arccos(torch.sum(F.normalize(edge1, p=2, dim=-1) * F.normalize(edge2, p=2, dim=-1), dim=-1))
+        face_angles.append(face_angle)
+    face_angles = torch.stack(face_angles, dim=-1)
+    return face_angles
 
 
-@batched(2, 2, 2)
+@batched(2, None, 2)
 def compute_vertex_normal(
-        vertices: torch.Tensor,
-        faces: torch.Tensor,
-        face_normal: torch.Tensor = None
-    ) -> torch.Tensor:
+    vertices: torch.Tensor,
+    faces: torch.Tensor,
+    face_normal: torch.Tensor = None
+) -> torch.Tensor:
     """
     Compute vertex normals of a triangular mesh by averaging neightboring face normals
 
@@ -153,19 +149,19 @@ def compute_vertex_normal(
     return vertex_normal
 
 
-@batched(2, 2, 2)
+@batched(2, None, 2)
 def compute_vertex_normal_weighted(
-        vertices: torch.Tensor,
-        faces: torch.Tensor,
-        face_normal: torch.Tensor = None
-    ) -> torch.Tensor:
+    vertices: torch.Tensor,
+    faces: torch.Tensor,
+    face_normal: torch.Tensor = None
+) -> torch.Tensor:
     """
     Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
     according to the angles
 
     Args:
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-        faces (torch.Tensor): [..., T, 3] triangular face indices
+        faces (torch.Tensor): [T, 3] triangular face indices
         face_normal (torch.Tensor, optional): [..., T, 3] face normals.
             None to compute face normals from vertices and faces. Defaults to None.
 
@@ -175,7 +171,7 @@ def compute_vertex_normal_weighted(
     N = vertices.shape[0]
     if face_normal is None:
         face_normal = compute_face_normal(vertices, faces)
-    face_angle = compute_face_angle(vertices, faces)
+    face_angle = compute_face_angles(vertices, faces)
     face_normal = face_normal[:, :, None, :].expand(-1, -1, 3, -1) * face_angle[..., None]
     vertex_normal = torch.index_put(torch.zeros_like(vertices), (torch.arange(N)[:, None], faces.view(N, -1)), face_normal.view(N, -1, 3), accumulate=True)
     vertex_normal = F.normalize(vertex_normal, p=2, dim=-1)
@@ -183,8 +179,8 @@ def compute_vertex_normal_weighted(
 
 
 def remove_corrupted_faces(
-        faces: torch.Tensor
-    ) -> torch.Tensor:
+    faces: torch.Tensor
+) -> torch.Tensor:
     """
     Remove corrupted faces (faces with duplicated vertices)
 
@@ -199,10 +195,10 @@ def remove_corrupted_faces(
 
 
 def merge_duplicate_vertices(
-        vertices: torch.Tensor,
-        faces: torch.Tensor,
-        tol: float = 1e-6
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    vertices: torch.Tensor,
+    faces: torch.Tensor,
+    tol: float = 1e-6
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Merge duplicate vertices of a triangular mesh. 
     Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.

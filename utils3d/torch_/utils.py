@@ -9,6 +9,14 @@ from . import transforms
 from . import mesh
 
 
+__all__ = [
+    'image_uv',
+    'image_mesh',
+    'chessboard',
+    'image_mesh_with_depth',
+]
+
+
 def image_uv(width: int, height: int, left: int = None, top: int = None, right: int = None, bottom: int = None):
     return torch.from_numpy(__image_uv(width, height, left, top, right, bottom))
 
@@ -22,10 +30,10 @@ def image_mesh(width: int, height: int, mask: torch.Tensor = None):
 
 
 def image_mesh_with_depth(
-        depth: torch.Tensor,
-        extrinsic: torch.Tensor = None,
-        intrinsic: torch.Tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    depth: torch.Tensor,
+    extrinsic: torch.Tensor = None,
+    intrinsic: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
     height, width = depth.shape
     image_uv, image_mesh = image_mesh(width, height)
     image_mesh = image_mesh.reshape(-1, 4)

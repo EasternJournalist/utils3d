@@ -115,16 +115,20 @@ def warp_image_by_depth(
 
     Args:
         ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
-        depth (torch.Tensor): [B, H, W] linear depth
-        image (torch.Tensor): [B, C, H, W]. None to use image space uv. Defaults to None.
+        depth (torch.Tensor): (B, H, W) linear depth
+        image (torch.Tensor): (B, C, H, W). None to use image space uv. Defaults to None.
         width (int, optional): width of the output image. None to use the same as depth. Defaults to None.
         height (int, optional): height of the output image. Defaults the same as depth..
-        extrinsic_src (torch.Tensor, optional): extrinsic matrix for source. None to use identity. Defaults to None.
-        extrinsic_tgt (torch.Tensor, optional): extrinsic matrix for target. None to use identity. Defaults to None.
-        intrinsic_src (torch.Tensor, optional): intrinsic matrix for source. None to use the same as target. Defaults to None.
-        intrinsic_tgt (torch.Tensor, optional): intrinsic matrix for target. None to use the same as source. Defaults to None.
+        extrinsic_src (torch.Tensor, optional): (B, 4, 4) extrinsic matrix for source. None to use identity. Defaults to None.
+        extrinsic_tgt (torch.Tensor, optional): (B, 4, 4) extrinsic matrix for target. None to use identity. Defaults to None.
+        intrinsic_src (torch.Tensor, optional): (B, 3, 3) intrinsic matrix for source. None to use the same as target. Defaults to None.
+        intrinsic_tgt (torch.Tensor, optional): (B, 3, 3) intrinsic matrix for target. None to use the same as source. Defaults to None.
         near (float, optional): near plane. Defaults to 0.1. 
         far (float, optional): far plane. Defaults to 100.0.
+    
+    Returns:
+        image: (torch.Tensor): (B, C, H, W) rendered image
+        depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 to 1
     """
     assert depth.ndim == 3
     batch_size = depth.shape[0]
