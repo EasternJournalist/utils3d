@@ -22,7 +22,6 @@ __all__ = [
 ]
 
 
-@batched(2, 2, 1)
 def triangulate(
     faces: torch.Tensor,
     vertices: torch.Tensor = None,
