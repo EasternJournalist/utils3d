@@ -81,6 +81,8 @@ def rasterize_vertex_attr(
         mvp = mvp @ model
     
     pos_clip = vertices @ mvp.transpose(-1, -2)
+    faces = faces.contiguous()
+    attr = attr.contiguous()
     
     rast_out, rast_db = dr.rasterize(ctx.nvd_ctx, pos_clip, faces, resolution=[height, width], grad_db=True)
     image, image_dr = dr.interpolate(attr, rast_out, faces, rast_db)
@@ -88,26 +90,27 @@ def rasterize_vertex_attr(
         image = dr.antialias(image, rast_out, pos_clip, faces)
     image = image.flip(1).permute(0, 3, 1, 2)
     
-    depth = rast_out[..., 2]
+    depth = rast_out[..., 2].flip(1) * 0.5 + 0.5
     return image, depth
 
 
 def warp_image_by_depth(
     ctx: RastContext,
-    depth: torch.Tensor,
-    image: torch.Tensor = None,
+    depth: torch.FloatTensor,
+    image: torch.FloatTensor = None,
+    mask: torch.BoolTensor = None,
     width: int = None,
     height: int = None,
     *,
-    extrinsic_src: torch.Tensor = None,
-    extrinsic_tgt: torch.Tensor = None,
-    intrinsic_src: torch.Tensor = None,
-    intrinsic_tgt: torch.Tensor = None,
+    extrinsic_src: torch.FloatTensor = None,
+    extrinsic_tgt: torch.FloatTensor = None,
+    intrinsic_src: torch.FloatTensor = None,
+    intrinsic_tgt: torch.FloatTensor = None,
     near: float = 0.1,
     far: float = 100.0,
     antialiasing: bool = True,
     backslash: bool = False,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
     """
     Warp image by depth. You may provide either view and perspective (OpenGL convention), or extrinsic and intrinsic (OpenCV convention).
     NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
@@ -127,8 +130,9 @@ def warp_image_by_depth(
         far (float, optional): far plane. Defaults to 100.0.
     
     Returns:
-        image: (torch.Tensor): (B, C, H, W) rendered image
-        depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 to 1
+        image: (torch.FloatTensor): (B, C, H, W) rendered image
+        depth: (torch.FloatTensor): (B, H, W) linear depth, ranging from 0 to inf
+        mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
     """
     assert depth.ndim == 3
     batch_size = depth.shape[0]
@@ -156,6 +160,8 @@ def warp_image_by_depth(
         
     uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
     uv, faces = uv.to(depth.device), faces.to(depth.device)
+    if mask is not None:
+        depth = torch.where(mask, depth, torch.tensor(far, dtype=depth.dtype, device=depth.device))
     pts = transforms.unproject_cv(
         uv,
         depth.flatten(-2, -1),
@@ -175,7 +181,10 @@ def warp_image_by_depth(
     else:
         attr = uv.expand(batch_size, -1, -1)
 
-    return rasterize_vertex_attr(
+    if mask is not None:
+        attr = torch.cat([attr, mask.float().flatten(1, 2).unsqueeze(-1)], dim=-1)
+
+    output_image, screen_depth = rasterize_vertex_attr(
         ctx,
         pts,
         faces,
@@ -186,4 +195,13 @@ def warp_image_by_depth(
         perspective=perspective_tgt,
         antialiasing=antialiasing
     )
+    output_mask = screen_depth > 0
 
+    if mask is not None:
+        output_image, rast_mask = output_image[..., :-1, :, :], output_image[..., -1, :, :]
+        output_mask &= (rast_mask > 0.9999).reshape(batch_size, height, width)
+
+    output_depth = transforms.linearize_depth(screen_depth, near=near, far=far) * output_mask
+    output_image = output_image * output_mask.unsqueeze(1)
+
+    return output_image, output_depth, output_mask

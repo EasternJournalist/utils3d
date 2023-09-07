@@ -6,11 +6,7 @@ from . import transforms
 from . import mesh
 
 
-from .utils import (    
-    image_uv,
-    image_mesh,
-    chessboard
-)
+from .utils import *
 
 from .transforms import *
 from .mesh import *

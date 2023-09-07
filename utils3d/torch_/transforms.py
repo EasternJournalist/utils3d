@@ -134,6 +134,7 @@ def intrinsic(
     return ret
 
 
+@batched(0, 0, 0, None)
 def intrinsic_from_fov(
         fov: Union[float, torch.Tensor],
         width: Union[int, torch.Tensor],
@@ -461,12 +462,12 @@ def linearize_depth(
     Linearize depth value to linear depth
 
     Args:
-        depth (torch.Tensor): [...] depth value
+        depth (torch.Tensor): [...] screen depth value, ranging in [0, 1]
         near (float | torch.Tensor): [...] near plane to clip
         far (float | torch.Tensor): [...] far plane to clip
 
     Returns:
-        (torch.Tensor): [..., 1] linear depth
+        (torch.Tensor): [...] linear depth
     """
     return near * far / (far - (far - near) * depth)
 

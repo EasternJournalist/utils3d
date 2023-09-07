@@ -13,7 +13,8 @@ __all__ = [
     'image_uv',
     'image_mesh',
     'chessboard',
-    'image_mesh_with_depth',
+    'depth_edge',
+    'image_mesh_from_depth',
 ]
 
 
@@ -29,7 +30,47 @@ def image_mesh(width: int, height: int, mask: torch.Tensor = None):
     return uv, faces
 
 
-def image_mesh_with_depth(
+def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, slope_tol: float = None, intrinsics: torch.Tensor = None) -> torch.BoolTensor:
+    """
+    Compute edge map from depth map. 
+    Args:
+        depth (torch.Tensor): shape (..., height, width), linear depth map
+        atol (float): absolute tolerance
+        rtol (float): relative tolerance
+        slope_tol (float): slope tolerance, in radians
+        intrinsics (torch.Tensor): shape (..., 3, 3), intrinsic matrix, used to compute slope tolerance
+
+    Returns:
+        edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
+    """
+    diff_x = (depth[:, :-1, :] - depth[:, 1:, :]).abs()
+    diff_x = torch.cat([
+        diff_x[:, :1, :],
+        torch.maximum(diff_x[:, :-1, :], diff_x[:, 1:, :]),
+        diff_x[:, -1:, :],
+    ], dim=-2)
+    diff_y = (depth[:, :, :-1] - depth[:, :, 1:]).abs()
+    diff_y = torch.cat([
+        diff_y[:, :, :1],
+        torch.maximum(diff_y[:, :, :-1], diff_y[:, :, 1:]),
+        diff_y[:, :, -1:],
+    ], dim=-1)
+    diff = torch.maximum(diff_x, diff_y)
+
+    edge = torch.zeros_like(depth, dtype=torch.bool)
+    if atol is not None:
+        edge |= diff > atol
+    if rtol is not None:
+        edge |= (diff / depth).nan_to_num_() > rtol
+    if slope_tol is not None:
+        pixel_width, pixel_height = (torch.inverse(intrinsics[..., :2, :2]) @ torch.tensor([1 / depth.shape[-1], 1 / depth.shape[-2]], dtype=depth.dtype, device=depth.device)).unbind(dim=-1)
+        pixel_width, pixel_height = pixel_width[..., None, None], pixel_height[..., None, None]
+        tan_slope = torch.maximum(diff_x / (pixel_width * depth), diff_y / (pixel_height * depth))
+        edge |= tan_slope > torch.tan(torch.tensor(slope_tol, dtype=depth.dtype, device=depth.device))
+    return edge
+
+
+def image_mesh_from_depth(
     depth: torch.Tensor,
     extrinsic: torch.Tensor = None,
     intrinsic: torch.Tensor = None
