@@ -9,6 +9,16 @@ __all__ = ['read_extrinsics_from_colmap', 'read_intrinsics_from_colmap', 'write_
 
 
 def write_extrinsics_as_colmap(file: Union[str, Path], extrinsics: np.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
+    """
+    Write extrinsics to colmap `images.txt` file.
+    Args:
+        file: Path to `images.txt` file.
+        extrinsics: (N, 4, 4) array of extrinsics.
+        image_names: str or List of str, image names. Length is N. 
+            If str, it should be a format string with `i` as the index. (i starts from 1, in correspondence with IMAGE_ID in colmap)
+        camera_ids: List of int, camera ids. Length is N.
+            If None, it will be set to [1, 2, ..., N].
+    """
     assert extrinsics.shape[1:] == (4, 4) and extrinsics.ndim == 3 or extrinsics.shape == (4, 4)
     if extrinsics.ndim == 2:
         extrinsics = extrinsics[np.newaxis, ...]
@@ -31,6 +41,15 @@ def write_extrinsics_as_colmap(file: Union[str, Path], extrinsics: np.ndarray, i
 
 
 def write_intrinsics_as_colmap(file: Union[str, Path], intrinsics: np.ndarray, width: int, height: int, normalized: bool = False):
+    """
+    Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
+    Args:
+        file: Path to `cameras.txt` file.
+        intrinsics: (N, 3, 3) array of intrinsics.
+        width: Image width.
+        height: Image height.
+        normalized: Whether the intrinsics are normalized. If True, the intrinsics will unnormalized for writing.
+    """
     assert intrinsics.shape[1:] == (3, 3) and intrinsics.ndim == 3 or intrinsics.shape == (3, 3)
     if intrinsics.ndim == 2:
         intrinsics = intrinsics[np.newaxis, ...]
@@ -44,6 +63,15 @@ def write_intrinsics_as_colmap(file: Union[str, Path], intrinsics: np.ndarray, w
 
 
 def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, List[int], List[str]]:
+    """
+    Read extrinsics from colmap `images.txt` file. 
+    Args:
+        file: Path to `images.txt` file.
+    Returns:
+        extrinsics: (N, 4, 4) array of extrinsics.
+        camera_ids: List of int, camera ids. Length is N.
+        image_names: List of str, image names. Length is N.
+    """
     with open(file) as fp:
         lines = fp.readlines()
     image_names, quats, trans, camera_ids = [], [], [], []
@@ -73,6 +101,14 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
 
 
 def read_intrinsics_from_colmap(file: Union[str, Path]) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Read intrinsics from colmap `cameras.txt` file.
+    Args:
+        file: Path to `cameras.txt` file.
+    Returns:
+        intrinsics: (N, 3, 3) array of intrinsics.
+        distortions: (N, 5) array of distortions.
+    """
     with open(file) as fp:
         lines = fp.readlines()
     intrinsics, distortions = [], []

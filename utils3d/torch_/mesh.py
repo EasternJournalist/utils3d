@@ -142,10 +142,12 @@ def compute_vertex_normal(
         normals (torch.Tensor): [..., N, 3] vertex normals
     """
     N = vertices.shape[0]
+    assert faces.shape[-1] == 3, "Only support triangular mesh"
     if face_normal is None:
         face_normal = compute_face_normal(vertices, faces)
-    face_normal = face_normal[:, :, None, :].expand(-1, -1, 3, -1).reshape(N, -1, 3)
-    vertex_normal = torch.index_put(torch.zeros_like(vertices), (torch.arange(N)[:, None], faces.view(N, -1)), face_normal, accumulate=True)
+    face_normal = face_normal[:, :, None, :].expand(-1, -1, 3, -1).flatten(-3, -2)
+    faces = faces.flatten()
+    vertex_normal = torch.index_put(torch.zeros_like(vertices), (torch.arange(N)[:, None], faces[None, :]), face_normal, accumulate=True)
     vertex_normal = F.normalize(vertex_normal, p=2, dim=-1)
     return vertex_normal
 

@@ -1,15 +1,11 @@
 import warnings
 import importlib
 
-from . import utils
-from . import transforms
-from . import mesh
-
-
-from .utils import *
 
 from .transforms import *
 from .mesh import *
+from .utils import *
+
 
 if importlib.find_loader('nvdiffrast'):
     from .rasterization import *

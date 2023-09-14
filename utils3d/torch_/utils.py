@@ -15,6 +15,7 @@ __all__ = [
     'chessboard',
     'depth_edge',
     'image_mesh_from_depth',
+    'depth_to_normal'
 ]
 
 
@@ -82,6 +83,24 @@ def image_mesh_from_depth(
     pts = transforms.unproject_cv(image_uv, depth, extrinsic, intrinsic)
     image_mesh = mesh.triangulate(image_mesh, vertices=pts)
     return pts, image_mesh
+
+
+def depth_to_normal(depth: torch.Tensor, intrinsic: torch.Tensor) -> torch.Tensor:
+    """
+    Args:
+        depth (torch.Tensor): shape (..., height, width), linear depth map
+        intrinsic (torch.Tensor): shape (..., 3, 3), intrinsic matrix
+    Returns:
+        normal (torch.Tensor): shape (..., 3, height, width), normal map
+    """
+    height, width = depth.shape[-2:]
+    uv, faces = image_mesh(width, height)
+    faces = mesh.triangulate(faces)
+    uv = uv.reshape(-1, 2).to(depth)
+    depth = depth.flatten(-2)
+    pts = transforms.unproject_cv(uv, depth, intrinsic=intrinsic, extrinsic=transforms.view_to_extrinsic(torch.eye(4).to(depth)))
+    normal = mesh.compute_vertex_normal(pts, faces.to(pts.device))
+    return normal.reshape(*depth.shape[:-1], height, width, 3).permute(0, 3, 1, 2)
 
 
 def chessboard(width: int, height: int, grid_size: int, color_a: torch.Tensor, color_b: torch.Tensor) -> torch.Tensor:
