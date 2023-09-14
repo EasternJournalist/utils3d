@@ -1,5 +1,8 @@
-import torch
 from typing import *
+
+import torch
+import torch.nn.functional as F
+
 from ._helpers import batched
 
 
@@ -605,7 +608,7 @@ def unproject_cv(
     return points
 
 
-def _axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
+def axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
     """
     Return the rotation matrices for one of the rotations about an axis
     of which Euler angles describe, for each value of the angle given.
@@ -634,6 +637,7 @@ def _axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
 
     return torch.stack(R_flat, -1).reshape(angle.shape + (3, 3))
 
+
 def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str) -> torch.Tensor:
     """
     Code MODIFIED from pytorch3d
@@ -656,7 +660,7 @@ def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str) -> torch
         if letter not in ("X", "Y", "Z"):
             raise ValueError(f"Invalid letter {letter} in convention string.")
     matrices = [
-        _axis_angle_rotation(c, euler_angles[..., 'XYZ'.index(c)])
+        axis_angle_rotation(c, euler_angles[..., 'XYZ'.index(c)])
         for c in convention
     ]
     # return functools.reduce(torch.matmul, matrices)
@@ -688,4 +692,55 @@ def rodrigues(rot_vecs: torch.Tensor) -> torch.Tensor:
 
     ident = torch.eye(3, dtype=dtype, device=device)
     rot_mat = ident + sin * K + (1 - cos) * torch.matmul(K, K)
+    return rot_mat
+
+
+def matrix_to_quaternion(rot_mat: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
+    """Converts a batch of 3x3 rotation matrices to quaternions (w, x, y, z)
+
+    Args:
+        rot_mat (torch.Tensor): shape (..., 3, 3), the rotation matrices to convert
+
+    Returns:
+        torch.Tensor: shape (..., 4), the quaternions corresponding to the given rotation matrices
+    """
+    batch_shape = rot_mat.shape[:-2]
+    device, dtype = rot_mat.device, rot_mat.dtype
+
+    # Extract the diagonal and off-diagonal elements of the rotation matrix
+    r11, r12, r13, r21, r22, r23, r31, r32, r33 = torch.flatten(rot_mat, end_dim=-2).unbind(dim=-1)
+
+    # Compute the quaternion components
+    qw = torch.sqrt(torch.clamp(r11 + r22 + r33 + 1, min=eps)) / 2
+    qx = torch.sign(r32 - r23) * torch.sqrt(torch.clamp(r11 - r22 - r33 + 1, min=eps)) / 2
+    qy = torch.sign(r13 - r31) * torch.sqrt(torch.clamp(-r11 + r22 - r33 + 1, min=eps)) / 2
+    qz = torch.sign(r21 - r12) * torch.sqrt(torch.clamp(-r11 - r22 + r33 + 1, min=eps)) / 2
+
+    # Stack the quaternion components and return the result
+    quat = torch.stack([qw, qx, qy, qz], dim=-1)
+    return quat.view(*batch_shape, 4)
+
+
+def quaternion_to_matrix(quaternion: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
+    """Converts a batch of quaternions (w, x, y, z) to rotation matrices
+    
+    Args:
+        quaternion (torch.Tensor): shape (..., 4), the quaternions to convert
+    
+    Returns:
+        torch.Tensor: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions
+    """
+    assert quaternion.shape[-1] == 4
+    quaternion = F.normalize(quaternion, dim=-1)
+    w, x, y, z = quaternion.unbind(dim=-1)
+    zeros = torch.zeros_like(w)
+    I = torch.eye(3, dtype=quaternion.dtype, device=quaternion.device)
+    xyz = quaternion[..., 1:]
+    A = xyz[..., :, None] * xyz[..., None, :] - I * (xyz ** 2).sum(dim=-1)[None, None]
+    B = torch.stack([
+        zeros, -z, y,
+        z, zeros, -x,
+        -y, x, zeros
+    ], dim=-1).unflatten(-1, (3, 3))
+    rot_mat = I + 2 * (A + w[..., None, None] * B)
     return rot_mat

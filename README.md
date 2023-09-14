@@ -8,6 +8,7 @@ Supports:
 * Projection, unprojection, depth-based image warping, flow-based image warping...
 * Easy Reading and writing .obj, .ply files
 * Reading and writing Colmap format camera parameters
+* NeRF/MipNeRF utilities
 
 For most functions, there are both numpy (indifferentiable) and pytorch implementations (differentiable).
 
@@ -46,3 +47,9 @@ pip install -e ./utils3d
 ### Projection
 
 ### Image warping
+
+### NeRF
+
+pytorch only
+11
+* `utils3d.torch.nerf`

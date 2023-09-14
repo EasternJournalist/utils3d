@@ -10,6 +10,7 @@ from . import transforms, utils, mesh
 __all__ = [
     'RastContext',
     'rasterize_vertex_attr',
+    'texture',
     'warp_image_by_depth',
 ]
 
@@ -56,8 +57,14 @@ class RastContext:
         self.__prog_src = {}
         self.__prog = {}
 
+        self.__buffer
+
     def __del__(self):
         self.mgl_ctx.release()
+
+    def screen_quad(self) -> moderngl.VertexArray:
+        self.screen_quad_vbo = self.mgl_ctx.buffer(np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], dtype='f4'))
+        self.screen_quad_ibo = self.mgl_ctx.buffer(np.array([0, 1, 2, 0, 2, 3], dtype=np.int32))
 
     def program_vertex_attribute(self, n: int) -> moderngl.Program:
         assert n in [1, 2, 3, 4], 'vertex attribute only supports channels 1, 2, 3, 4'
@@ -75,8 +82,27 @@ class RastContext:
             self.__prog[f'vertex_attribute_{n}'] = self.mgl_ctx.program(vertex_shader=vsh, fragment_shader=fsh)
 
         return self.__prog[f'vertex_attribute_{n}']
-    
 
+    def program_texture(self, n: int) -> moderngl.Program:
+        assert n in [1, 2, 3, 4], 'texture only supports channels 1, 2, 3, 4'
+
+        if 'texture_vsh' not in self.__prog_src:
+            with open(os.path.join(os.path.dirname(__file__), 'shaders', 'texture.vsh'), 'r') as f:
+                self.__prog_src['texture_vsh'] = f.read()
+        if 'texture_fsh' not in self.__prog_src:
+            with open(os.path.join(os.path.dirname(__file__), 'shaders', 'texture.fsh'), 'r') as f:
+                self.__prog_src['texture_fsh'] = f.read()
+
+        if f'texture_{n}' not in self.__prog:
+            vsh = self.__prog_src['texture_vsh'].replace('vecN', f'vec{n}')
+            fsh = self.__prog_src['texture_fsh'].replace('vecN', f'vec{n}')
+            self.__prog[f'texture_{n}'] = self.mgl_ctx.program(vertex_shader=vsh, fragment_shader=fsh)
+            self.__prog[f'texture_{n}']['tex'] = 0
+            self.__prog[f'texture_{n}']['uv'] = 1
+        
+        return self.__prog[f'texture_{n}']
+
+    
 def rasterize_vertex_attr(
     ctx: RastContext,
     vertices: np.ndarray,
@@ -179,6 +205,58 @@ def rasterize_vertex_attr(
     return attr_map, depth_map
 
 
+def texture(
+    ctx: RastContext,
+    uv: np.ndarray,
+    texture: np.ndarray,
+    interpolation: str= 'linear', 
+    wrap: str = 'clamp'
+) -> np.ndarray:
+    """
+    Given an UV image, texturing from the texture map
+    """
+    assert len(texture.shape) == 3 and 1 <= texture.shape[2] <= 4
+    assert uv.shape[2] == 2
+    height, width = uv.shape[:2]
+    texture_dtype = map_np_dtype(texture.dtype)
+
+    # Create VAO
+    screen_quad_vbo = ctx.mgl_ctx.buffer(np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], dtype='f4'))
+    screen_quad_ibo = ctx.mgl_ctx.buffer(np.array([0, 1, 2, 0, 2, 3], dtype=np.int32))
+    screen_quad_vao = ctx.mgl_ctx.vertex_array(ctx.program_texture(texture.shape[2]), [(screen_quad_vbo, '2f4', 'in_vert')], index_buffer=screen_quad_ibo, index_element_size=4)
+
+    # Create texture, set filter and bind. TODO: min mag filter, mipmap
+    texture_tex = ctx.mgl_ctx.texture((texture.shape[1], texture.shape[0]), texture.shape[2], dtype=texture_dtype, data=texture)
+    if interpolation == 'linear':
+        texture_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+    elif interpolation == 'nearest':
+        texture_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+    texture_tex.use(location=0)
+    texture_uv = ctx.mgl_ctx.texture((width, height), 2, dtype='f4', data=uv.astype('f4', copy=False))
+    texture_uv.filter = (moderngl.NEAREST, moderngl.NEAREST)
+    texture_uv.use(location=1)
+
+    # Create render buffer and frame buffer
+    rb = ctx.mgl_ctx.renderbuffer((uv.shape[1], uv.shape[0]), texture.shape[2], dtype=texture_dtype)
+    fbo = ctx.mgl_ctx.framebuffer(color_attachments=[rb])
+
+    # Render
+    fbo.use()
+    fbo.viewport = (0, 0, width, height)
+    ctx.mgl_ctx.disable(ctx.mgl_ctx.BLEND)
+    screen_quad_vao.render()
+
+    # Read buffer
+    image_buffer = np.frombuffer(fbo.read(components=texture.shape[2], attachment=0, dtype=texture_dtype), dtype=texture_dtype).reshape((height, width, texture.shape[2]))
+
+    # Release
+    texture_tex.release()
+    rb.release()
+    fbo.release()
+
+    return image_buffer
+
+
 def warp_image_by_depth(
     ctx: RastContext,
     depth: np.ndarray,
@@ -268,3 +346,5 @@ def warp_image_by_depth(
         ssaa=ssaa,
         return_depth=return_depth,
     )
+
+

@@ -94,6 +94,14 @@ def rasterize_vertex_attr(
     return image, depth
 
 
+def texture(
+    ctx: RastContext,
+    uv: torch.Tensor,
+    uv_da: torch.Tensor,
+    texture: torch.Tensor,
+) -> torch.Tensor:
+    dr.texture(ctx.nvd_ctx, uv, texture)
+
 def warp_image_by_depth(
     ctx: RastContext,
     depth: torch.FloatTensor,

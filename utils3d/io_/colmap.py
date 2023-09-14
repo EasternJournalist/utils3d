@@ -69,7 +69,7 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
         file: Path to `images.txt` file.
     Returns:
         extrinsics: (N, 4, 4) array of extrinsics.
-        camera_ids: List of int, camera ids. Length is N.
+        camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap starts from 1.
         image_names: List of str, image names. Length is N.
     """
     with open(file) as fp:
