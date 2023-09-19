@@ -38,7 +38,6 @@ def triangulate(
     if faces.shape[-1] == 3:
         return faces
     P = faces.shape[-1]
-    index = np.arange(N)[:, None]
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
@@ -89,7 +88,8 @@ def compute_face_normal(
 @batched(2, None)
 def compute_face_angle(
         vertices: np.ndarray,
-        faces: np.ndarray
+        faces: np.ndarray,
+        eps: float = 1e-12
     ) -> np.ndarray:
     """
     Compute face angles of a triangular mesh
@@ -106,8 +106,8 @@ def compute_face_angle(
         edge1 = vertices[..., faces[:, (i + 1) % 3], :] - vertices[..., faces[:, i], :]
         edge2 = vertices[..., faces[:, (i + 2) % 3], :] - vertices[..., faces[:, i], :]
         face_angle[..., i] = np.arccos(np.sum(
-            edge1 / np.linalg.norm(edge1, axis=-1, keepdims=True) *
-            edge2 / np.linalg.norm(edge2, axis=-1, keepdims=True),
+            edge1 / np.clip(np.linalg.norm(edge1, axis=-1, keepdims=True), eps, None) *
+            edge2 / np.clip(np.linalg.norm(edge2, axis=-1, keepdims=True), eps, None),
             axis=-1
         ))
     return face_angle

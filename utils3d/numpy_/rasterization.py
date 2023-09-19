@@ -57,8 +57,6 @@ class RastContext:
         self.__prog_src = {}
         self.__prog = {}
 
-        self.__buffer
-
     def __del__(self):
         self.mgl_ctx.release()
 

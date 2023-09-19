@@ -38,6 +38,8 @@ __all__ = [
     'axis_angle_to_quaternion',
     'quaternion_to_axis_angle',
     'slerp',
+    'interpolate_extrinsics',
+    'interpolate_view',
 ]
 
 
@@ -727,10 +729,10 @@ def quaternion_to_axis_angle(quaternion: torch.Tensor, eps: float = 1e-12) -> to
         torch.Tensor: shape (..., 3), the axis-angle vectors corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
-    quaternion = F.normalize(quaternion, dim=-1, eps=eps)
-    axis = quaternion[..., 1:]
-    angle = 2 * torch.atan2(torch.norm(axis, dim=-1), quaternion[..., 0])
-    return angle[..., None] * axis
+    norm = torch.norm(quaternion[..., 1:], dim=-1, keepdim=True)
+    axis = quaternion[..., 1:] / norm.clamp(min=eps)
+    angle = 2 * torch.atan2(norm, quaternion[..., 0:1])
+    return angle * axis
 
 
 def axis_angle_to_quaternion(axis_angle: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
@@ -804,22 +806,59 @@ def quaternion_to_matrix(quaternion: torch.Tensor, eps: float = 1e-12) -> torch.
     return rot_mat
 
 
-def slerp(rot_mat_1: torch.Tensor, rot_mat_2: torch.Tensor, t: float) -> torch.Tensor:
+def slerp(rot_mat_1: torch.Tensor, rot_mat_2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     """Spherical linear interpolation between two rotation matrices
 
     Args:
         rot_mat_1 (torch.Tensor): shape (..., 3, 3), the first rotation matrix
         rot_mat_2 (torch.Tensor): shape (..., 3, 3), the second rotation matrix
-        t (float): interpolation factor
+        t (torch.Tensor): shape (...,), the interpolation factor
 
     Returns:
         torch.Tensor: shape (..., 3, 3), the interpolated rotation matrix
     """
     assert rot_mat_1.shape == rot_mat_2.shape
     assert rot_mat_1.shape[-2:] == (3, 3)
-    assert 0 <= t <= 1
     rot_vec_1 = matrix_to_axis_angle(rot_mat_1)
     rot_vec_2 = matrix_to_axis_angle(rot_mat_2)
-    rot_vec = (1 - t) * rot_vec_1 + t * rot_vec_2
+    rot_vec = (1 - t[..., None]) * rot_vec_1 + t[..., None] * rot_vec_2
     rot_mat = axis_angle_to_matrix(rot_vec)
     return rot_mat
+
+
+def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """Interpolate extrinsics between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
+
+    Args:
+        ext1 (torch.Tensor): shape (..., 4, 4), the first camera pose
+        ext2 (torch.Tensor): shape (..., 4, 4), the second camera pose
+        t (torch.Tensor): shape (...,), the interpolation factor
+
+    Returns:
+        torch.Tensor: shape (..., 4, 4), the interpolated camera pose
+    """
+    assert ext1.shape[-2:] == (4, 4) and ext2.shape[-2:] == (4, 4)
+    pos1 = ext1[..., :3, 3] @ ext1[..., :3, :3]
+    pos2 = ext2[..., :3, 3] @ ext2[..., :3, :3]
+    pos = (1 - t[..., None]) * pos1 + t[..., None] * pos2
+    rot = slerp(ext1[..., :3, :3], ext2[..., :3, :3], t)
+    ext = torch.cat([
+        torch.cat([rot, pos[..., None]], dim=-1),
+        torch.tensor([0, 0, 0, 1], dtype=ext1.dtype, device=ext1.device)[:, None].expand_as(ext1[..., :1, :])
+    ], dim=-2)
+
+    return ext
+
+
+def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: torch.Tensor):
+    """Interpolate view matrices between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
+
+    Args:
+        ext1 (torch.Tensor): shape (..., 4, 4), the first camera pose
+        ext2 (torch.Tensor): shape (..., 4, 4), the second camera pose
+        t (torch.Tensor): shape (...,), the interpolation factor
+
+    Returns:
+        torch.Tensor: shape (..., 4, 4), the interpolated camera pose
+    """
+    return interpolate_extrinsics(view1, view2, t)

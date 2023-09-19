@@ -33,23 +33,14 @@ pip install -e ./utils3d
 
 ### Camera
 
-`utils3d.numpy.transformations`
+### Rotations
 
 ### Mesh
 
-`utils3d.numpy.mesh`
-
 ### Rendering
-
-`utils3d.numpy.rasterize.RastContext`
-`utils3d.numpy.rasterize.rasterize`
 
 ### Projection
 
 ### Image warping
 
 ### NeRF
-
-pytorch only
-11
-* `utils3d.torch.nerf`

@@ -12,8 +12,12 @@ __all__ = [
     'get_image_rays',
     'get_mipnerf_cones',
     'volume_rendering',
-    'uniform_bin_sample',
+    'bin_sample',
     'importance_sample',
+    'nerf_render_rays',
+    'mipnerf_render_rays',
+    'nerf_render_view',
+    'mipnerf_render_view'
 ]
 
 
@@ -175,79 +179,6 @@ def importance_sample(z_vals: Tensor, weights: Tensor, n_samples: int) -> Tuple[
     return z_importance
 
 
-def mipnerf_render_rays(
-    mipnerf: Callable[[Tensor, Tensor], Tuple[Tensor, Tensor]],
-    rays_o: Tensor, rays_d: Tensor, pixel_width: Tensor, 
-    *, 
-    return_dict: bool = False,
-    n_coarse: int = 64, n_fine: int = 64, uniform_ratio: float = 0.4,
-    near: float = 0.1, far: float = 100.0,
-    z_spacing: Literal['linear', 'inverse_linear'] = 'linear',
-) -> Union[Tuple[Tensor, Tensor], Dict[str, Tensor]]:
-    """
-    MipNeRF rendering.
-
-    Args:
-        mipnerf: mipnerf model, which takes (points_mu, points_sigma) as input and returns (color, density) as output.
-            The shape of points_mu and points_sigma should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples, 3, 3) respectively.
-            The shape of color and density should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples) respectively.
-        rays_o: (..., n_rays, 3) ray origins
-        rays_d: (..., n_rays, 3) ray directions.
-        pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
-    
-    Returns 
-        if return_dict is False, return fine results only:
-            rgb_fine: (..., n_rays, 3) rendered color values.
-            depth_fine: (..., n_rays, 1) rendered depth values.
-        else, return a dict. If n_fine == 0, the dict only contains coarse results:
-        ```
-        {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
-        ```
-        If n_fine > 0, the dict contains both coarse and fine results:
-        ```
-        {
-            "coarse": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..},
-            "fine": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
-        }
-        ```
-    """
-    # 1. Coarse: bin sampling
-    z_coarse = bin_sample(rays_d.shape[:-1], n_coarse, near, far, spacing=z_spacing, device=rays_o.device, dtype=rays_o.dtype)
-    points_mu_coarse, points_sigma_coarse = get_mipnerf_cones(rays_o, rays_d, z_coarse, pixel_width)
-    ray_length = rays_d.norm(dim=-1)
-
-    #    Query color and density
-    color_coarse, density_coarse = mipnerf(points_mu_coarse, points_sigma_coarse)
-
-    #    Volume rendering
-    rgb_coarse, depth_coarse, weights_coarse = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                                # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
-
-    if n_fine == 0:
-        if return_dict:
-            return {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights_coarse, 'z_vals': z_coarse, 'color': color_coarse, 'density': density_coarse}
-        else:
-            return rgb_coarse, depth_coarse
-
-    # 2. Fine: Importance sampling
-    with torch.no_grad():
-        weights_coarse = (1.0 - uniform_ratio) * weights_coarse + uniform_ratio / weights_coarse.shape[-1]
-    z_fine = importance_sample(z_coarse, weights_coarse, n_fine)
-    z_fine, _ = torch.sort(z_fine, dim=-2)
-    points_mu_fine, points_sigma_fine = get_mipnerf_cones(rays_o, rays_d, z_fine, pixel_width)                                                           
-    color_fine, density_fine = mipnerf(points_mu_fine, points_sigma_fine)  
-
-    #   Volume rendering                    
-    rgb_fine, depth_fine, weights_fine = volume_rendering(color_fine, density_fine, z_fine, ray_length)
-
-    if return_dict:
-        return {
-            'coarse': {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights_coarse, 'z_vals': z_coarse, 'color': color_coarse, 'density': density_coarse},
-            'fine': {'rgb': rgb_fine, 'depth': depth_fine, 'weights': weights_fine, 'z_vals': z_fine, 'color': color_fine, 'density': density_fine}
-        }
-    else:
-        return rgb_fine, depth_fine
-
-
 def nerf_render_rays(
     nerf: Union[Callable[[Tensor], Tuple[Tensor, Tensor]], Tuple[Callable[[Tensor], Tuple[Tensor, Tensor]], Callable[[Tensor], Tuple[Tensor, Tensor]]]],
     rays_o: Tensor, rays_d: Tensor,
@@ -258,7 +189,7 @@ def nerf_render_rays(
     z_spacing: Literal['linear', 'inverse_linear'] = 'linear',
 ):
     """
-    NeRF rendering.
+    NeRF rendering of rays. Note that it supports arbitrary batch dimensions (denoted as `...`)
 
     Args:
         nerf: nerf model, which takes points as input and returns (color, density) as output.
@@ -269,10 +200,10 @@ def nerf_render_rays(
         pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
     
     Returns 
-        if return_dict is False, return fine results only:
-            rgb_fine: (..., n_rays, 3) rendered color values.
-            depth_fine: (..., n_rays, 1) rendered depth values.
-        else, return a dict. If n_fine == 0, the dict only contains coarse results:
+        if return_dict is False, return rendered results only: (If `n_fine == 0`, return coarse results, otherwise return fine results)
+            rgb: (..., n_rays, 3) rendered color values. 
+            depth: (..., n_rays) rendered depth values.
+        else, return a dict. If `n_fine == 0`, the dict only contains coarse results:
         ```
         {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
         ```
@@ -308,7 +239,8 @@ def nerf_render_rays(
     
     # 2. Fine: Importance sampling
     if nerf_coarse is nerf_fine:
-        # Reuse coarse results
+        # If coarse and fine stages share the same model, the points of coarse stage can be reused, 
+        # and we only need to query the importance samples of fine stage.
         z_fine = importance_sample(z_vals, weights, n_fine)               
         points_fine = rays_o[..., None, :] + rays_d[..., None, :] * z_fine[..., None]                      
         color_fine, density_fine = nerf_fine(points_fine)
@@ -322,7 +254,7 @@ def nerf_render_rays(
         density = torch.gather(density, dim=-1, index=sort_inds)
         rgb, depth, weights = volume_rendering(color, density, z_vals, ray_length)
     else:
-        # Re-query coarse stage points and importance sample
+        # If coarse and fine stages use different models, we need to query the importance samples of both stages.
         z_fine = importance_sample(z_coarse, weights, n_fine)
         z_vals = torch.cat([z_coarse, z_fine], dim=-1)   
         points = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., None]
@@ -338,56 +270,121 @@ def nerf_render_rays(
         return rgb, depth
 
 
-def mipnerf_render_view(
-    nerf: Tensor,
+def mipnerf_render_rays(
+    mipnerf: Callable[[Tensor, Tensor], Tuple[Tensor, Tensor]],
+    rays_o: Tensor, rays_d: Tensor, pixel_width: Tensor, 
+    *, 
+    return_dict: bool = False,
+    n_coarse: int = 64, n_fine: int = 64, uniform_ratio: float = 0.4,
+    near: float = 0.1, far: float = 100.0,
+    z_spacing: Literal['linear', 'inverse_linear'] = 'linear',
+) -> Union[Tuple[Tensor, Tensor], Dict[str, Tensor]]:
+    """
+    MipNeRF rendering.
+
+    Args:
+        mipnerf: mipnerf model, which takes (points_mu, points_sigma) as input and returns (color, density) as output.
+            The shape of points_mu and points_sigma should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples, 3, 3) respectively.
+            The shape of color and density should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples) respectively.
+        rays_o: (..., n_rays, 3) ray origins
+        rays_d: (..., n_rays, 3) ray directions.
+        pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
+    
+    Returns 
+        if return_dict is False, return rendered results only: (If `n_fine == 0`, return coarse results, otherwise return fine results)
+            rgb: (..., n_rays, 3) rendered color values. 
+            depth: (..., n_rays) rendered depth values.
+        else, return a dict. If `n_fine == 0`, the dict only contains coarse results:
+        ```
+        {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
+        ```
+        If n_fine > 0, the dict contains both coarse and fine results:
+        ```
+        {
+            "coarse": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..},
+            "fine": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
+        }
+        ```
+    """
+    # 1. Coarse: bin sampling
+    z_coarse = bin_sample(rays_d.shape[:-1], n_coarse, near, far, spacing=z_spacing, device=rays_o.device, dtype=rays_o.dtype)
+    points_mu_coarse, points_sigma_coarse = get_mipnerf_cones(rays_o, rays_d, z_coarse, pixel_width)
+    ray_length = rays_d.norm(dim=-1)
+
+    #    Query color and density
+    color_coarse, density_coarse = mipnerf(points_mu_coarse, points_sigma_coarse)
+
+    #    Volume rendering
+    rgb_coarse, depth_coarse, weights_coarse = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                                # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
+
+    if n_fine == 0:
+        if return_dict:
+            return {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights_coarse, 'z_vals': z_coarse, 'color': color_coarse, 'density': density_coarse}
+        else:
+            return rgb_coarse, depth_coarse
+
+    # 2. Fine: Importance sampling. (NOTE: coarse stages and fine stages always share the same model, but coarse stage points can not be reused)
+    with torch.no_grad():
+        weights_coarse = (1.0 - uniform_ratio) * weights_coarse + uniform_ratio / weights_coarse.shape[-1]
+    z_fine = importance_sample(z_coarse, weights_coarse, n_fine)
+    z_fine, _ = torch.sort(z_fine, dim=-2)
+    points_mu_fine, points_sigma_fine = get_mipnerf_cones(rays_o, rays_d, z_fine, pixel_width)                                                           
+    color_fine, density_fine = mipnerf(points_mu_fine, points_sigma_fine)  
+
+    #   Volume rendering                    
+    rgb_fine, depth_fine, weights_fine = volume_rendering(color_fine, density_fine, z_fine, ray_length)
+
+    if return_dict:
+        return {
+            'coarse': {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights_coarse, 'z_vals': z_coarse, 'color': color_coarse, 'density': density_coarse},
+            'fine': {'rgb': rgb_fine, 'depth': depth_fine, 'weights': weights_fine, 'z_vals': z_fine, 'color': color_fine, 'density': density_fine}
+        }
+    else:
+        return rgb_fine, depth_fine
+
+
+def nerf_render_view(
+    mipnerf: Tensor,
     extrinsics: Tensor, 
     intrinsics: Tensor, 
     width: int,
     height: int,
     *,
-    patchify: bool = True,
-    num_rays_limit: int = 4096,
+    patchify: bool = False,
+    patch_size: Tuple[int, int] = (64, 64),
     **options: Dict[str, Any]
 ) -> Tuple[Tensor, Tensor]:
     """
+    MipNeRF rendering of views. Note that it supports arbitrary batch dimensions (denoted as `...`)
+
     Args:
-        render_extrinsics: (n_batch, n_view 4, 4) extrinsic matrice of the rendered views
-        render_intrinsics (optional): (n_batch, n_view, 3, 3) intrinsic matrice of the rendered views.
-        render_width (optional): image width of the rendered views.
-        render_height (optional): image height of the rendered views.
+        extrinsics: (..., 4, 4) extrinsic matrice of the rendered views
+        intrinsics (optional): (..., 3, 3) intrinsic matrice of the rendered views.
+        width (optional): image width of the rendered views.
+        height (optional): image height of the rendered views.
+        patchify (optional): If the image is too large, render it patch by patch
         **options: rendering options.
     
     Returns:
-        rgb: (n_batch, n_view, 3, height, width) rendered color values.
-        depth: (n_batch, n_view, 1, height, width) rendered depth values.
+        rgb: (..., 3, height, width) rendered color values.
+        depth: (..., height, width) rendered depth values.
     """
-    if intrinsics is None:
-        intrinsics = intrinsics[:, 0, ...].expand(intrinsics.shape[0], extrinsics.shape[1], -1, -1)
-    n_render_view = extrinsics.shape[1]
-    
-    pixel_width = get_pixel_width(intrinsics, width, height)
-
-    # Render
     if patchify:
-        # Patchify rendering
-        PATCH_SIZE = int((num_rays_limit / n_render_view) ** 0.5)
-        n_rows, n_columns = math.ceil(height / PATCH_SIZE), math.ceil(width / PATCH_SIZE)
+        # Patchified rendering
+        max_patch_width, max_patch_height = patch_size
+        n_rows, n_columns = math.ceil(height / max_patch_height), math.ceil(width / max_patch_width)
 
         rgb_rows, depth_rows = [], []
         for i_row in range(n_rows):
             rgb_row, depth_row = [], []
             for i_column in range(n_columns):
-                patch_shape = patch_height, patch_width = min(PATCH_SIZE, render_height - i_row * PATCH_SIZE), min(PATCH_SIZE, render_width - i_column * PATCH_SIZE)
-                uv = image_uv(render_width, render_height, i_column * PATCH_SIZE, i_row * PATCH_SIZE, i_column * PATCH_SIZE + patch_width, i_row * PATCH_SIZE + patch_height).to(render_extrinsics)
+                patch_shape = patch_height, patch_width = min(max_patch_height, height - i_row * max_patch_height), min(max_patch_width, width - i_column * max_patch_width)
+                uv = image_uv(width, height, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
                 uv = uv.flatten(0, 1)                                               # (patch_height * patch_width, 2)
                 ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
-                rgb_, depth_ = self.render_rays(                                    # (n_batch, n_view, patch_height * patch_width, 3 or 1)
-                    images, features, extrinsics, intrinsics,
-                    ray_o_, ray_d_, pixel_width,
-                    **options
-                ) 
-                rgb_ = rgb_.permute(0, 1, 3, 2).unflatten(-1, patch_shape)          # (n_batch, n_view, 3, patch_height, patch_width)
-                depth_ = depth_.permute(0, 1, 3, 2).unflatten(-1, patch_shape)      # (n_batch, n_view, 1, patch_height, patch_width)
+                rgb_, depth_ = nerf_render_rays(mipnerf, ray_o_, ray_d_, **options) 
+                rgb_ = rgb_.transpose(-1, -2).unflatten(-1, patch_shape)            # (..., 3, patch_height, patch_width)
+                depth_ = depth_.unflatten(-1, patch_shape)                          # (..., patch_height, patch_width)
                 
                 rgb_row.append(rgb_)
                 depth_row.append(depth_)
@@ -399,15 +396,76 @@ def mipnerf_render_view(
         return rgb, depth
     else:
         # Full rendering
-        uv = utils3d.image_uv(render_width, render_height).to(extrinsics)
-        uv = uv.flatten(0, 1)                                                       # (render_height * render_width, 2)
-        ray_o_, ray_d_ = get_rays(render_extrinsics, render_intrinsics, uv)
-        rgb, depth = render_rays(                                              # (n_batch, n_view, render_height * render_width, 3 or 1)
-            images, features, extrinsics, intrinsics,
-            ray_o_, ray_d_, pixel_width,
-            **options
-        )
-        rgb = rgb.permute(0, 1, 3, 2).reshape(images.shape[0], n_render_view, 3, render_height, render_width)    # (n_batch, n_view, 3, render_height, render_width)
-        depth = depth.permute(0, 1, 3, 2).reshape(images.shape[0], n_render_view, 1, render_height, render_width) # (n_batch, n_view, 1, render_height, render_width)
+        uv = image_uv(width,height).to(extrinsics)
+        uv = uv.flatten(0, 1)                                                       # (height * width, 2)
+        ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
+        rgb, depth = nerf_render_rays(mipnerf, ray_o_, ray_d_, **options) 
+        rgb = rgb.transpose(-1, -2).unflatten(-1, (height, width))                  # (..., 3, height, width)
+        depth = depth.unflatten(-1, (height, width))                                # (..., height, width)
+        
+        return rgb, depth
+    
+
+def mipnerf_render_view(
+    mipnerf: Tensor,
+    extrinsics: Tensor, 
+    intrinsics: Tensor, 
+    width: int,
+    height: int,
+    *,
+    patchify: bool = False,
+    patch_size: Tuple[int, int] = (64, 64),
+    **options: Dict[str, Any]
+) -> Tuple[Tensor, Tensor]:
+    """
+    MipNeRF rendering of views. Note that it supports arbitrary batch dimensions (denoted as `...`)
+
+    Args:
+        extrinsics: (..., 4, 4) extrinsic matrice of the rendered views
+        intrinsics (optional): (..., 3, 3) intrinsic matrice of the rendered views.
+        width (optional): image width of the rendered views.
+        height (optional): image height of the rendered views.
+        patchify (optional): If the image is too large, render it patch by patch
+        **options: rendering options.
+    
+    Returns:
+        rgb: (..., 3, height, width) rendered color values.
+        depth: (..., height, width) rendered depth values.
+    """
+    pixel_width = get_pixel_width(intrinsics, width, height)
+
+    if patchify:
+        # Patchified rendering
+        max_patch_width, max_patch_height = patch_size
+        n_rows, n_columns = math.ceil(height / max_patch_height), math.ceil(width / max_patch_width)
+
+        rgb_rows, depth_rows = [], []
+        for i_row in range(n_rows):
+            rgb_row, depth_row = [], []
+            for i_column in range(n_columns):
+                patch_shape = patch_height, patch_width = min(max_patch_height, height - i_row * max_patch_height), min(max_patch_width, width - i_column * max_patch_width)
+                uv = image_uv(width, height, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
+                uv = uv.flatten(0, 1)                                               # (patch_height * patch_width, 2)
+                ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
+                rgb_, depth_ = mipnerf_render_rays(mipnerf, ray_o_, ray_d_, pixel_width, **options) 
+                rgb_ = rgb_.transpose(-1, -2).unflatten(-1, patch_shape)            # (..., 3, patch_height, patch_width)
+                depth_ = depth_.unflatten(-1, patch_shape)                          # (..., patch_height, patch_width)
+                
+                rgb_row.append(rgb_)
+                depth_row.append(depth_)
+            rgb_rows.append(torch.cat(rgb_row, dim=-1))
+            depth_rows.append(torch.cat(depth_row, dim=-1))
+        rgb = torch.cat(rgb_rows, dim=-2)
+        depth = torch.cat(depth_rows, dim=-2)
+
+        return rgb, depth
+    else:
+        # Full rendering
+        uv = image_uv(width, height).to(extrinsics)
+        uv = uv.flatten(0, 1)                                                       # (height * width, 2)
+        ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
+        rgb, depth = mipnerf_render_rays(mipnerf, ray_o_, ray_d_, pixel_width, **options) 
+        rgb = rgb.transpose(-1, -2).unflatten(-1, (height, width))                  # (..., 3, height, width)
+        depth = depth.unflatten(-1, (height, width))                                # (..., height, width)
         
         return rgb, depth
