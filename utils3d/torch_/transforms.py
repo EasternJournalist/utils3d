@@ -1,4 +1,5 @@
 from typing import *
+from numbers import Number 
 
 import torch
 import torch.nn.functional as F
@@ -762,22 +763,37 @@ def matrix_to_quaternion(rot_mat: torch.Tensor, eps: float = 1e-12) -> torch.Ten
     # Extract the diagonal and off-diagonal elements of the rotation matrix
     m00, m01, m02, m10, m11, m12, m20, m21, m22 = rot_mat.flatten(-2).unbind(dim=-1)
 
-    # Compute the quaternion components
-    quat = torch.where(
-        (m22 < 0).unsqueeze(-1),
+    diag = torch.diagonal(rot_mat, dim1=-2, dim2=-1)
+    M = torch.tensor([
+        [1, 1, 1],
+        [1, -1, -1],
+        [-1, 1, -1],
+        [-1, -1, 1]
+    ], dtype=rot_mat.dtype, device=rot_mat.device)
+    wxyz = (1 + diag @ M.transpose(-1, -2)).clamp_(0).sqrt().mul(0.5)
+    _, max_idx = wxyz.max(dim=-1)
+    xw = torch.sign(m21 - m12)
+    yw = torch.sign(m02 - m20)
+    zw = torch.sign(m10 - m01)
+    yz = torch.sign(m21 + m12)
+    xz = torch.sign(m02 + m20)
+    xy = torch.sign(m01 + m10)
+    ones = torch.ones_like(xw)
+    sign = torch.where(
+        max_idx[..., None] == 0,
+        torch.stack([ones, xw, yw, zw], dim=-1),
         torch.where(
-            (m00 > m11).unsqueeze(-1),
-            torch.stack([-(m12 - m21), 1 + m00 - m11 - m22, m01 + m10, m20 + m02], dim=-1),
-            torch.stack([-(m20 - m02), m01 + m10, 1 - m00 + m11 - m22, m12 + m21], dim=-1),
-        ),
-        torch.where(
-            (m00 < -m11).unsqueeze(-1),
-            torch.stack([-(m01 - m10), m02 + m20, m12 + m21, 1 - m00 - m11 + m22], dim=-1),
-            torch.stack([-(1 + m00 + m11 + m22), m12 - m21, m20 - m02, m01 - m10], dim=-1),
+            max_idx[..., None] == 1,
+            torch.stack([xw, ones, xy, xz], dim=-1),
+            torch.where(
+                max_idx[..., None] == 2,
+                torch.stack([yw, xy, ones, yz], dim=-1),
+                torch.stack([zw, xz, yz, ones], dim=-1)
+            )
         )
     )
+    quat = sign * wxyz
     quat = F.normalize(quat, dim=-1, eps=eps)
-    quat = torch.sign(quat[..., 0:1]) * quat
     return quat
 
 
@@ -806,13 +822,13 @@ def quaternion_to_matrix(quaternion: torch.Tensor, eps: float = 1e-12) -> torch.
     return rot_mat
 
 
-def slerp(rot_mat_1: torch.Tensor, rot_mat_2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+def slerp(rot_mat_1: torch.Tensor, rot_mat_2: torch.Tensor, t: Union[Number, torch.Tensor]) -> torch.Tensor:
     """Spherical linear interpolation between two rotation matrices
 
     Args:
         rot_mat_1 (torch.Tensor): shape (..., 3, 3), the first rotation matrix
         rot_mat_2 (torch.Tensor): shape (..., 3, 3), the second rotation matrix
-        t (torch.Tensor): shape (...,), the interpolation factor
+        t (torch.Tensor): scalar or shape (...,), the interpolation factor
 
     Returns:
         torch.Tensor: shape (..., 3, 3), the interpolated rotation matrix
@@ -821,42 +837,47 @@ def slerp(rot_mat_1: torch.Tensor, rot_mat_2: torch.Tensor, t: torch.Tensor) -> 
     assert rot_mat_1.shape[-2:] == (3, 3)
     rot_vec_1 = matrix_to_axis_angle(rot_mat_1)
     rot_vec_2 = matrix_to_axis_angle(rot_mat_2)
+    if isinstance(t, Number):
+        t = torch.tensor(t, dtype=rot_mat_1.dtype, device=rot_mat_1.device)
     rot_vec = (1 - t[..., None]) * rot_vec_1 + t[..., None] * rot_vec_2
     rot_mat = axis_angle_to_matrix(rot_vec)
     return rot_mat
 
 
-def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: Union[Number, torch.Tensor]) -> torch.Tensor:
     """Interpolate extrinsics between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
 
     Args:
         ext1 (torch.Tensor): shape (..., 4, 4), the first camera pose
         ext2 (torch.Tensor): shape (..., 4, 4), the second camera pose
-        t (torch.Tensor): shape (...,), the interpolation factor
+        t (torch.Tensor): scalar or shape (...,), the interpolation factor
 
     Returns:
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose
     """
+    print(t)
     assert ext1.shape[-2:] == (4, 4) and ext2.shape[-2:] == (4, 4)
     pos1 = ext1[..., :3, 3] @ ext1[..., :3, :3]
     pos2 = ext2[..., :3, 3] @ ext2[..., :3, :3]
+    if isinstance(t, Number):
+        t = torch.tensor(t, dtype=ext1.dtype, device=ext1.device)
     pos = (1 - t[..., None]) * pos1 + t[..., None] * pos2
     rot = slerp(ext1[..., :3, :3], ext2[..., :3, :3], t)
     ext = torch.cat([
-        torch.cat([rot, pos[..., None]], dim=-1),
-        torch.tensor([0, 0, 0, 1], dtype=ext1.dtype, device=ext1.device)[:, None].expand_as(ext1[..., :1, :])
+        torch.cat([rot, rot @ pos[..., None]], dim=-1),
+        torch.tensor([0, 0, 0, 1], dtype=ext1.dtype, device=ext1.device).expand_as(ext1[..., :1, :])
     ], dim=-2)
 
     return ext
 
 
-def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: torch.Tensor):
+def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: Union[Number, torch.Tensor]):
     """Interpolate view matrices between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
 
     Args:
         ext1 (torch.Tensor): shape (..., 4, 4), the first camera pose
         ext2 (torch.Tensor): shape (..., 4, 4), the second camera pose
-        t (torch.Tensor): shape (...,), the interpolation factor
+        t (torch.Tensor): scalar or shape (...,), the interpolation factor
 
     Returns:
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose

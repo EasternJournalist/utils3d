@@ -24,7 +24,6 @@ def run():
         # dim = 0
         # spatial = []
         expected = R.from_matrix(matrix.reshape(-1, 3, 3)).as_quat().reshape(spatial + [4])[..., [3, 0, 1, 2]]
-        expected = np.sign(expected[..., [0]]) * expected
         actual = utils3d.torch.matrix_to_quaternion(
             torch.from_numpy(matrix)
         ).cpu().numpy()
