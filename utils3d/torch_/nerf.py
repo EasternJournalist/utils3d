@@ -3,6 +3,7 @@ from numbers import Number
 import math
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 from .utils import image_uv
 
@@ -180,7 +181,7 @@ def importance_sample(z_vals: Tensor, weights: Tensor, n_samples: int) -> Tuple[
 
 
 def nerf_render_rays(
-    nerf: Union[Callable[[Tensor], Tuple[Tensor, Tensor]], Tuple[Callable[[Tensor], Tuple[Tensor, Tensor]], Callable[[Tensor], Tuple[Tensor, Tensor]]]],
+    nerf: Union[Callable[[Tensor, Tensor], Tuple[Tensor, Tensor]], Tuple[Callable[[Tensor], Tuple[Tensor, Tensor]], Callable[[Tensor], Tuple[Tensor, Tensor]]]],
     rays_o: Tensor, rays_d: Tensor,
     *, 
     return_dict: bool = False,
@@ -192,9 +193,16 @@ def nerf_render_rays(
     NeRF rendering of rays. Note that it supports arbitrary batch dimensions (denoted as `...`)
 
     Args:
-        nerf: nerf model, which takes points as input and returns (color, density) as output.
+        nerf: nerf model, which takes (points, directions) as input and returns (color, density) as output.
             If nerf is a tuple, it should be (nerf_coarse, nerf_fine), where nerf_coarse and nerf_fine are two nerf models for coarse and fine stages respectively.
-            The input of points should be (..., n_rays, n_samples, 3) and output of color and density should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples) respectively.
+            
+            nerf args:
+                points: (..., n_rays, n_samples, 3)
+                directions: (..., n_rays, n_samples, 3)
+            nerf returns:
+                color: (..., n_rays, n_samples, 3) color values.
+                density: (..., n_rays, n_samples) density values.
+                
         rays_o: (..., n_rays, 3) ray origins
         rays_d: (..., n_rays, 3) ray directions.
         pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
@@ -225,11 +233,11 @@ def nerf_render_rays(
     ray_length = rays_d.norm(dim=-1, keepdim=True)
 
     #    Query color and density                   
-    color_coarse, density_coarse = nerf_coarse(points_coarse)     # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
+    color_coarse, density_coarse = nerf_coarse(points_coarse, rays_d.unsqueeze(-2).expand_as(points_coarse))                    # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
     
     #    Volume rendering
     with torch.no_grad():
-        rgb_coarse, depth_coarse, weights = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                 # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
+        rgb_coarse, depth_coarse, weights = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
     
     if n_fine == 0:
         if return_dict:
@@ -271,7 +279,7 @@ def nerf_render_rays(
 
 
 def mipnerf_render_rays(
-    mipnerf: Callable[[Tensor, Tensor], Tuple[Tensor, Tensor]],
+    mipnerf: Callable[[Tensor, Tensor, Tensor], Tuple[Tensor, Tensor]],
     rays_o: Tensor, rays_d: Tensor, pixel_width: Tensor, 
     *, 
     return_dict: bool = False,
@@ -284,8 +292,15 @@ def mipnerf_render_rays(
 
     Args:
         mipnerf: mipnerf model, which takes (points_mu, points_sigma) as input and returns (color, density) as output.
-            The shape of points_mu and points_sigma should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples, 3, 3) respectively.
-            The shape of color and density should be (..., n_rays, n_samples, 3) and (..., n_rays, n_samples) respectively.
+
+            mipnerf args:
+                points_mu: (..., n_rays, n_samples, 3) cone mu.
+                points_sigma: (..., n_rays, n_samples, 3, 3) cone sigma.
+                directions: (..., n_rays, n_samples, 3)
+            mipnerf returns:
+                color: (..., n_rays, n_samples, 3) color values.
+                density: (..., n_rays, n_samples) density values.
+
         rays_o: (..., n_rays, 3) ray origins
         rays_d: (..., n_rays, 3) ray directions.
         pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
@@ -312,7 +327,7 @@ def mipnerf_render_rays(
     ray_length = rays_d.norm(dim=-1)
 
     #    Query color and density
-    color_coarse, density_coarse = mipnerf(points_mu_coarse, points_sigma_coarse)
+    color_coarse, density_coarse = mipnerf(points_mu_coarse, points_sigma_coarse, rays_d.unsqueeze(-2).expand_as(points_mu_coarse))                # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
 
     #    Volume rendering
     rgb_coarse, depth_coarse, weights_coarse = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                                # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
