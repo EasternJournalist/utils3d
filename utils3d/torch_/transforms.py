@@ -855,7 +855,6 @@ def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: Union[Numb
     Returns:
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose
     """
-    print(t)
     assert ext1.shape[-2:] == (4, 4) and ext2.shape[-2:] == (4, 4)
     pos1 = ext1[..., :3, 3] @ ext1[..., :3, :3]
     pos2 = ext2[..., :3, 3] @ ext2[..., :3, :3]

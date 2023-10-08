@@ -4,6 +4,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 from .utils import image_uv
 
@@ -18,7 +19,8 @@ __all__ = [
     'nerf_render_rays',
     'mipnerf_render_rays',
     'nerf_render_view',
-    'mipnerf_render_view'
+    'mipnerf_render_view',
+    'InstantNGP',
 ]
 
 
@@ -30,22 +32,38 @@ def get_rays(extrinsics: Tensor, intrinsics: Tensor, uv: Tensor) -> Tuple[Tensor
         uv: (..., n_rays, 2) uv coordinates of the rays. 
 
     Returns:
-        rays_o: (..., 1, 3) ray origins
-        rays_d: (..., n_rays, 3) ray directions. NOTE: ray directions are NOT normalized. They actuallys makes rays_o + rays_d * z = world coordinates, where z is the depth.
+        rays_o: (..., 1,      3) ray origins
+        rays_d: (..., n_rays, 3) ray directions. 
+            NOTE: ray directions are NOT normalized. They actuallys makes rays_o + rays_d * z = world coordinates, where z is the depth.
     """
     uvz = torch.cat([uv, torch.ones_like(uv[..., :1])], dim=-1).to(extrinsics)                                                          # (n_batch, n_views, n_rays, 3)
 
     with torch.cuda.amp.autocast(enabled=False):
-        inv_transformation = (intrinsics @ extrinsics[:, :, :3, :3]).inverse()
+        inv_transformation = (intrinsics @ extrinsics[..., :3, :3]).inverse()
         inv_extrinsics = extrinsics.inverse()
     rays_d = uvz @ inv_transformation.transpose(-1, -2)                                                  
-    rays_o = inv_extrinsics[:, :, None, :3, 3]                                                                                          # (n_batch, n_views, 1, 3)
+    rays_o = inv_extrinsics[..., None, :3, 3]                                                                                           # (n_batch, n_views, 1, 3)
     return rays_o, rays_d
 
 
-def get_image_rays(extrinsics: Tensor, intrinsics: Tensor, height: int, width: int) -> Tuple[Tensor, Tensor]:
-    uv = image_uv(height, width).to(extrinsics).flatten(0, 1)
-    return get_rays(extrinsics, intrinsics, uv)
+def get_image_rays(extrinsics: Tensor, intrinsics: Tensor, width: int, height: int) -> Tuple[Tensor, Tensor]:
+    """
+    Args:
+        extrinsics: (..., 4, 4) extrinsic matrices.
+        intrinsics: (..., 3, 3) intrinsic matrices.
+        width: width of the image.
+        height: height of the image.
+    
+    Returns:
+        rays_o: (..., 1,      1,     3) ray origins
+        rays_d: (..., height, width, 3) ray directions. 
+            NOTE: ray directions are NOT normalized. They actuallys makes rays_o + rays_d * z = world coordinates, where z is the depth.
+    """
+    uv = image_uv(width, height).to(extrinsics).flatten(0, 1)
+    rays_o, rays_d = get_rays(extrinsics, intrinsics, uv)
+    rays_o = rays_o.unflatten(-2, (1, 1))
+    rays_d = rays_d.unflatten(-2, (height, width))
+    return rays_o, rays_d
 
 
 def get_mipnerf_cones(rays_o: Tensor, rays_d: Tensor, z_vals: Tensor, pixel_width: Tensor) -> Tuple[Tensor, Tensor]:
@@ -116,10 +134,10 @@ def volume_rendering(color: Tensor, sigma: Tensor, z_vals: Tensor, ray_length: T
     alpha = 1.0 - (-sigma_delta).exp_()                                               
     weights = alpha * transparancy
     if rgb:
-        rgb = torch.sum(weights[:, None] * color, dim=-2) if rgb else None        
+        rgb = torch.sum(weights[..., None] * color, dim=-2) if rgb else None        
     if depth:
         z_vals = (z_vals[..., 1:] + z_vals[..., :-1]).mul_(0.5)
-        depth = torch.sum(weights * z_vals, dim=-2) if depth else None            
+        depth = torch.sum(weights * z_vals, dim=-1) / weights.sum(dim=-1).clamp_min_(1e-8) if depth else None            
     return rgb, depth, weights
 
 
@@ -170,7 +188,7 @@ def importance_sample(z_vals: Tensor, weights: Tensor, n_samples: int) -> Tuple[
 
     pdf = weights / torch.sum(weights, dim=-1, keepdim=True)                          # (..., n_rays, n_input_samples - 1)
     cdf = torch.cumsum(pdf, dim=-1)
-    u = torch.rand(z_vals.shape[:-1], n_samples, device=z_vals.device, dtype=z_vals.dtype)
+    u = torch.rand(*z_vals.shape[:-1], n_samples, device=z_vals.device, dtype=z_vals.dtype)
     
     inds = torch.searchsorted(cdf, u, right=True).clamp(0, cdf.shape[-1] - 1)         # (..., n_rays, n_samples)
     
@@ -230,14 +248,14 @@ def nerf_render_rays(
     # 1. Coarse: bin sampling
     z_coarse = bin_sample(rays_d.shape[:-1], n_coarse, near, far, device=rays_o.device, dtype=rays_o.dtype, spacing=z_spacing)                       # (n_batch, n_views, n_rays, n_samples)
     points_coarse = rays_o[..., None, :] + rays_d[..., None, :] * z_coarse[..., None]                                                                # (n_batch, n_views, n_rays, n_samples, 3)
-    ray_length = rays_d.norm(dim=-1, keepdim=True)
+    ray_length = rays_d.norm(dim=-1)
 
     #    Query color and density                   
-    color_coarse, density_coarse = nerf_coarse(points_coarse, rays_d.unsqueeze(-2).expand_as(points_coarse))                    # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
+    color_coarse, density_coarse = nerf_coarse(points_coarse, rays_d[..., None, :].expand_as(points_coarse))               # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
     
     #    Volume rendering
     with torch.no_grad():
-        rgb_coarse, depth_coarse, weights = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
+        rgb_coarse, depth_coarse, weights = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)            # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
     
     if n_fine == 0:
         if return_dict:
@@ -249,16 +267,16 @@ def nerf_render_rays(
     if nerf_coarse is nerf_fine:
         # If coarse and fine stages share the same model, the points of coarse stage can be reused, 
         # and we only need to query the importance samples of fine stage.
-        z_fine = importance_sample(z_vals, weights, n_fine)               
+        z_fine = importance_sample(z_coarse, weights, n_fine)               
         points_fine = rays_o[..., None, :] + rays_d[..., None, :] * z_fine[..., None]                      
-        color_fine, density_fine = nerf_fine(points_fine)
+        color_fine, density_fine = nerf_fine(points_fine, rays_d[..., None, :].expand_as(points_fine))
 
         # Merge & volume rendering
         z_vals = torch.cat([z_coarse, z_fine], dim=-1)          
-        color = torch.cat([color_coarse, color_fine], dim=-2), 
+        color = torch.cat([color_coarse, color_fine], dim=-2)
         density = torch.cat([density_coarse, density_fine], dim=-1)     
-        z_vals, sort_inds = torch.sort(z_vals, dim=-1)                       
-        color = torch.gather(color, dim=-2, index=sort_inds.expand(*([-1] * sort_inds.ndim), 3))
+        z_vals, sort_inds = torch.sort(z_vals, dim=-1)                   
+        color = torch.gather(color, dim=-2, index=sort_inds[..., None].expand_as(color))
         density = torch.gather(density, dim=-1, index=sort_inds)
         rgb, depth, weights = volume_rendering(color, density, z_vals, ray_length)
     else:
@@ -327,10 +345,10 @@ def mipnerf_render_rays(
     ray_length = rays_d.norm(dim=-1)
 
     #    Query color and density
-    color_coarse, density_coarse = mipnerf(points_mu_coarse, points_sigma_coarse, rays_d.unsqueeze(-2).expand_as(points_mu_coarse))                # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
+    color_coarse, density_coarse = mipnerf(points_mu_coarse, points_sigma_coarse, rays_d[..., None, :].expand_as(points_mu_coarse))             # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
 
     #    Volume rendering
-    rgb_coarse, depth_coarse, weights_coarse = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                                # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
+    rgb_coarse, depth_coarse, weights_coarse = volume_rendering(color_coarse, density_coarse, z_coarse, ray_length)                             # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
 
     if n_fine == 0:
         if return_dict:
@@ -344,7 +362,7 @@ def mipnerf_render_rays(
     z_fine = importance_sample(z_coarse, weights_coarse, n_fine)
     z_fine, _ = torch.sort(z_fine, dim=-2)
     points_mu_fine, points_sigma_fine = get_mipnerf_cones(rays_o, rays_d, z_fine, pixel_width)                                                           
-    color_fine, density_fine = mipnerf(points_mu_fine, points_sigma_fine)  
+    color_fine, density_fine = mipnerf(points_mu_fine, points_sigma_fine, rays_d[..., None, :].expand_as(points_mu_fine))
 
     #   Volume rendering                    
     rgb_fine, depth_fine, weights_fine = volume_rendering(color_fine, density_fine, z_fine, ray_length)
@@ -359,7 +377,7 @@ def mipnerf_render_rays(
 
 
 def nerf_render_view(
-    mipnerf: Tensor,
+    nerf: Tensor,
     extrinsics: Tensor, 
     intrinsics: Tensor, 
     width: int,
@@ -370,7 +388,7 @@ def nerf_render_view(
     **options: Dict[str, Any]
 ) -> Tuple[Tensor, Tensor]:
     """
-    MipNeRF rendering of views. Note that it supports arbitrary batch dimensions (denoted as `...`)
+    NeRF rendering of views. Note that it supports arbitrary batch dimensions (denoted as `...`)
 
     Args:
         extrinsics: (..., 4, 4) extrinsic matrice of the rendered views
@@ -397,7 +415,7 @@ def nerf_render_view(
                 uv = image_uv(width, height, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
                 uv = uv.flatten(0, 1)                                               # (patch_height * patch_width, 2)
                 ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
-                rgb_, depth_ = nerf_render_rays(mipnerf, ray_o_, ray_d_, **options) 
+                rgb_, depth_ = nerf_render_rays(nerf, ray_o_, ray_d_, **options, return_dict=False)
                 rgb_ = rgb_.transpose(-1, -2).unflatten(-1, patch_shape)            # (..., 3, patch_height, patch_width)
                 depth_ = depth_.unflatten(-1, patch_shape)                          # (..., patch_height, patch_width)
                 
@@ -414,7 +432,7 @@ def nerf_render_view(
         uv = image_uv(width,height).to(extrinsics)
         uv = uv.flatten(0, 1)                                                       # (height * width, 2)
         ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
-        rgb, depth = nerf_render_rays(mipnerf, ray_o_, ray_d_, **options) 
+        rgb, depth = nerf_render_rays(nerf, ray_o_, ray_d_, **options, return_dict=False)
         rgb = rgb.transpose(-1, -2).unflatten(-1, (height, width))                  # (..., 3, height, width)
         depth = depth.unflatten(-1, (height, width))                                # (..., height, width)
         
@@ -484,3 +502,125 @@ def mipnerf_render_view(
         depth = depth.unflatten(-1, (height, width))                                # (..., height, width)
         
         return rgb, depth
+
+
+class InstantNGP(nn.Module):
+    """
+    An implementation of InstantNGP, Müller et. al., https://nvlabs.github.io/instant-ngp/.
+    Requires `tinycudann` package.
+    Install it by:
+    ```
+    pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+    ```
+    """
+    def __init__(self,
+        view_dependent: bool = True,
+        base_resolution: int = 16,
+        finest_resolution: int = 2048,
+        n_levels: int = 16,
+        num_layers_density: int = 2,
+        hidden_dim_density: int = 64,
+        num_layers_color: int = 3,
+        hidden_dim_color: int = 64,
+        log2_hashmap_size: int = 19,
+        bound: float = 1.0,
+        color_range: Tuple[float, float] = (0.0, 1.0),
+    ):
+        super().__init__()
+        import tinycudann
+        N_FEATURES_PER_LEVEL = 2
+        GEO_FEAT_DIM = 15
+
+        self.bound = bound
+        self.color_range = color_range
+
+        # density network
+        self.num_layers_density = num_layers_density
+        self.hidden_dim_density = hidden_dim_density
+
+        per_level_scale = (finest_resolution / base_resolution) ** (1 / (n_levels - 1))
+
+        self.encoder = tinycudann.Encoding(
+            n_input_dims=3,
+            encoding_config={
+                "otype": "HashGrid",
+                "n_levels": n_levels,
+                "n_features_per_level": N_FEATURES_PER_LEVEL,
+                "log2_hashmap_size": log2_hashmap_size,
+                "base_resolution": base_resolution,
+                "per_level_scale": per_level_scale,
+            },
+        )
+
+        self.density_net = tinycudann.Network(
+            n_input_dims=N_FEATURES_PER_LEVEL * n_levels,
+            n_output_dims=1 + GEO_FEAT_DIM,
+            network_config={
+                "otype": "FullyFusedMLP",
+                "activation": "ReLU",
+                "output_activation": "None",
+                "n_neurons": hidden_dim_density,
+                "n_hidden_layers": num_layers_density - 1,
+            },
+        )
+
+        # color network
+        self.num_layers_color = num_layers_color        
+        self.hidden_dim_color = hidden_dim_color
+        
+        self.view_dependent = view_dependent
+        if view_dependent:
+            self.encoder_dir = tinycudann.Encoding(
+                n_input_dims=3,
+                encoding_config={
+                    "otype": "SphericalHarmonics",
+                    "degree": 4,
+                },
+            )
+            self.in_dim_color = self.encoder_dir.n_output_dims + GEO_FEAT_DIM
+        else:
+            self.in_dim_color = GEO_FEAT_DIM
+
+        self.color_net = tinycudann.Network(
+            n_input_dims=self.in_dim_color,
+            n_output_dims=3,
+            network_config={
+                "otype": "FullyFusedMLP",
+                "activation": "ReLU",
+                "output_activation": "None",
+                "n_neurons": hidden_dim_color,
+                "n_hidden_layers": num_layers_color - 1,
+            },
+        )
+    
+    def forward(self, x: torch.Tensor, d: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x: (..., 3) points
+            d: (..., 3) directions
+        Returns:
+            color: (..., 3) color values.
+            density: (..., 1) density values.
+        """
+        batch_shape = x.shape[:-1]
+        x, d = x.reshape(-1, 3), d.reshape(-1, 3)
+
+        # density
+        x = (x + self.bound) / (2 * self.bound)     # to [0, 1]
+        x = self.encoder(x)
+        density, geo_feat = self.density_net(x).split([1, 15], dim=-1)
+
+        density = torch.where(density > 0, density + 1.0, torch.exp(density)).squeeze(-1)
+
+        # color
+        if self.view_dependent:
+            d = (F.normalize(d, dim=-1) + 1) / 2    # tcnn SH encoding requires inputs to be in [0, 1]
+            d = self.encoder_dir(d)
+            h = torch.cat([d, geo_feat], dim=-1)
+        else:
+            h = geo_feat
+        h = self.color_net(h)
+        
+        color = torch.sigmoid(h) * (self.color_range[1] - self.color_range[0]) + self.color_range[0]
+
+        return color.reshape(*batch_shape, 3), density.reshape(*batch_shape)
