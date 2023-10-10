@@ -862,11 +862,8 @@ def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: Union[Numb
         t = torch.tensor(t, dtype=ext1.dtype, device=ext1.device)
     pos = (1 - t[..., None]) * pos1 + t[..., None] * pos2
     rot = slerp(ext1[..., :3, :3], ext2[..., :3, :3], t)
-    ext = torch.cat([
-        torch.cat([rot, rot @ pos[..., None]], dim=-1),
-        torch.tensor([0, 0, 0, 1], dtype=ext1.dtype, device=ext1.device).expand_as(ext1[..., :1, :])
-    ], dim=-2)
-
+    ext = torch.cat([rot, rot @ pos[..., None]], dim=-1)
+    ext = torch.cat([ext, torch.tensor([0, 0, 0, 1], dtype=ext.dtype, device=ext.device).expand_as(ext[..., :1, :])], dim=-2)
     return ext
 
 

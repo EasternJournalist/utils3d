@@ -141,6 +141,39 @@ def volume_rendering(color: Tensor, sigma: Tensor, z_vals: Tensor, ray_length: T
     return rgb, depth, weights
 
 
+def neus_volume_rendering(color: Tensor, sdf: Tensor, s: torch.Tensor, z_vals: Tensor = None, rgb: bool = True, depth: bool = True) -> Tuple[Tensor, Tensor, Tensor]:
+    """
+    Given color, sdf values and z_vals (linear depth of the sampling points), do volume rendering. (NeuS)
+
+    Args:
+        color: (..., n_samples or n_samples - 1, 3) color values.
+        sdf: (..., n_samples) sdf values.
+        s: (..., n_samples) S values of S-density function in NeuS. The standard deviation of such S-density distribution is 1 / s.
+        z_vals: (..., n_samples) z values.
+        ray_length: (...) length of the ray
+
+    Returns:
+        rgb: (..., 3) rendered color values.
+        depth: (...) rendered depth values.
+        weights (..., n_samples) weights.
+    """
+
+    if color.shape[-2] == z_vals.shape[-1]:
+        color = (color[..., 1:, :] + color[..., :-1, :]).mul_(0.5)
+
+    sigmoid_sdf = torch.sigmoid(s * sdf)
+    alpha = F.relu(1 - sigmoid_sdf[..., :-1] / sigmoid_sdf[..., :-1])
+    transparancy = torch.cumprod(torch.cat([torch.ones_like(alpha[..., :1]), alpha], dim=-1), dim=-1)
+    weights = alpha * transparancy
+
+    if rgb:
+        rgb = torch.sum(weights[..., None] * color, dim=-2) if rgb else None        
+    if depth:
+        z_vals = (z_vals[..., 1:] + z_vals[..., :-1]).mul_(0.5)
+        depth = torch.sum(weights * z_vals, dim=-1) / weights.sum(dim=-1).clamp_min_(1e-8) if depth else None            
+    return rgb, depth, weights
+
+
 def bin_sample(size: Union[torch.Size, Tuple[int, ...]], n_samples: int, min_value: Number, max_value: Number, spacing: Literal['linear', 'inverse_linear'], dtype: torch.dtype = None, device: torch.device = None) -> Tensor:
     """
     Uniformly (or uniformly in inverse space) sample z values in `n_samples` bins in range [min_value, max_value].
@@ -226,14 +259,14 @@ def nerf_render_rays(
         pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
     
     Returns 
-        if return_dict is False, return rendered results only: (If `n_fine == 0`, return coarse results, otherwise return fine results)
+        if return_dict is False, return rendered rgb and depth for short cut. (If there are separate coarse and fine results, return fine results)
             rgb: (..., n_rays, 3) rendered color values. 
             depth: (..., n_rays) rendered depth values.
-        else, return a dict. If `n_fine == 0`, the dict only contains coarse results:
+        else, return a dict. If `n_fine == 0` or `nerf` is a single model, the dict only contains coarse results:
         ```
         {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
         ```
-        If n_fine > 0, the dict contains both coarse and fine results:
+        If there are two models for coarse and fine stages, the dict contains both coarse and fine results:
         ```
         {
             "coarse": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..},
@@ -279,6 +312,8 @@ def nerf_render_rays(
         color = torch.gather(color, dim=-2, index=sort_inds[..., None].expand_as(color))
         density = torch.gather(density, dim=-1, index=sort_inds)
         rgb, depth, weights = volume_rendering(color, density, z_vals, ray_length)
+
+        return {'rgb': rgb, 'depth': depth, 'weights': weights, 'z_vals': z_vals, 'color': color, 'density': density}
     else:
         # If coarse and fine stages use different models, we need to query the importance samples of both stages.
         z_fine = importance_sample(z_coarse, weights, n_fine)
@@ -287,13 +322,13 @@ def nerf_render_rays(
         color, density = nerf_fine(points)
         rgb, depth, weights = volume_rendering(color, density, z_vals, ray_length)
 
-    if return_dict:
-        return {
-            'coarse': {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights, 'z_vals': z_coarse, 'color': color_coarse, 'density': density_coarse},
-            'fine': {'rgb': rgb, 'depth': depth, 'weights': weights, 'z_vals': z_vals, 'color': color, 'density': density}
-        }
-    else:
-        return rgb, depth
+        if return_dict:
+            return {
+                'coarse': {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights, 'z_vals': z_coarse, 'color': color_coarse, 'density': density_coarse},
+                'fine': {'rgb': rgb, 'depth': depth, 'weights': weights, 'z_vals': z_vals, 'color': color, 'density': density}
+            }
+        else:
+            return rgb, depth
 
 
 def mipnerf_render_rays(
@@ -331,7 +366,7 @@ def mipnerf_render_rays(
         ```
         {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
         ```
-        If n_fine > 0, the dict contains both coarse and fine results:
+        If n_fine > 0, the dict contains both coarse and fine results :
         ```
         {
             "coarse": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..},
@@ -376,6 +411,93 @@ def mipnerf_render_rays(
         return rgb_fine, depth_fine
 
 
+def neus_render_rays(
+    neus: Callable[[Tensor, Tensor], Tuple[Tensor, Tensor]],
+    s: Union[Number, Tensor],
+    rays_o: Tensor, rays_d: Tensor, 
+    *, 
+    compute_normal: bool = True,
+    return_dict: bool = False,
+    n_coarse: int = 64, n_fine: int = 64,
+    near: float = 0.1, far: float = 100.0,
+    z_spacing: Literal['linear', 'inverse_linear'] = 'linear',
+):
+    """
+    TODO
+    NeuS rendering of rays. Note that it supports arbitrary batch dimensions (denoted as `...`)
+
+    Args:
+        neus: neus model, which takes (points, directions) as input and returns (color, density) as output.
+
+            nerf args:
+                points: (..., n_rays, n_samples, 3)
+                directions: (..., n_rays, n_samples, 3)
+            nerf returns:
+                color: (..., n_rays, n_samples, 3) color values.
+                density: (..., n_rays, n_samples) density values.
+                
+        rays_o: (..., n_rays, 3) ray origins
+        rays_d: (..., n_rays, 3) ray directions.
+        pixel_width: (..., n_rays) pixel width. How to compute? pixel_width = 1 / (normalized focal length * width)
+    
+    Returns 
+        if return_dict is False, return rendered results only: (If `n_fine == 0`, return coarse results, otherwise return fine results)
+            rgb: (..., n_rays, 3) rendered color values. 
+            depth: (..., n_rays) rendered depth values.
+        else, return a dict. If `n_fine == 0`, the dict only contains coarse results:
+        ```
+        {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'sdf': ..., 'normal': ...}
+        ```
+        If n_fine > 0, the dict contains both coarse and fine results:
+        ```
+        {
+            "coarse": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..},
+            "fine": {'rgb': .., 'depth': .., 'weights': .., 'z_vals': .., 'color': .., 'density': ..}
+        }
+        ```
+    """
+
+    # 1. Coarse: bin sampling
+    z_coarse = bin_sample(rays_d.shape[:-1], n_coarse, near, far, device=rays_o.device, dtype=rays_o.dtype, spacing=z_spacing)                       # (n_batch, n_views, n_rays, n_samples)
+    points_coarse = rays_o[..., None, :] + rays_d[..., None, :] * z_coarse[..., None]                                                                # (n_batch, n_views, n_rays, n_samples, 3)
+
+    #    Query color and density                   
+    color_coarse, sdf_coarse = neus(points_coarse, rays_d[..., None, :].expand_as(points_coarse))                                  # (n_batch, n_views, n_rays, n_samples, 3), (n_batch, n_views, n_rays, n_samples)
+    
+    #    Volume rendering
+    with torch.no_grad():
+        rgb_coarse, depth_coarse, weights = neus_volume_rendering(color_coarse, sdf_coarse, s, z_coarse)            # (n_batch, n_views, n_rays, 3), (n_batch, n_views, n_rays, 1), (n_batch, n_views, n_rays, n_samples)
+    
+    if n_fine == 0:
+        if return_dict:
+            return {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights, 'z_vals': z_coarse, 'color': color_coarse, 'sdf': sdf_coarse}
+        else:
+            return rgb_coarse, depth_coarse
+    
+    # If coarse and fine stages share the same model, the points of coarse stage can be reused, 
+    # and we only need to query the importance samples of fine stage.
+    z_fine = importance_sample(z_coarse, weights, n_fine)               
+    points_fine = rays_o[..., None, :] + rays_d[..., None, :] * z_fine[..., None]                      
+    color_fine, sdf_fine = neus(points_fine, rays_d[..., None, :].expand_as(points_fine))
+
+    # Merge & volume rendering
+    z_vals = torch.cat([z_coarse, z_fine], dim=-1)          
+    color = torch.cat([color_coarse, color_fine], dim=-2)
+    sdf = torch.cat([sdf_coarse, sdf_fine], dim=-1)     
+    z_vals, sort_inds = torch.sort(z_vals, dim=-1)                   
+    color = torch.gather(color, dim=-2, index=sort_inds[..., None].expand_as(color))
+    sdf = torch.gather(sdf, dim=-1, index=sort_inds)
+    rgb, depth, weights = neus_volume_rendering(color, sdf, s, z_vals)
+
+    if return_dict:
+        return {
+            'coarse': {'rgb': rgb_coarse, 'depth': depth_coarse, 'weights': weights, 'z_vals': z_coarse, 'color': color_coarse, 'sdf': sdf_coarse},
+            'fine': {'rgb': rgb, 'depth': depth, 'weights': weights, 'z_vals': z_vals, 'color': color, 'sdf': sdf}
+        }
+    else:
+        return rgb, depth
+
+
 def nerf_render_view(
     nerf: Tensor,
     extrinsics: Tensor, 
@@ -399,7 +521,7 @@ def nerf_render_view(
         **options: rendering options.
     
     Returns:
-        rgb: (..., 3, height, width) rendered color values.
+        rgb: (..., channels, height, width) rendered color values.
         depth: (..., height, width) rendered depth values.
     """
     if patchify:
@@ -524,7 +646,7 @@ class InstantNGP(nn.Module):
         hidden_dim_color: int = 64,
         log2_hashmap_size: int = 19,
         bound: float = 1.0,
-        color_range: Tuple[float, float] = (0.0, 1.0),
+        color_channels: int = 3,
     ):
         super().__init__()
         import tinycudann
@@ -532,7 +654,7 @@ class InstantNGP(nn.Module):
         GEO_FEAT_DIM = 15
 
         self.bound = bound
-        self.color_range = color_range
+        self.color_channels = color_channels
 
         # density network
         self.num_layers_density = num_layers_density
@@ -583,7 +705,7 @@ class InstantNGP(nn.Module):
 
         self.color_net = tinycudann.Network(
             n_input_dims=self.in_dim_color,
-            n_output_dims=3,
+            n_output_dims=color_channels,
             network_config={
                 "otype": "FullyFusedMLP",
                 "activation": "ReLU",
@@ -609,8 +731,7 @@ class InstantNGP(nn.Module):
         x = (x + self.bound) / (2 * self.bound)     # to [0, 1]
         x = self.encoder(x)
         density, geo_feat = self.density_net(x).split([1, 15], dim=-1)
-
-        density = torch.where(density > 0, density + 1.0, torch.exp(density)).squeeze(-1)
+        density = F.softplus(density).squeeze(-1)
 
         # color
         if self.view_dependent:
@@ -619,8 +740,7 @@ class InstantNGP(nn.Module):
             h = torch.cat([d, geo_feat], dim=-1)
         else:
             h = geo_feat
-        h = self.color_net(h)
-        
-        color = torch.sigmoid(h) * (self.color_range[1] - self.color_range[0]) + self.color_range[0]
+        color = self.color_net(h)
 
-        return color.reshape(*batch_shape, 3), density.reshape(*batch_shape)
+        return color.reshape(*batch_shape, self.color_channels), density.reshape(*batch_shape)
+
