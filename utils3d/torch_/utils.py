@@ -44,17 +44,17 @@ def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, slop
     Returns:
         edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
     """
-    diff_x = (depth[:, :-1, :] - depth[:, 1:, :]).abs()
+    diff_x = (depth[..., :-1, :] - depth[..., 1:, :]).abs()
     diff_x = torch.cat([
-        diff_x[:, :1, :],
-        torch.maximum(diff_x[:, :-1, :], diff_x[:, 1:, :]),
-        diff_x[:, -1:, :],
+        diff_x[..., :1, :],
+        torch.maximum(diff_x[..., :-1, :], diff_x[..., 1:, :]),
+        diff_x[..., -1:, :],
     ], dim=-2)
-    diff_y = (depth[:, :, :-1] - depth[:, :, 1:]).abs()
+    diff_y = (depth[..., :, :-1] - depth[..., :, 1:]).abs()
     diff_y = torch.cat([
-        diff_y[:, :, :1],
-        torch.maximum(diff_y[:, :, :-1], diff_y[:, :, 1:]),
-        diff_y[:, :, -1:],
+        diff_y[..., :, :1],
+        torch.maximum(diff_y[..., :, :-1], diff_y[..., :, 1:]),
+        diff_y[..., :, -1:],
     ], dim=-1)
     diff = torch.maximum(diff_x, diff_y)
 
@@ -100,7 +100,7 @@ def depth_to_normal(depth: torch.Tensor, intrinsic: torch.Tensor) -> torch.Tenso
     depth = depth.flatten(-2)
     pts = transforms.unproject_cv(uv, depth, intrinsic=intrinsic, extrinsic=transforms.view_to_extrinsic(torch.eye(4).to(depth)))
     normal = mesh.compute_vertex_normal(pts, faces.to(pts.device))
-    return normal.reshape(*depth.shape[:-1], height, width, 3).permute(0, 3, 1, 2)
+    return normal.reshape(*depth.shape[:-1], height, width, 3).permute(*range(len(depth.shape) - 2), -1, -3, -2)
 
 
 def chessboard(width: int, height: int, grid_size: int, color_a: torch.Tensor, color_b: torch.Tensor) -> torch.Tensor:
