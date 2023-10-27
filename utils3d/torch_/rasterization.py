@@ -4,6 +4,7 @@ import torch
 import nvdiffrast.torch as dr
 
 from . import utils, transforms, mesh
+from ._helpers import batched
 
 
 __all__ = [
@@ -101,6 +102,7 @@ def texture(
     texture: torch.Tensor,
 ) -> torch.Tensor:
     dr.texture(ctx.nvd_ctx, uv, texture)
+
 
 def warp_image_by_depth(
     ctx: RastContext,

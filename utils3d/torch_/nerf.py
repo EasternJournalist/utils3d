@@ -312,8 +312,11 @@ def nerf_render_rays(
         color = torch.gather(color, dim=-2, index=sort_inds[..., None].expand_as(color))
         density = torch.gather(density, dim=-1, index=sort_inds)
         rgb, depth, weights = volume_rendering(color, density, z_vals, ray_length)
-
-        return {'rgb': rgb, 'depth': depth, 'weights': weights, 'z_vals': z_vals, 'color': color, 'density': density}
+        
+        if return_dict:
+            return {'rgb': rgb, 'depth': depth, 'weights': weights, 'z_vals': z_vals, 'color': color, 'density': density}
+        else:
+            return rgb, depth
     else:
         # If coarse and fine stages use different models, we need to query the importance samples of both stages.
         z_fine = importance_sample(z_coarse, weights, n_fine)

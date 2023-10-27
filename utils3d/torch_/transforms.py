@@ -833,7 +833,6 @@ def slerp(rot_mat_1: torch.Tensor, rot_mat_2: torch.Tensor, t: Union[Number, tor
     Returns:
         torch.Tensor: shape (..., 3, 3), the interpolated rotation matrix
     """
-    assert rot_mat_1.shape == rot_mat_2.shape
     assert rot_mat_1.shape[-2:] == (3, 3)
     rot_vec_1 = matrix_to_axis_angle(rot_mat_1)
     rot_vec_2 = matrix_to_axis_angle(rot_mat_2)
@@ -856,8 +855,8 @@ def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: Union[Numb
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose
     """
     assert ext1.shape[-2:] == (4, 4) and ext2.shape[-2:] == (4, 4)
-    pos1 = ext1[..., :3, 3] @ ext1[..., :3, :3]
-    pos2 = ext2[..., :3, 3] @ ext2[..., :3, :3]
+    pos1 = (ext1[..., None, :3, 3] @ ext1[..., :3, :3]).squeeze(-2)
+    pos2 = (ext2[..., None, :3, 3] @ ext2[..., :3, :3]).squeeze(-2)
     if isinstance(t, Number):
         t = torch.tensor(t, dtype=ext1.dtype, device=ext1.device)
     pos = (1 - t[..., None]) * pos1 + t[..., None] * pos2

@@ -7,17 +7,17 @@ __all__ = [
     'perspective',
     'perspective_from_fov',
     'perspective_from_fov_xy',
-    'intrinsic',
-    'intrinsic_from_fov',
-    'intrinsic_from_fov_xy',
+    'intrinsics',
+    'intrinsics_from_fov',
+    'intrinsics_from_fov_xy',
     'view_look_at',
-    'extrinsic_look_at',
-    'perspective_to_intrinsic',
-    'intrinsic_to_perspective',
-    'extrinsic_to_view',
-    'view_to_extrinsic',
-    'normalize_intrinsic',
-    'crop_intrinsic',
+    'extrinsics_look_at',
+    'perspective_to_intrinsics',
+    'intrinsics_to_perspective',
+    'extrinsics_to_view',
+    'view_to_extrinsics',
+    'normalize_intrinsics',
+    'crop_intrinsics',
     'pixel_to_uv',
     'pixel_to_ndc',
     'project_depth',
@@ -106,14 +106,14 @@ def perspective_from_fov_xy(
 
 
 @batched(0,0,0,0)
-def intrinsic(
+def intrinsics(
         focal_x: Union[float, np.ndarray],
         focal_y: Union[float, np.ndarray],
         cx: Union[float, np.ndarray],
         cy: Union[float, np.ndarray]
     ) -> np.ndarray:
     """
-    Get OpenCV intrinsic matrix
+    Get OpenCV intrinsics matrix
 
     Args:
         focal_x (float | np.ndarray): focal length in x axis
@@ -122,7 +122,7 @@ def intrinsic(
         cy (float | np.ndarray): principal point in y axis
 
     Returns:
-        (np.ndarray): [..., 3, 3] OpenCV intrinsic matrix
+        (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
     """
     N = focal_x.shape[0]
     ret = np.zeros((N, 3, 3), dtype=focal_x.dtype)
@@ -134,51 +134,51 @@ def intrinsic(
     return ret
 
 
-def intrinsic_from_fov(
+def intrinsics_from_fov(
         fov: Union[float, np.ndarray],
         width: Union[int, np.ndarray],
         height: Union[int, np.ndarray],
         normalize: bool = False
     ) -> np.ndarray:
     """
-    Get OpenCV intrinsic matrix from field of view in largest dimension
+    Get OpenCV intrinsics matrix from field of view in largest dimension
 
     Args:
         fov (float | np.ndarray): field of view in largest dimension
         width (int | np.ndarray): image width
         height (int | np.ndarray): image height
-        normalize (bool): whether to normalize the intrinsic to uv space
+        normalize (bool): whether to normalize the intrinsics to uv space
 
     Returns:
-        (np.ndarray): [..., 3, 3] OpenCV intrinsic matrix
+        (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
     """
     focal = np.maximum(width, height) / (2 * np.tan(fov / 2))
     cx = width / 2
     cy = height / 2
-    ret = intrinsic(focal, focal, cx, cy)
+    ret = intrinsics(focal, focal, cx, cy)
     if normalize:
-        ret = normalize_intrinsic(ret, width, height)
+        ret = normalize_intrinsics(ret, width, height)
     return ret
 
 
-def intrinsic_from_fov_xy(
+def intrinsics_from_fov_xy(
         fov_x: Union[float, np.ndarray],
         fov_y: Union[float, np.ndarray]
     ) -> np.ndarray:
     """
-    Get OpenCV intrinsic matrix from field of view in x and y axis
+    Get OpenCV intrinsics matrix from field of view in x and y axis
 
     Args:
         fov_x (float | np.ndarray): field of view in x axis
         fov_y (float | np.ndarray): field of view in y axis
 
     Returns:
-        (np.ndarray): [..., 3, 3] OpenCV intrinsic matrix
+        (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
     """
     focal_x = 0.5 / np.tan(fov_x / 2)
     focal_y = 0.5 / np.tan(fov_y / 2)
     cx = cy = 0.5
-    return intrinsic(focal_x, focal_y, cx, cy)
+    return intrinsics(focal_x, focal_y, cx, cy)
 
 
 @batched(1,1,1)
@@ -214,13 +214,13 @@ def view_look_at(
 
 
 @batched(1,1,1)
-def extrinsic_look_at(
+def extrinsics_look_at(
         eye: np.ndarray,
         look_at: np.ndarray,
         up: np.ndarray
     ) -> np.ndarray:
     """
-    Get OpenCV extrinsic matrix looking at something
+    Get OpenCV extrinsics matrix looking at something
 
     Args:
         eye (np.ndarray): [..., 3] the eye position
@@ -228,7 +228,7 @@ def extrinsic_look_at(
         up (np.ndarray): [..., 3] head up direction (-y axis in screen space). Not necessarily othogonal to view direction
 
     Returns:
-        (np.ndarray): [..., 4, 4], extrinsic matrix
+        (np.ndarray): [..., 4, 4], extrinsics matrix
     """
     z = look_at - eye
     x = np.cross(-up, z)
@@ -246,17 +246,17 @@ def extrinsic_look_at(
 
 
 @batched(2)
-def perspective_to_intrinsic(
+def perspective_to_intrinsics(
         perspective: np.ndarray
     ) -> np.ndarray:
     """
-    OpenGL perspective matrix to OpenCV intrinsic
+    OpenGL perspective matrix to OpenCV intrinsics
 
     Args:
         perspective (np.ndarray): [..., 4, 4] OpenGL perspective matrix
 
     Returns:
-        (np.ndarray): shape [..., 3, 3] OpenCV intrinsic
+        (np.ndarray): shape [..., 3, 3] OpenCV intrinsics
     """
     N = perspective.shape[0]
     fx, fy = perspective[:, 0, 0], perspective[:, 1, 1]
@@ -271,25 +271,25 @@ def perspective_to_intrinsic(
 
 
 @batched(2,0,0)
-def intrinsic_to_perspective(
-        intrinsic: np.ndarray,
+def intrinsics_to_perspective(
+        intrinsics: np.ndarray,
         near: Union[float, np.ndarray],
         far: Union[float, np.ndarray],
     ) -> np.ndarray:
     """
-    OpenCV intrinsic to OpenGL perspective matrix
+    OpenCV intrinsics to OpenGL perspective matrix
 
     Args:
-        intrinsic (np.ndarray): [..., 3, 3] OpenCV intrinsic matrix
+        intrinsics (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
         near (float | np.ndarray): [...] near plane to clip
         far (float | np.ndarray): [...] far plane to clip
     Returns:
         (np.ndarray): [..., 4, 4] OpenGL perspective matrix
     """
-    N = intrinsic.shape[0]
-    fx, fy = intrinsic[:, 0, 0], intrinsic[:, 1, 1]
-    cx, cy = intrinsic[:, 0, 2], intrinsic[:, 1, 2]
-    ret = np.zeros((N, 4, 4), dtype=intrinsic.dtype)
+    N = intrinsics.shape[0]
+    fx, fy = intrinsics[:, 0, 0], intrinsics[:, 1, 1]
+    cx, cy = intrinsics[:, 0, 2], intrinsics[:, 1, 2]
+    ret = np.zeros((N, 4, 4), dtype=intrinsics.dtype)
     ret[:, 0, 0] = 2 * fx
     ret[:, 1, 1] = 2 * fy
     ret[:, 0, 2] = -2 * cx + 1
@@ -301,60 +301,60 @@ def intrinsic_to_perspective(
 
 
 @batched(2)
-def extrinsic_to_view(
-        extrinsic: np.ndarray
+def extrinsics_to_view(
+        extrinsics: np.ndarray
     ) -> np.ndarray:
     """
-    OpenCV camera extrinsic to OpenGL view matrix
+    OpenCV camera extrinsics to OpenGL view matrix
 
     Args:
-        extrinsic (np.ndarray): [..., 4, 4] OpenCV camera extrinsic matrix
+        extrinsics (np.ndarray): [..., 4, 4] OpenCV camera extrinsics matrix
 
     Returns:
         (np.ndarray): [..., 4, 4] OpenGL view matrix
     """
-    return extrinsic * np.array([1, -1, -1, 1], dtype=extrinsic.dtype)[:, None]
+    return extrinsics * np.array([1, -1, -1, 1], dtype=extrinsics.dtype)[:, None]
 
 
 @batched(2)
-def view_to_extrinsic(
+def view_to_extrinsics(
         view: np.ndarray
     ) -> np.ndarray:
     """
-    OpenGL view matrix to OpenCV camera extrinsic
+    OpenGL view matrix to OpenCV camera extrinsics
 
     Args:
         view (np.ndarray): [..., 4, 4] OpenGL view matrix
 
     Returns:
-        (np.ndarray): [..., 4, 4] OpenCV camera extrinsic matrix
+        (np.ndarray): [..., 4, 4] OpenCV camera extrinsics matrix
     """
     return view * np.array([1, -1, -1, 1], dtype=view.dtype)[:, None]
 
 
 @batched(2,0,0)
-def normalize_intrinsic(
-        intrinsic: np.ndarray,
+def normalize_intrinsics(
+        intrinsics: np.ndarray,
         width: Union[int, np.ndarray],
         height: Union[int, np.ndarray]
     ) -> np.ndarray:
     """
-    Normalize camera intrinsic(s) to uv space
+    Normalize camera intrinsics(s) to uv space
 
     Args:
-        intrinsic (np.ndarray): [..., 3, 3] camera intrinsic(s) to normalize
+        intrinsics (np.ndarray): [..., 3, 3] camera intrinsics(s) to normalize
         width (int | np.ndarray): [...] image width(s)
         height (int | np.ndarray): [...] image height(s)
 
     Returns:
-        (np.ndarray): [..., 3, 3] normalized camera intrinsic(s)
+        (np.ndarray): [..., 3, 3] normalized camera intrinsics(s)
     """
-    return intrinsic * np.stack([1 / width, 1 / height, np.ones_like(width)], axis=-1).astype(intrinsic.dtype)[..., None]
+    return intrinsics * np.stack([1 / width, 1 / height, np.ones_like(width)], axis=-1).astype(intrinsics.dtype)[..., None]
 
 
 @batched(2,0,0,0,0,0,0)
-def crop_intrinsic(
-        intrinsic: np.ndarray,
+def crop_intrinsics(
+        intrinsics: np.ndarray,
         width: Union[int, np.ndarray],
         height: Union[int, np.ndarray],
         left: Union[int, np.ndarray],
@@ -363,10 +363,10 @@ def crop_intrinsic(
         crop_height: Union[int, np.ndarray]
     ) -> np.ndarray:
     """
-    Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
+    Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
     Args:
-        intrinsic (np.ndarray): [..., 3, 3] camera intrinsic(s) to crop
+        intrinsics (np.ndarray): [..., 3, 3] camera intrinsics(s) to crop
         width (int | np.ndarray): [...] image width(s)
         height (int | np.ndarray): [...] image height(s)
         left (int | np.ndarray): [...] left crop boundary
@@ -375,14 +375,14 @@ def crop_intrinsic(
         crop_height (int | np.ndarray): [...] crop height
 
     Returns:
-        (np.ndarray): [..., 3, 3] cropped camera intrinsic(s)
+        (np.ndarray): [..., 3, 3] cropped camera intrinsics(s)
     """
-    intrinsic = intrinsic.copy()
-    intrinsic[..., 0, 0] *= width / crop_width
-    intrinsic[..., 1, 1] *= height / crop_height
-    intrinsic[..., 0, 2] = (intrinsic[..., 0, 2] * width - left) / crop_width
-    intrinsic[..., 1, 2] = (intrinsic[..., 1, 2] * height - top) / crop_height
-    return intrinsic
+    intrinsics = intrinsics.copy()
+    intrinsics[..., 0, 0] *= width / crop_width
+    intrinsics[..., 1, 1] *= height / crop_height
+    intrinsics[..., 0, 2] = (intrinsics[..., 0, 2] * width - left) / crop_width
+    intrinsics[..., 1, 2] = (intrinsics[..., 1, 2] * height - top) / crop_height
+    return intrinsics
 
 
 @batched(1,0,0)
@@ -506,8 +506,8 @@ def project_gl(
 @batched(2,2,2)
 def project_cv(
         points: np.ndarray,
-        extrinsic: np.ndarray = None,
-        intrinsic: np.ndarray = None
+        extrinsics: np.ndarray = None,
+        intrinsics: np.ndarray = None
     ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Project 3D points to 2D following the OpenCV convention
@@ -515,20 +515,20 @@ def project_cv(
     Args:
         points (np.ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last
             dimension is 4, the points are assumed to be in homogeneous coordinates
-        extrinsic (np.ndarray): [..., 4, 4] extrinsic matrix
-        intrinsic (np.ndarray): [..., 3, 3] intrinsic matrix
+        extrinsics (np.ndarray): [..., 4, 4] extrinsics matrix
+        intrinsics (np.ndarray): [..., 3, 3] intrinsics matrix
 
     Returns:
         uv_coord (np.ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
         linear_depth (np.ndarray): [..., N] linear depth
     """
-    assert intrinsic is not None, "intrinsic matrix is required"
+    assert intrinsics is not None, "intrinsics matrix is required"
     if points.shape[-1] == 3:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
-    if extrinsic is not None:
-        points = points @ extrinsic.swapaxes(-1, -2)
-    points = points[..., :3] @ intrinsic.swapaxes(-1, -2)
+    if extrinsics is not None:
+        points = points @ extrinsics.swapaxes(-1, -2)
+    points = points[..., :3] @ intrinsics.swapaxes(-1, -2)
     uv_coord = points[..., :2] / points[..., 2:]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
@@ -572,8 +572,8 @@ def unproject_gl(
 def unproject_cv(
         uv_coord: np.ndarray,
         depth: np.ndarray,
-        extrinsic: np.ndarray = None,
-        intrinsic: np.ndarray = None
+        extrinsics: np.ndarray = None,
+        intrinsics: np.ndarray = None
     ) -> np.ndarray:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention
@@ -582,17 +582,17 @@ def unproject_cv(
         uv_coord (np.ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
         depth (np.ndarray): [..., N] depth value
-        extrinsic (np.ndarray): [..., 4, 4] extrinsic matrix
-        intrinsic (np.ndarray): [..., 3, 3] intrinsic matrix
+        extrinsics (np.ndarray): [..., 4, 4] extrinsics matrix
+        intrinsics (np.ndarray): [..., 3, 3] intrinsics matrix
 
     Returns:
         points (np.ndarray): [..., N, 3] 3d points
     """
-    assert intrinsic is not None, "intrinsic matrix is required"
+    assert intrinsics is not None, "intrinsics matrix is required"
     points = np.concatenate([uv_coord, np.ones_like(uv_coord[..., :1])], axis=-1)
-    points = points @ np.linalg.inv(intrinsic).swapaxes(-1, -2)
+    points = points @ np.linalg.inv(intrinsics).swapaxes(-1, -2)
     points = points * depth[..., None]
-    if extrinsic is not None:
+    if extrinsics is not None:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
-        points = (points @ np.linalg.inv(extrinsic).swapaxes(-1, -2))[..., :3]
+        points = (points @ np.linalg.inv(extrinsics).swapaxes(-1, -2))[..., :3]
     return points
