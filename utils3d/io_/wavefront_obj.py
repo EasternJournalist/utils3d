@@ -3,7 +3,11 @@ from typing import Dict, Any, Union, Iterable
 import numpy as np
 from pathlib import Path
 
-__all__ = ['read_obj', 'write_obj', 'simple_write_obj']
+__all__ = [
+    'read_obj', 
+    'write_obj', 
+    'simple_write_obj'
+]
 
 def read_obj(
         file : Any,

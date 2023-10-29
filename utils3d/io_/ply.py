@@ -24,11 +24,11 @@ def read_ply(
 
 
 def write_ply(
-        file: Union[str, Path],
-        vertices: np.ndarray,
-        faces: np.ndarray,
-        color: np.ndarray = None,
-    ):
+    file: Union[str, Path],
+    vertices: np.ndarray,
+    faces: np.ndarray = None,
+    color: np.ndarray = None,
+):
     """
     Write .ply file, without preprocessing.
     
@@ -39,9 +39,10 @@ def write_ply(
         color (np.ndarray, optional): [N, 3]. Defaults to None.
     """
     assert vertices.ndim == 2 and vertices.shape[1] == 3
-    assert faces.ndim == 2 and faces.shape[1] == 3
     vertices = vertices.astype(np.float32)
-    faces = faces.astype(np.int32)
+    if faces is not None:
+        assert faces.ndim == 2 and faces.shape[1] == 3
+        faces = faces.astype(np.int32)
     if color is not None:
         assert color.ndim == 2 and color.shape[1] == 3
         if color.dtype in [np.float32, np.float64]:
@@ -56,13 +57,18 @@ def write_ply(
         vertices_data['blue'] = color[:, 2]
     else:
         vertices_data = np.array([tuple(v) for v in vertices], dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
-    faces_data = np.zeros(len(faces), dtype=[('vertex_indices', 'i4', (3,))])
-    faces_data['vertex_indices'] = faces
-    plydata = plyfile.PlyData(
-        [
+    if faces is not None:
+        faces_data = np.zeros(len(faces), dtype=[('vertex_indices', 'i4', (3,))])
+        faces_data['vertex_indices'] = faces
+    
+    if faces is None:
+        plydata = plyfile.PlyData([
+            plyfile.PlyElement.describe(vertices_data, 'vertex')
+        ])
+    else:
+        plydata = plyfile.PlyData([
             plyfile.PlyElement.describe(vertices_data, 'vertex'),
             plyfile.PlyElement.describe(faces_data, 'face')
-        ]
-    )
+        ])
     plydata.write(file)
     
