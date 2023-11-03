@@ -165,8 +165,8 @@ def warp_image_by_depth(
     
     assert all(x is not None for x in [extrinsic_src, extrinsic_tgt, intrinsic_src, intrinsic_tgt]), "Make sure you have provided all the necessary camera parameters."
 
-    view_tgt = transforms.extrinsic_to_view(extrinsic_tgt)
-    perspective_tgt = transforms.intrinsic_to_perspective(intrinsic_tgt, near=near, far=far)
+    view_tgt = transforms.extrinsics_to_view(extrinsic_tgt)
+    perspective_tgt = transforms.intrinsics_to_perspective(intrinsic_tgt, near=near, far=far)
         
     uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
     uv, faces = uv.to(depth.device), faces.to(depth.device)
