@@ -11,17 +11,17 @@ __all__ = [
     'perspective',
     'perspective_from_fov',
     'perspective_from_fov_xy',
-    'intrinsic',
-    'intrinsic_from_fov',
-    'intrinsic_from_fov_xy',
+    'intrinsics',
+    'intrinsics_from_fov',
+    'intrinsics_from_fov_xy',
     'view_look_at',
-    'extrinsic_look_at',
-    'perspective_to_intrinsic',
-    'intrinsic_to_perspective',
-    'extrinsic_to_view',
-    'view_to_extrinsic',
-    'normalize_intrinsic',
-    'crop_intrinsic',
+    'extrinsics_look_at',
+    'perspective_to_intrinsics',
+    'intrinsics_to_perspective',
+    'extrinsics_to_view',
+    'view_to_extrinsics',
+    'normalize_intrinsics',
+    'crop_intrinsics',
     'pixel_to_uv',
     'pixel_to_ndc',
     'project_depth',
@@ -121,14 +121,14 @@ def perspective_from_fov_xy(
 
 
 @batched(0,0,0,0)
-def intrinsic(
+def intrinsics(
         focal_x: Union[float, torch.Tensor],
         focal_y: Union[float, torch.Tensor],
         cx: Union[float, torch.Tensor],
         cy: Union[float, torch.Tensor]
     ) -> torch.Tensor:
     """
-    Get OpenCV intrinsic matrix
+    Get OpenCV intrinsics matrix
 
     Args:
         focal_x (float | torch.Tensor): focal length in x axis
@@ -137,7 +137,7 @@ def intrinsic(
         cy (float | torch.Tensor): principal point in y axis
 
     Returns:
-        (torch.Tensor): [..., 3, 3] OpenCV intrinsic matrix
+        (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
     """
     N = focal_x.shape[0]
     ret = torch.zeros((N, 3, 3), dtype=focal_x.dtype, device=focal_x.device)
@@ -150,51 +150,51 @@ def intrinsic(
 
 
 @batched(0, 0, 0, None)
-def intrinsic_from_fov(
+def intrinsics_from_fov(
         fov: Union[float, torch.Tensor],
         width: Union[int, torch.Tensor],
         height: Union[int, torch.Tensor],
         normalize: bool = False
     ) -> torch.Tensor:
     """
-    Get OpenCV intrinsic matrix from field of view in largest dimension
+    Get OpenCV intrinsics matrix from field of view in largest dimension
 
     Args:
         fov (float | torch.Tensor): field of view in largest dimension
         width (int | torch.Tensor): image width
         height (int | torch.Tensor): image height
-        normalize (bool, optional): whether to normalize the intrinsic matrix. Defaults to False.
+        normalize (bool, optional): whether to normalize the intrinsics matrix. Defaults to False.
 
     Returns:
-        (torch.Tensor): [..., 3, 3] OpenCV intrinsic matrix
+        (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
     """
     focal = torch.maximum(width, height) / (2 * torch.tan(fov / 2))
     cx = width / 2
     cy = height / 2
-    ret = intrinsic(focal, focal, cx, cy)
+    ret = intrinsics(focal, focal, cx, cy)
     if normalize:
-        ret = normalize_intrinsic(ret, width, height)
+        ret = normalize_intrinsics(ret, width, height)
     return ret
 
 
-def intrinsic_from_fov_xy(
+def intrinsics_from_fov_xy(
         fov_x: Union[float, torch.Tensor],
         fov_y: Union[float, torch.Tensor]
     ) -> torch.Tensor:
     """
-    Get OpenCV intrinsic matrix from field of view in x and y axis
+    Get OpenCV intrinsics matrix from field of view in x and y axis
 
     Args:
         fov_x (float | torch.Tensor): field of view in x axis
         fov_y (float | torch.Tensor): field of view in y axis
 
     Returns:
-        (torch.Tensor): [..., 3, 3] OpenCV intrinsic matrix
+        (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
     """
     focal_x = 0.5 / torch.tan(fov_x / 2)
     focal_y = 0.5 / torch.tan(fov_y / 2)
     cx = cy = 0.5
-    return intrinsic(focal_x, focal_y, cx, cy)
+    return intrinsics(focal_x, focal_y, cx, cy)
 
 
 @batched(1,1,1)
@@ -232,13 +232,13 @@ def view_look_at(
 
 
 @batched(1, 1, 1)
-def extrinsic_look_at(
+def extrinsics_look_at(
     eye: torch.Tensor,
     look_at: torch.Tensor,
     up: torch.Tensor
 ) -> torch.Tensor:
     """
-    Get OpenCV extrinsic matrix looking at something
+    Get OpenCV extrinsics matrix looking at something
 
     Args:
         eye (torch.Tensor): [..., 3] the eye position
@@ -246,7 +246,7 @@ def extrinsic_look_at(
         up (torch.Tensor): [..., 3] head up direction (-y axis in screen space). Not necessarily othogonal to view direction
 
     Returns:
-        (torch.Tensor): [..., 4, 4], extrinsic matrix
+        (torch.Tensor): [..., 4, 4], extrinsics matrix
     """
     N = eye.shape[0]
     z = look_at - eye
@@ -266,17 +266,17 @@ def extrinsic_look_at(
 
 
 @batched(2)
-def perspective_to_intrinsic(
+def perspective_to_intrinsics(
         perspective: torch.Tensor
     ) -> torch.Tensor:
     """
-    OpenGL perspective matrix to OpenCV intrinsic
+    OpenGL perspective matrix to OpenCV intrinsics
 
     Args:
         perspective (torch.Tensor): [..., 4, 4] OpenGL perspective matrix
 
     Returns:
-        (torch.Tensor): shape [..., 3, 3] OpenCV intrinsic
+        (torch.Tensor): shape [..., 3, 3] OpenCV intrinsics
     """
     N = perspective.shape[0]
     fx, fy = perspective[:, 0, 0], perspective[:, 1, 1]
@@ -291,25 +291,25 @@ def perspective_to_intrinsic(
 
 
 @batched(2,0,0)
-def intrinsic_to_perspective(
-        intrinsic: torch.Tensor,
+def intrinsics_to_perspective(
+        intrinsics: torch.Tensor,
         near: Union[float, torch.Tensor],
         far: Union[float, torch.Tensor],
     ) -> torch.Tensor:
     """
-    OpenCV intrinsic to OpenGL perspective matrix
+    OpenCV intrinsics to OpenGL perspective matrix
 
     Args:
-        intrinsic (torch.Tensor): [..., 3, 3] OpenCV intrinsic matrix
+        intrinsics (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
         near (float | torch.Tensor): [...] near plane to clip
         far (float | torch.Tensor): [...] far plane to clip
     Returns:
         (torch.Tensor): [..., 4, 4] OpenGL perspective matrix
     """
-    N = intrinsic.shape[0]
-    fx, fy = intrinsic[:, 0, 0], intrinsic[:, 1, 1]
-    cx, cy = intrinsic[:, 0, 2], intrinsic[:, 1, 2]
-    ret = torch.zeros((N, 4, 4), dtype=intrinsic.dtype, device=intrinsic.device)
+    N = intrinsics.shape[0]
+    fx, fy = intrinsics[:, 0, 0], intrinsics[:, 1, 1]
+    cx, cy = intrinsics[:, 0, 2], intrinsics[:, 1, 2]
+    ret = torch.zeros((N, 4, 4), dtype=intrinsics.dtype, device=intrinsics.device)
     ret[:, 0, 0] = 2 * fx
     ret[:, 1, 1] = 2 * fy
     ret[:, 0, 2] = -2 * cx + 1
@@ -321,60 +321,60 @@ def intrinsic_to_perspective(
 
 
 @batched(2)
-def extrinsic_to_view(
-        extrinsic: torch.Tensor
+def extrinsics_to_view(
+        extrinsics: torch.Tensor
     ) -> torch.Tensor:
     """
-    OpenCV camera extrinsic to OpenGL view matrix
+    OpenCV camera extrinsics to OpenGL view matrix
 
     Args:
-        extrinsic (torch.Tensor): [..., 4, 4] OpenCV camera extrinsic matrix
+        extrinsics (torch.Tensor): [..., 4, 4] OpenCV camera extrinsics matrix
 
     Returns:
         (torch.Tensor): [..., 4, 4] OpenGL view matrix
     """
-    return extrinsic * torch.tensor([1, -1, -1, 1], dtype=extrinsic.dtype, device=extrinsic.device)[:, None]
+    return extrinsics * torch.tensor([1, -1, -1, 1], dtype=extrinsics.dtype, device=extrinsics.device)[:, None]
 
 
 @batched(2)
-def view_to_extrinsic(
+def view_to_extrinsics(
         view: torch.Tensor
     ) -> torch.Tensor:
     """
-    OpenGL view matrix to OpenCV camera extrinsic
+    OpenGL view matrix to OpenCV camera extrinsics
 
     Args:
         view (torch.Tensor): [..., 4, 4] OpenGL view matrix
 
     Returns:
-        (torch.Tensor): [..., 4, 4] OpenCV camera extrinsic matrix
+        (torch.Tensor): [..., 4, 4] OpenCV camera extrinsics matrix
     """
     return view  * torch.tensor([1, -1, -1, 1], dtype=view.dtype, device=view.device)[:, None]
 
 
 @batched(2,0,0)
-def normalize_intrinsic(
-        intrinsic: torch.Tensor,
+def normalize_intrinsics(
+        intrinsics: torch.Tensor,
         width: Union[int, torch.Tensor],
         height: Union[int, torch.Tensor]
     ) -> torch.Tensor:
     """
-    Normalize camera intrinsic(s) to uv space
+    Normalize camera intrinsics(s) to uv space
 
     Args:
-        intrinsic (torch.Tensor): [..., 3, 3] camera intrinsic(s) to normalize
+        intrinsics (torch.Tensor): [..., 3, 3] camera intrinsics(s) to normalize
         width (int | torch.Tensor): [...] image width(s)
         height (int | torch.Tensor): [...] image height(s)
 
     Returns:
-        (torch.Tensor): [..., 3, 3] normalized camera intrinsic(s)
+        (torch.Tensor): [..., 3, 3] normalized camera intrinsics(s)
     """
-    return intrinsic * torch.stack([1 / width, 1 / height, torch.ones_like(width)], dim=-1)[..., None]
+    return intrinsics * torch.stack([1 / width, 1 / height, torch.ones_like(width)], dim=-1)[..., None]
 
 
 @batched(2,0,0,0,0,0,0)
-def crop_intrinsic(
-        intrinsic: torch.Tensor,
+def crop_intrinsics(
+        intrinsics: torch.Tensor,
         width: Union[int, torch.Tensor],
         height: Union[int, torch.Tensor],
         left: Union[int, torch.Tensor],
@@ -383,10 +383,10 @@ def crop_intrinsic(
         crop_height: Union[int, torch.Tensor]
     ) -> torch.Tensor:
     """
-    Evaluate the new intrinsic(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
+    Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
     Args:
-        intrinsic (torch.Tensor): [..., 3, 3] camera intrinsic(s) to crop
+        intrinsics (torch.Tensor): [..., 3, 3] camera intrinsics(s) to crop
         width (int | torch.Tensor): [...] image width(s)
         height (int | torch.Tensor): [...] image height(s)
         left (int | torch.Tensor): [...] left crop boundary
@@ -395,14 +395,14 @@ def crop_intrinsic(
         crop_height (int | torch.Tensor): [...] crop height
 
     Returns:
-        (torch.Tensor): [..., 3, 3] cropped camera intrinsic(s)
+        (torch.Tensor): [..., 3, 3] cropped camera intrinsics(s)
     """
-    intrinsic = intrinsic.clone().detach()
-    intrinsic[..., 0, 0] *= width / crop_width
-    intrinsic[..., 1, 1] *= height / crop_height
-    intrinsic[..., 0, 2] = (intrinsic[..., 0, 2] * width - left) / crop_width
-    intrinsic[..., 1, 2] = (intrinsic[..., 1, 2] * height - top) / crop_height
-    return intrinsic
+    intrinsics = intrinsics.clone().detach()
+    intrinsics[..., 0, 0] *= width / crop_width
+    intrinsics[..., 1, 1] *= height / crop_height
+    intrinsics[..., 0, 2] = (intrinsics[..., 0, 2] * width - left) / crop_width
+    intrinsics[..., 1, 2] = (intrinsics[..., 1, 2] * height - top) / crop_height
+    return intrinsics
 
 
 @batched(1,0,0)
@@ -528,8 +528,8 @@ def project_gl(
 @batched(2, 2, 2)
 def project_cv(
     points: torch.Tensor,
-    extrinsic: torch.Tensor = None,
-    intrinsic: torch.Tensor = None
+    extrinsics: torch.Tensor = None,
+    intrinsics: torch.Tensor = None
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Project 3D points to 2D following the OpenCV convention
@@ -537,20 +537,20 @@ def project_cv(
     Args:
         points (torch.Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last
             dimension is 4, the points are assumed to be in homogeneous coordinates
-        extrinsic (torch.Tensor): [..., 4, 4] extrinsic matrix
-        intrinsic (torch.Tensor): [..., 3, 3] intrinsic matrix
+        extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix
+        intrinsics (torch.Tensor): [..., 3, 3] intrinsics matrix
 
     Returns:
         uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
         linear_depth (torch.Tensor): [..., N] linear depth
     """
-    assert intrinsic is not None, "intrinsic matrix is required"
+    assert intrinsics is not None, "intrinsics matrix is required"
     if points.shape[-1] == 3:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
-    if extrinsic is not None:
-        points = points @ extrinsic.transpose(-1, -2)
-    points = points[..., :3] @ intrinsic.transpose(-2, -1)
+    if extrinsics is not None:
+        points = points @ extrinsics.transpose(-1, -2)
+    points = points[..., :3] @ intrinsics.transpose(-2, -1)
     uv_coord = points[..., :2] / points[..., 2:]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
@@ -594,8 +594,8 @@ def unproject_gl(
 def unproject_cv(
     uv_coord: torch.Tensor,
     depth: torch.Tensor,
-    extrinsic: torch.Tensor = None,
-    intrinsic: torch.Tensor = None
+    extrinsics: torch.Tensor = None,
+    intrinsics: torch.Tensor = None
 ) -> torch.Tensor:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention
@@ -604,19 +604,19 @@ def unproject_cv(
         uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
         depth (torch.Tensor): [..., N] depth value
-        extrinsic (torch.Tensor): [..., 4, 4] extrinsic matrix
-        intrinsic (torch.Tensor): [..., 3, 3] intrinsic matrix
+        extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix
+        intrinsics (torch.Tensor): [..., 3, 3] intrinsics matrix
 
     Returns:
         points (torch.Tensor): [..., N, 3] 3d points
     """
-    assert intrinsic is not None, "intrinsic matrix is required"
+    assert intrinsics is not None, "intrinsics matrix is required"
     points = torch.cat([uv_coord, torch.ones_like(uv_coord[..., :1])], dim=-1)
-    points = points @ torch.inverse(intrinsic).transpose(-2, -1)
+    points = points @ torch.inverse(intrinsics).transpose(-2, -1)
     points = points * depth[..., None]
-    if extrinsic is not None:
+    if extrinsics is not None:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
-        points = (points @ torch.inverse(extrinsic).transpose(-2, -1))[..., :3]
+        points = (points @ torch.inverse(extrinsics).transpose(-2, -1))[..., :3]
     return points
 
 

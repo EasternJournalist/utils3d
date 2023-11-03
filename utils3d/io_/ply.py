@@ -41,7 +41,7 @@ def write_ply(
     assert vertices.ndim == 2 and vertices.shape[1] == 3
     vertices = vertices.astype(np.float32)
     if faces is not None:
-        assert faces.ndim == 2 and faces.shape[1] == 3
+        assert faces.ndim == 2 #and faces.shape[1] == 3
         faces = faces.astype(np.int32)
     if color is not None:
         assert color.ndim == 2 and color.shape[1] == 3
@@ -58,7 +58,7 @@ def write_ply(
     else:
         vertices_data = np.array([tuple(v) for v in vertices], dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
     if faces is not None:
-        faces_data = np.zeros(len(faces), dtype=[('vertex_indices', 'i4', (3,))])
+        faces_data = np.zeros(len(faces), dtype=[('vertex_indices', 'i4', (faces.shape[1],))])
         faces_data['vertex_indices'] = faces
     
     if faces is None:
