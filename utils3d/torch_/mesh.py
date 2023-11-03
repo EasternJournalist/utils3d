@@ -48,8 +48,9 @@ def triangulate(
     if vertices is not None:
         assert faces.shape[-1] == 4, "now only support quad mesh"
         if backslash is None:
-            backslash = torch.norm(vertices[faces[..., 0]] - vertices[faces[..., 2]], p=2, dim=-1) < \
-                        torch.norm(vertices[faces[..., 1]] - vertices[faces[..., 3]], p=2, dim=-1)
+            faces_idx = faces.long()
+            backslash = torch.norm(vertices[faces_idx[..., 0]] - vertices[faces_idx[..., 2]], p=2, dim=-1) < \
+                        torch.norm(vertices[faces_idx[..., 1]] - vertices[faces_idx[..., 3]], p=2, dim=-1)
     if backslash is None:
         loop_indice = torch.stack([
             torch.zeros(P - 2, dtype=int),
