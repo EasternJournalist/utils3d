@@ -615,7 +615,7 @@ def quaternion_to_matrix(quaternion: np.ndarray, eps: float = 1e-12) -> np.ndarr
     zeros = np.zeros_like(w)
     I = np.eye(3, dtype=quaternion.dtype)
     xyz = quaternion[..., 1:]
-    A = xyz[..., :, None] * xyz[..., None, :] - I * (xyz ** 2).sum(dim=-1)[..., None, None]
+    A = xyz[..., :, None] * xyz[..., None, :] - I * (xyz ** 2).sum(axis=-1)[..., None, None]
     B = np.stack([
         zeros, -z, y,
         z, zeros, -x,
@@ -637,14 +637,14 @@ def matrix_to_quaternion(rot_mat: np.ndarray, eps: float = 1e-12) -> np.ndarray:
     # Extract the diagonal and off-diagonal elements of the rotation matrix
     m00, m01, m02, m10, m11, m12, m20, m21, m22 = [rot_mat[..., i, j] for i in range(3) for j in range(3)]
 
-    diag = np.diagonal(rot_mat, dim1=-2, dim2=-1)
+    diag = np.diagonal(rot_mat, axis1=-2, axis2=-1)
     M = np.array([
         [1, 1, 1],
         [1, -1, -1],
         [-1, 1, -1],
         [-1, -1, 1]
     ], dtype=rot_mat.dtype)
-    wxyz = 0.5 * np.clip(1 + diag @ M.T, 0.0) ** 0.5
+    wxyz = 0.5 * np.clip(1 + diag @ M.T, 0.0, None) ** 0.5
     max_idx = np.argmax(wxyz, axis=-1)
     xw = np.sign(m21 - m12)
     yw = np.sign(m02 - m20)
