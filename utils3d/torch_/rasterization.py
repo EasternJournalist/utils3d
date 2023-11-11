@@ -61,7 +61,8 @@ def rasterize_vertex_attr(
 
     Returns:
         image: (torch.Tensor): (B, C, H, W)
-        depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 to 1
+        depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
+            NOTE: Empty pixels will have depth 1., i.e. far plane.
     """
     assert vertices.ndim == 3
     assert faces.ndim == 2
@@ -91,7 +92,8 @@ def rasterize_vertex_attr(
         image = dr.antialias(image, rast_out, pos_clip, faces)
     image = image.flip(1).permute(0, 3, 1, 2)
     
-    depth = rast_out[..., 2].flip(1) * 0.5 + 0.5
+    depth = rast_out[..., 2].flip(1) 
+    depth = (depth * 0.5 + 0.5) * (depth > 0).float() + (depth == 0).float()
     return image, depth
 
 
@@ -205,11 +207,11 @@ def warp_image_by_depth(
         perspective=perspective_tgt,
         antialiasing=antialiasing
     )
-    output_mask = screen_depth > 0
+    output_mask = screen_depth < 1.0
 
     if mask is not None:
         output_image, rast_mask = output_image[..., :-1, :, :], output_image[..., -1, :, :]
-        output_mask &= (rast_mask > 0.9999).reshape(batch_size, height, width)
+        output_mask &= (rast_mask > 0.9999).reshape(-1, height, width)
 
     output_depth = transforms.linearize_depth(screen_depth, near=near, far=far) * output_mask
     output_image = output_image * output_mask.unsqueeze(1)
