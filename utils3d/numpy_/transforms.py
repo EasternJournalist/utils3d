@@ -27,7 +27,8 @@ __all__ = [
     'project_cv',
     'project_gl',
     'quaternion_to_matrix',
-    'matrix_to_quaternion'
+    'matrix_to_quaternion',
+    'extrinsics_to_essential'
 ]
 
 
@@ -669,3 +670,25 @@ def matrix_to_quaternion(rot_mat: np.ndarray, eps: float = 1e-12) -> np.ndarray:
     quat = sign * wxyz
     quat = quat / np.linalg.norm(quat, axis=-1, keepdims=True).clip(min=eps)
     return quat
+
+
+def extrinsics_to_essential(extrinsics: np.ndarray):
+    """
+    Extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
+
+    Args:
+        extrinsics (np.ndaray): [..., 4, 4] extrinsics matrix
+
+    Returns:
+        (np.ndaray): [..., 3, 3] essential matrix
+    """
+    assert extrinsics.shape[-2:] == (4, 4)
+    R = extrinsics[..., :3, :3]
+    t = extrinsics[..., :3, 3]
+    zeros = np.zeros_like(t)
+    t_x = np.stack([
+        zeros, -t[..., 2], t[..., 1],
+        t[..., 2], zeros, -t[..., 0],
+        -t[..., 1], t[..., 0], zeros
+    ]).reshape(*t.shape[:-1], 3, 3)
+    return R @ t_x

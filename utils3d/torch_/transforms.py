@@ -41,6 +41,7 @@ __all__ = [
     'slerp',
     'interpolate_extrinsics',
     'interpolate_view',
+    'extrinsics_to_essential',
 ]
 
 
@@ -878,3 +879,25 @@ def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: Union[Number, 
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose
     """
     return interpolate_extrinsics(view1, view2, t)
+
+
+def extrinsics_to_essential(extrinsics: torch.Tensor):
+    """
+    Extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
+
+    Args:
+        extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix
+
+    Returns:
+        (torch.Tensor): [..., 3, 3] essential matrix
+    """
+    assert extrinsics.shape[-2:] == (4, 4)
+    R = extrinsics[..., :3, :3]
+    t = extrinsics[..., :3, 3]
+    zeros = torch.zeros_like(t)
+    t_x = torch.stack([
+        zeros, -t[..., 2], t[..., 1],
+        t[..., 2], zeros, -t[..., 0],
+        -t[..., 1], t[..., 0], zeros
+    ]).reshape(*t.shape[:-1], 3, 3)
+    return R @ t_x
