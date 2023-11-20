@@ -28,7 +28,8 @@ __all__ = [
     'project_gl',
     'quaternion_to_matrix',
     'matrix_to_quaternion',
-    'extrinsics_to_essential'
+    'extrinsics_to_essential',
+    'euler_angles_to_matrix'
 ]
 
 
@@ -605,10 +606,10 @@ def quaternion_to_matrix(quaternion: np.ndarray, eps: float = 1e-12) -> np.ndarr
     """Converts a batch of quaternions (w, x, y, z) to rotation matrices
     
     Args:
-        quaternion (torch.Tensor): shape (..., 4), the quaternions to convert
+        quaternion (np.ndarray): shape (..., 4), the quaternions to convert
     
     Returns:
-        torch.Tensor: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions
+        np.ndarray: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
     quaternion = quaternion / np.linalg.norm(quaternion, axis=-1, keepdims=True).clip(min=eps)
@@ -692,3 +693,60 @@ def extrinsics_to_essential(extrinsics: np.ndarray):
         -t[..., 1], t[..., 0], zeros
     ]).reshape(*t.shape[:-1], 3, 3)
     return t_x @ R 
+
+
+def euler_axis_angle_rotation(axis: str, angle: np.ndarray) -> np.ndarray:
+    """
+    Return the rotation matrices for one of the rotations about an axis
+    of which Euler angles describe, for each value of the angle given.
+
+    Args:
+        axis: Axis label "X" or "Y or "Z".
+        angle: any shape tensor of Euler angles in radians
+
+    Returns:
+        Rotation matrices as tensor of shape (..., 3, 3).
+    """
+
+    cos = np.cos(angle)
+    sin = np.sin(angle)
+    one = np.ones_like(angle)
+    zero = np.zeros_like(angle)
+
+    if axis == "X":
+        R_flat = (one, zero, zero, zero, cos, -sin, zero, sin, cos)
+    elif axis == "Y":
+        R_flat = (cos, zero, sin, zero, one, zero, -sin, zero, cos)
+    elif axis == "Z":
+        R_flat = (cos, -sin, zero, sin, cos, zero, zero, zero, one)
+    else:
+        raise ValueError("letter must be either X, Y or Z.")
+
+    return np.stack(R_flat, -1).reshape(angle.shape + (3, 3))
+
+
+def euler_angles_to_matrix(euler_angles: np.ndarray, convention: str = 'XYZ') -> np.ndarray:
+    """
+    Convert rotations given as Euler angles in radians to rotation matrices.
+
+    Args:
+        euler_angles: Euler angles in radians as ndarray of shape (..., 3), XYZ
+        convention: permutation of "X", "Y" or "Z", representing the order of Euler rotations to apply.
+
+    Returns:
+        Rotation matrices as ndarray of shape (..., 3, 3).
+    """
+    if euler_angles.shape[-1] != 3:
+        raise ValueError("Invalid input euler angles.")
+    if len(convention) != 3:
+        raise ValueError("Convention must have 3 letters.")
+    if convention[1] in (convention[0], convention[2]):
+        raise ValueError(f"Invalid convention {convention}.")
+    for letter in convention:
+        if letter not in ("X", "Y", "Z"):
+            raise ValueError(f"Invalid letter {letter} in convention string.")
+    matrices = [
+        euler_axis_angle_rotation(c, euler_angles[..., 'XYZ'.index(c)])
+        for c in convention
+    ]
+    return matrices[2] @ matrices[1] @ matrices[0]
