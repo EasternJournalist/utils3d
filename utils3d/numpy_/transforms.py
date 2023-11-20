@@ -685,10 +685,10 @@ def extrinsics_to_essential(extrinsics: np.ndarray):
     assert extrinsics.shape[-2:] == (4, 4)
     R = extrinsics[..., :3, :3]
     t = extrinsics[..., :3, 3]
-    zeros = np.zeros_like(t)
+    zeros = np.zeros_like(t[..., 0])
     t_x = np.stack([
         zeros, -t[..., 2], t[..., 1],
         t[..., 2], zeros, -t[..., 0],
         -t[..., 1], t[..., 0], zeros
     ]).reshape(*t.shape[:-1], 3, 3)
-    return R @ t_x
+    return t_x @ R 
