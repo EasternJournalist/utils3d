@@ -12,6 +12,7 @@ __all__ = [
     'image_mesh_from_depth',
     'chessboard',
     'cube',
+    'camera_frustum'
 ]
 
 
@@ -123,8 +124,8 @@ def image_mesh(
 
 def image_mesh_from_depth(
         depth: np.ndarray,
-        extrinsic: np.ndarray = None,
-        intrinsic: np.ndarray = None,
+        extrinsics: np.ndarray = None,
+        intrinsics: np.ndarray = None,
         *vertice_attrs: np.ndarray,
         atol: float = None,
         rtol: float = None,
@@ -137,8 +138,8 @@ def image_mesh_from_depth(
 
     Args:
         depth (np.ndarray): [H, W] depth map
-        extrinsic (np.ndarray, optional): [4, 4] extrinsic matrix. Defaults to None.
-        intrinsic (np.ndarray, optional): [3, 3] intrinsic matrix. Defaults to None.
+        extrinsics (np.ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
+        intrinsics (np.ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
         *vertice_attrs (np.ndarray): [H, W, C] vertex attributes. Defaults to None.
         atol (float, optional): absolute tolerance. Defaults to None.
         rtol (float, optional): relative tolerance. Defaults to None.
@@ -157,7 +158,7 @@ def image_mesh_from_depth(
     height, width = depth.shape
     image_uv, image_face = image_mesh(width, height)
     depth = depth.reshape(-1)
-    pts = transforms.unproject_cv(image_uv, depth, extrinsic, intrinsic)
+    pts = transforms.unproject_cv(image_uv, depth, extrinsics, intrinsics)
     image_face = mesh.triangulate(image_face, vertices=pts)
     ref_indices = None
     ret = []
@@ -192,7 +193,7 @@ def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, col
         height (int): image height
         grid_size (int): size of chessboard grid
         color_a (np.ndarray): color of the grid at the top-left corner
-        color_b (np.ndarray): color in complementary grids
+        color_b (np.ndarray): color in complementary grid cells
 
     Returns:
         image (np.ndarray): shape (height, width, channels), chessboard image
@@ -226,3 +227,29 @@ def cube():
     ], dtype=np.int32)
 
     return vertices, faces
+
+
+def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float = 1.0) -> Tuple[np.ndarray, ...]:
+    """
+    Get a triangle mesh of camera frustum.
+    """
+    assert extrinsics.shape == (4, 4) and intrinsics.shape == (3, 3)
+    vertices = transforms.unproject_cv(
+        np.array([[0, 0], [0, 0], [0, 1], [1, 1], [1, 0]], dtype=np.float32), 
+        np.array([0] + [depth] * 4, dtype=np.float32), 
+        extrinsics, 
+        intrinsics
+    )
+    edges = np.array([
+        [0, 1], [0, 2], [0, 3], [0, 4], 
+        [1, 2], [2, 3], [3, 4], [4, 1]
+    ], dtype=np.int32)
+    faces = np.array([
+        [0, 1, 2],
+        [0, 2, 3],
+        [0, 3, 4],
+        [0, 4, 1],
+        [1, 2, 3],
+        [1, 3, 4]
+    ], dtype=np.int32)
+    return vertices, edges, faces
