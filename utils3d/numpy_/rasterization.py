@@ -262,10 +262,10 @@ def warp_image_by_depth(
     width: int = None,
     height: int = None,
     *,
-    extrinsic_src: np.ndarray = None,
-    extrinsic_tgt: np.ndarray = None,
-    intrinsic_src: np.ndarray = None,
-    intrinsic_tgt: np.ndarray = None,
+    extrinsics_src: np.ndarray = None,
+    extrinsics_tgt: np.ndarray = None,
+    intrinsics_src: np.ndarray = None,
+    intrinsics_tgt: np.ndarray = None,
     near: float = 0.1,
     far: float = 100.0,
     cull_backface: bool = True,
@@ -281,10 +281,10 @@ def warp_image_by_depth(
         image (np.ndarray, optional): [H, W, C]. The image to warp. Defaults to None (use uv coordinates).
         width (int, optional): width of the output image. None to use depth map width. Defaults to None.
         height (int, optional): height of the output image. None to use depth map height. Defaults to None.
-        extrinsic_src (np.ndarray, optional): extrinsic matrix of the source camera. Defaults to None (identity).
-        extrinsic_tgt (np.ndarray, optional): extrinsic matrix of the target camera. Defaults to None (identity).
-        intrinsic_src (np.ndarray, optional): intrinsic matrix of the source camera. Defaults to None (use the same as intrinsic_tgt).
-        intrinsic_tgt (np.ndarray, optional): intrinsic matrix of the target camera. Defaults to None (use the same as intrinsic_src).
+        extrinsics_src (np.ndarray, optional): extrinsics matrix of the source camera. Defaults to None (identity).
+        extrinsics_tgt (np.ndarray, optional): extrinsics matrix of the target camera. Defaults to None (identity).
+        intrinsics_src (np.ndarray, optional): intrinsics matrix of the source camera. Defaults to None (use the same as intrinsics_tgt).
+        intrinsics_tgt (np.ndarray, optional): intrinsics matrix of the target camera. Defaults to None (use the same as intrinsics_src).
         cull_backface (bool, optional): whether to cull backface. Defaults to True.
         ssaa (int, optional): super sampling anti-aliasing. Defaults to 1.
     
@@ -302,28 +302,28 @@ def warp_image_by_depth(
         assert image.shape[-2:] == depth.shape[-2:], f'Shape of image {image.shape} does not match shape of depth {depth.shape}'
 
     # set up default camera parameters
-    if extrinsic_src is None:
-        extrinsic_src = np.eye(4)
-    if extrinsic_tgt is None:
-        extrinsic_tgt = np.eye(4)
-    if intrinsic_src is None:
-        intrinsic_src = intrinsic_tgt
-    if intrinsic_tgt is None:
-        intrinsic_tgt = intrinsic_src
+    if extrinsics_src is None:
+        extrinsics_src = np.eye(4)
+    if extrinsics_tgt is None:
+        extrinsics_tgt = np.eye(4)
+    if intrinsics_src is None:
+        intrinsics_src = intrinsics_tgt
+    if intrinsics_tgt is None:
+        intrinsics_tgt = intrinsics_src
     
-    assert all(x is not None for x in [extrinsic_src, extrinsic_tgt, intrinsic_src, intrinsic_tgt]), "Make sure you have provided all the necessary camera parameters."
+    assert all(x is not None for x in [extrinsics_src, extrinsics_tgt, intrinsics_src, intrinsics_tgt]), "Make sure you have provided all the necessary camera parameters."
 
     # check shapes
-    assert extrinsic_src.shape == (4, 4) and extrinsic_tgt.shape == (4, 4)
-    assert intrinsic_src.shape == (3, 3) and intrinsic_tgt.shape == (3, 3) 
+    assert extrinsics_src.shape == (4, 4) and extrinsics_tgt.shape == (4, 4)
+    assert intrinsics_src.shape == (3, 3) and intrinsics_tgt.shape == (3, 3) 
 
     # convert to view and perspective matrices
-    view_tgt = transforms.extrinsic_to_view(extrinsic_tgt)
-    perspective_tgt = transforms.intrinsic_to_perspective(intrinsic_tgt, near=near, far=far)
+    view_tgt = transforms.extrinsics_to_view(extrinsics_tgt)
+    perspective_tgt = transforms.intrinsics_to_perspective(intrinsics_tgt, near=near, far=far)
 
     # unproject depth map
     uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
-    pts = transforms.unproject_cv(uv, depth.reshape(-1), extrinsic_src, intrinsic_src)
+    pts = transforms.unproject_cv(uv, depth.reshape(-1), extrinsics_src, intrinsics_src)
     faces = mesh.triangulate(faces, vertices=pts)
 
     # rasterize attributes

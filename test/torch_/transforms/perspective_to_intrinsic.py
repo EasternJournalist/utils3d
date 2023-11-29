@@ -17,7 +17,7 @@ def run():
         near = np.random.uniform(0.1, 100, spatial)
         far = np.random.uniform(near*2, 1000, spatial)
 
-        expected = utils3d.numpy.perspective_to_intrinsic(
+        expected = utils3d.numpy.perspective_to_intrinsics(
             utils3d.numpy.perspective_from_fov_xy(fov_x, fov_y, near, far)
         )
 
@@ -27,7 +27,7 @@ def run():
         near = torch.tensor(near, device=device)
         far = torch.tensor(far, device=device)
 
-        actual = utils3d.torch.perspective_to_intrinsic(
+        actual = utils3d.torch.perspective_to_intrinsics(
             utils3d.torch.perspective_from_fov_xy(fov_x, fov_y, near, far)
         ).cpu().numpy()
         

@@ -17,9 +17,9 @@ def run():
         fov_x = np.where(width >= height, fov, 2 * np.arctan(np.tan(fov / 2) * width / height))
         fov_y = np.where(width >= height, 2 * np.arctan(np.tan(fov / 2) * height / width), fov)
 
-        expected = utils3d.numpy.intrinsic_from_fov_xy(fov_x, fov_y)
+        expected = utils3d.numpy.intrinsics_from_fov_xy(fov_x, fov_y)
 
-        actual = utils3d.numpy.normalize_intrinsic(utils3d.numpy.intrinsic_from_fov(fov, width, height), width, height)
+        actual = utils3d.numpy.normalize_intrinsics(utils3d.numpy.intrinsics_from_fov(fov, width, height), width, height)
 
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

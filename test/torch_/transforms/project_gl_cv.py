@@ -45,8 +45,8 @@ def run():
         gl_depth = gl[1].cpu().numpy()
         
         cv = utils3d.torch.project_cv(points,
-                                    utils3d.torch.extrinsic_look_at(eye, lookat, up),
-                                    utils3d.torch.intrinsic(focal_x, focal_y, 0.5, 0.5))
+                                    utils3d.torch.extrinsics_look_at(eye, lookat, up),
+                                    utils3d.torch.intrinsics(focal_x, focal_y, 0.5, 0.5))
         cv_uv = cv[0][..., :2].cpu().numpy()
         cv_depth = cv[1].cpu().numpy()
         

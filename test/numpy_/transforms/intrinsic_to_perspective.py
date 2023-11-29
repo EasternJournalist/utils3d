@@ -19,8 +19,8 @@ def run():
 
         expected = utils3d.numpy.perspective_from_fov_xy(fov_x, fov_y, near, far)
 
-        actual = utils3d.numpy.intrinsic_to_perspective(
-            utils3d.numpy.intrinsic_from_fov_xy(fov_x, fov_y),
+        actual = utils3d.numpy.intrinsics_to_perspective(
+            utils3d.numpy.intrinsics_from_fov_xy(fov_x, fov_y),
             near,
             far
         )

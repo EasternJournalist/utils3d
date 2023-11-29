@@ -17,7 +17,7 @@ def run():
         center_x = np.random.uniform(1, 10000, spatial)
         center_y = np.random.uniform(1, 10000, spatial)
 
-        expected = utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y)
+        expected = utils3d.numpy.intrinsics(focal_x, focal_y, center_x, center_y)
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
         focal_x = torch.tensor(focal_x, device=device)
@@ -25,7 +25,7 @@ def run():
         center_x = torch.tensor(center_x, device=device)
         center_y = torch.tensor(center_y, device=device)
 
-        actual = utils3d.torch.intrinsic(focal_x, focal_y, center_x, center_y).cpu().numpy()
+        actual = utils3d.torch.intrinsics(focal_x, focal_y, center_x, center_y).cpu().numpy()
         
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

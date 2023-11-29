@@ -33,8 +33,8 @@ def run():
         gl_depth = gl[1]
         
         cv = utils3d.numpy.transforms.project_cv(points,
-                                    utils3d.numpy.extrinsic_look_at(eye, lookat, up),
-                                    utils3d.numpy.intrinsic(focal_x, focal_y, 0.5, 0.5))
+                                    utils3d.numpy.extrinsics_look_at(eye, lookat, up),
+                                    utils3d.numpy.intrinsics(focal_x, focal_y, 0.5, 0.5))
         cv_uv = cv[0][..., :2]
         cv_depth = cv[1]
         

@@ -24,7 +24,7 @@ def run():
         expected[..., 1, 2] = cy
         expected[..., 2, 2] = 1
 
-        actual = utils3d.numpy.intrinsic_from_fov_xy(fov_x, fov_y)
+        actual = utils3d.numpy.intrinsics_from_fov_xy(fov_x, fov_y)
 
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

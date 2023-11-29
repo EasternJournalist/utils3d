@@ -16,14 +16,14 @@ def run():
         lookat = np.random.uniform(-10, 10, [*spatial, 3]).astype(np.float32)
         up = np.random.uniform(-10, 10, [*spatial, 3]).astype(np.float32)
 
-        expected = utils3d.numpy.extrinsic_look_at(eye, lookat, up)
+        expected = utils3d.numpy.extrinsics_look_at(eye, lookat, up)
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
         eye = torch.tensor(eye, device=device)
         lookat = torch.tensor(lookat, device=device)
         up = torch.tensor(up, device=device)
 
-        actual = utils3d.torch.extrinsic_look_at(eye, lookat, up).cpu().numpy()
+        actual = utils3d.torch.extrinsics_look_at(eye, lookat, up).cpu().numpy()
         
         assert np.allclose(expected, actual, 1e-5, 1e-5), '\n' + \
             'Input:\n' + \

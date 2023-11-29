@@ -883,7 +883,7 @@ def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: Union[Number, 
 
 def extrinsics_to_essential(extrinsics: torch.Tensor):
     """
-    Extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
+    extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
 
     Args:
         extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix

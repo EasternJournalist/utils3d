@@ -27,8 +27,8 @@ __all__ = [
 def get_rays(extrinsics: Tensor, intrinsics: Tensor, uv: Tensor) -> Tuple[Tensor, Tensor]:
     """
     Args:
-        extrinsics: (..., 4, 4) extrinsic matrices.
-        intrinsics: (..., 3, 3) intrinsic matrices.
+        extrinsics: (..., 4, 4) extrinsics matrices.
+        intrinsics: (..., 3, 3) intrinsics matrices.
         uv: (..., n_rays, 2) uv coordinates of the rays. 
 
     Returns:
@@ -49,8 +49,8 @@ def get_rays(extrinsics: Tensor, intrinsics: Tensor, uv: Tensor) -> Tuple[Tensor
 def get_image_rays(extrinsics: Tensor, intrinsics: Tensor, width: int, height: int) -> Tuple[Tensor, Tensor]:
     """
     Args:
-        extrinsics: (..., 4, 4) extrinsic matrices.
-        intrinsics: (..., 3, 3) intrinsic matrices.
+        extrinsics: (..., 4, 4) extrinsics matrices.
+        intrinsics: (..., 3, 3) intrinsics matrices.
         width: width of the image.
         height: height of the image.
     
@@ -95,7 +95,7 @@ def get_mipnerf_cones(rays_o: Tensor, rays_d: Tensor, z_vals: Tensor, pixel_widt
 def get_pixel_width(intrinsics: Tensor, width: int, height: int) -> Tensor:
     """
     Args:
-        intrinsics: (..., 3, 3) intrinsic matrices.
+        intrinsics: (..., 3, 3) intrinsics matrices.
         width: width of the image.
         height: height of the image.
     
@@ -516,8 +516,8 @@ def nerf_render_view(
     NeRF rendering of views. Note that it supports arbitrary batch dimensions (denoted as `...`)
 
     Args:
-        extrinsics: (..., 4, 4) extrinsic matrice of the rendered views
-        intrinsics (optional): (..., 3, 3) intrinsic matrice of the rendered views.
+        extrinsics: (..., 4, 4) extrinsics matrice of the rendered views
+        intrinsics (optional): (..., 3, 3) intrinsics matrice of the rendered views.
         width (optional): image width of the rendered views.
         height (optional): image height of the rendered views.
         patchify (optional): If the image is too large, render it patch by patch
@@ -579,8 +579,8 @@ def mipnerf_render_view(
     MipNeRF rendering of views. Note that it supports arbitrary batch dimensions (denoted as `...`)
 
     Args:
-        extrinsics: (..., 4, 4) extrinsic matrice of the rendered views
-        intrinsics (optional): (..., 3, 3) intrinsic matrice of the rendered views.
+        extrinsics: (..., 4, 4) extrinsics matrice of the rendered views
+        intrinsics (optional): (..., 3, 3) intrinsics matrice of the rendered views.
         width (optional): image width of the rendered views.
         height (optional): image height of the rendered views.
         patchify (optional): If the image is too large, render it patch by patch

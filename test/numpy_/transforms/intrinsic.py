@@ -23,7 +23,7 @@ def run():
         expected[..., 1, 2] = center_y
         expected[..., 2, 2] = 1
   
-        actual = utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y)
+        actual = utils3d.numpy.intrinsics(focal_x, focal_y, center_x, center_y)
         
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

@@ -28,11 +28,11 @@ def run():
         expected[..., 0, 2] = cx
         expected[..., 1, 2] = cy
         expected[..., 2, 2] = 1
-        expected = utils3d.numpy.normalize_intrinsic(expected, crop_width, crop_height)
+        expected = utils3d.numpy.normalize_intrinsics(expected, crop_width, crop_height)
 
-        actual = utils3d.numpy.crop_intrinsic(
-            utils3d.numpy.normalize_intrinsic(
-                utils3d.numpy.intrinsic_from_fov(fov, width, height),
+        actual = utils3d.numpy.crop_intrinsics(
+            utils3d.numpy.normalize_intrinsics(
+                utils3d.numpy.intrinsics_from_fov(fov, width, height),
                 width, height
             ),
             width, height, left, top, crop_width, crop_height

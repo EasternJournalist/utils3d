@@ -18,14 +18,14 @@ def run():
 
         expected = []
         for i in range(np.prod(spatial) if len(spatial) > 0 else 1):
-            expected.append(utils3d.numpy.view_to_extrinsic(np.array(glm.lookAt(
+            expected.append(utils3d.numpy.view_to_extrinsics(np.array(glm.lookAt(
                 glm.vec3(eye.reshape([-1, 3])[i]),
                 glm.vec3(lookat.reshape([-1, 3])[i]),
                 glm.vec3(up.reshape([-1, 3])[i])
             ))))
         expected = np.concatenate(expected, axis=0).reshape([*spatial, 4, 4])
 
-        actual = utils3d.numpy.extrinsic_look_at(eye, lookat, up)
+        actual = utils3d.numpy.extrinsics_look_at(eye, lookat, up)
         
         assert np.allclose(expected, actual, 1e-5, 1e-5), '\n' + \
             'Input:\n' + \

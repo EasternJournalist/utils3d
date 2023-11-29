@@ -17,9 +17,9 @@ def run():
         near = np.random.uniform(0.1, 100)
         far = np.random.uniform(near*2, 1000)
 
-        expected = utils3d.numpy.intrinsic_from_fov_xy(fov_x, fov_y)
+        expected = utils3d.numpy.intrinsics_from_fov_xy(fov_x, fov_y)
 
-        actual = utils3d.numpy.perspective_to_intrinsic(
+        actual = utils3d.numpy.perspective_to_intrinsics(
             utils3d.numpy.perspective_from_fov_xy(fov_x, fov_y, near, far)
         )
         

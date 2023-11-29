@@ -24,8 +24,8 @@ def run():
         points = np.random.uniform(-10, 10, [*spatial, N, 3])
         
         expected, _ = utils3d.numpy.transforms.project_cv(points,
-                                            utils3d.numpy.extrinsic_look_at(eye, lookat, up),
-                                            utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y))
+                                            utils3d.numpy.extrinsics_look_at(eye, lookat, up),
+                                            utils3d.numpy.intrinsics(focal_x, focal_y, center_x, center_y))
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
         focal_x = torch.tensor(focal_x, device=device)
@@ -38,8 +38,8 @@ def run():
         points = torch.tensor(points, device=device)
 
         actual, _ = utils3d.torch.project_cv(points,
-                                            utils3d.torch.extrinsic_look_at(eye, lookat, up),
-                                            utils3d.torch.intrinsic(focal_x, focal_y, center_x, center_y)
+                                            utils3d.torch.extrinsics_look_at(eye, lookat, up),
+                                            utils3d.torch.intrinsics(focal_x, focal_y, center_x, center_y)
         )
         actual = actual.cpu().numpy()
         

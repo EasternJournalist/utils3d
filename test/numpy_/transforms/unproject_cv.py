@@ -27,10 +27,10 @@ def run():
         
         actual = utils3d.numpy.transforms.unproject_cv(
             *utils3d.numpy.transforms.project_cv(points,
-                                     utils3d.numpy.transforms.extrinsic_look_at(eye, lookat, up),
-                                     utils3d.numpy.transforms.intrinsic(focal_x, focal_y, center_x, center_y)),
-            utils3d.numpy.transforms.extrinsic_look_at(eye, lookat, up),
-            utils3d.numpy.transforms.intrinsic(focal_x, focal_y, center_x, center_y)
+                                     utils3d.numpy.transforms.extrinsics_look_at(eye, lookat, up),
+                                     utils3d.numpy.transforms.intrinsics(focal_x, focal_y, center_x, center_y)),
+            utils3d.numpy.transforms.extrinsics_look_at(eye, lookat, up),
+            utils3d.numpy.transforms.intrinsics(focal_x, focal_y, center_x, center_y)
         )
         
         assert np.allclose(expected, actual), '\n' + \

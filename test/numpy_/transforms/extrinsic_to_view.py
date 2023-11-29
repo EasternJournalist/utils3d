@@ -18,7 +18,7 @@ def run():
 
         expected = utils3d.numpy.view_look_at(eye, lookat, up)
 
-        actual = utils3d.numpy.view_to_extrinsic(utils3d.numpy.extrinsic_look_at(eye, lookat, up))
+        actual = utils3d.numpy.view_to_extrinsics(utils3d.numpy.extrinsics_look_at(eye, lookat, up))
         
         assert np.allclose(expected, actual, 1e-5, 1e-5), '\n' + \
             'Input:\n' + \

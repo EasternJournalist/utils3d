@@ -10,10 +10,10 @@ def run():
     depth = np.ones((128, 128), dtype=float) * 2
     depth[32:96, 32:96] = 1
     depth = depth.reshape(-1)
-    intrinsic = utils3d.numpy.transforms.intrinsic_from_fov(1.0, 128, 128)
-    intrinsic = utils3d.numpy.transforms.normalize_intrinsic(intrinsic, 128, 128)
-    extrinsic = utils3d.numpy.transforms.extrinsic_look_at([0, 0, 1], [0, 0, 0], [0, 1, 0])
-    pts = utils3d.numpy.transforms.unproject_cv(image_uv, depth, extrinsic, intrinsic)
+    intrinsics = utils3d.numpy.transforms.intrinsics_from_fov(1.0, 128, 128)
+    intrinsics = utils3d.numpy.transforms.normalize_intrinsics(intrinsics, 128, 128)
+    extrinsics = utils3d.numpy.transforms.extrinsics_look_at([0, 0, 1], [0, 0, 0], [0, 1, 0])
+    pts = utils3d.numpy.transforms.unproject_cv(image_uv, depth, extrinsics, intrinsics)
     pts = pts.reshape(-1, 3)
     image_mesh = utils3d.numpy.mesh.triangulate(image_mesh, vertices=pts)
     utils3d.io.write_ply(os.path.join(os.path.dirname(__file__), '..', 'results_to_check', 'write_ply.ply'), pts, image_mesh)

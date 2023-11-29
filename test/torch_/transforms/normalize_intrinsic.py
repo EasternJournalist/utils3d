@@ -18,14 +18,14 @@ def run():
         fov_x = np.where(width >= height, fov, 2 * np.arctan(np.tan(fov / 2) * width / height))
         fov_y = np.where(width >= height, 2 * np.arctan(np.tan(fov / 2) * height / width), fov)
 
-        expected = utils3d.numpy.normalize_intrinsic(utils3d.numpy.intrinsic_from_fov(fov, width, height), width, height)
+        expected = utils3d.numpy.normalize_intrinsics(utils3d.numpy.intrinsics_from_fov(fov, width, height), width, height)
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
         fov = torch.tensor(fov, device=device)
         width = torch.tensor(width, device=device)
         height = torch.tensor(height, device=device)
 
-        actual = utils3d.torch.normalize_intrinsic(utils3d.torch.intrinsic_from_fov(fov, width, height), width, height).cpu().numpy()
+        actual = utils3d.torch.normalize_intrinsics(utils3d.torch.intrinsics_from_fov(fov, width, height), width, height).cpu().numpy()
 
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

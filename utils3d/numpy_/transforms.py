@@ -675,7 +675,7 @@ def matrix_to_quaternion(rot_mat: np.ndarray, eps: float = 1e-12) -> np.ndarray:
 
 def extrinsics_to_essential(extrinsics: np.ndarray):
     """
-    Extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
+    extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
 
     Args:
         extrinsics (np.ndaray): [..., 4, 4] extrinsics matrix

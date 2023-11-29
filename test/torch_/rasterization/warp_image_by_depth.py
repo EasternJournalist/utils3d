@@ -9,16 +9,16 @@ import imageio
 def run():
     depth = torch.ones((1, 128, 128), dtype=torch.float32, device='cuda') * 2
     depth[:, 32:48, 32:48] = 1
-    intrinsics = utils3d.torch.transforms.intrinsic(1.0, 1.0, 0.5, 0.5).to(depth)
-    extrinsics_src = utils3d.torch.transforms.extrinsic_look_at([0., 0., 1.], [0., 0., 0.], [0., 1., 0.]).to(depth)
-    extrinsics_tgt = utils3d.torch.transforms.extrinsic_look_at([1., 0., 1.], [0., 0., 0.], [0., 1., 0.]).to(depth)
+    intrinsics = utils3d.torch.transforms.intrinsics(1.0, 1.0, 0.5, 0.5).to(depth)
+    extrinsics_src = utils3d.torch.transforms.extrinsics_look_at([0., 0., 1.], [0., 0., 0.], [0., 1., 0.]).to(depth)
+    extrinsics_tgt = utils3d.torch.transforms.extrinsics_look_at([1., 0., 1.], [0., 0., 0.], [0., 1., 0.]).to(depth)
     ctx = utils3d.torch.rasterization.RastContext(backend='gl', device='cuda')
     uv, _ = utils3d.torch.rasterization.warp_image_by_depth(
         ctx,
         depth,
-        extrinsic_src=extrinsics_src,
-        extrinsic_tgt=extrinsics_tgt,
-        intrinsic_src=intrinsics,
+        extrinsics_src=extrinsics_src,
+        extrinsics_tgt=extrinsics_tgt,
+        intrinsics_src=intrinsics,
         antialiasing=False,
     )
     uv = torch.cat([uv, torch.zeros((1, 1, 128, 128)).to(uv)], dim=1) * 255

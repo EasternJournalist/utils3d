@@ -114,17 +114,17 @@ def warp_image_by_depth(
     width: int = None,
     height: int = None,
     *,
-    extrinsic_src: torch.FloatTensor = None,
-    extrinsic_tgt: torch.FloatTensor = None,
-    intrinsic_src: torch.FloatTensor = None,
-    intrinsic_tgt: torch.FloatTensor = None,
+    extrinsics_src: torch.FloatTensor = None,
+    extrinsics_tgt: torch.FloatTensor = None,
+    intrinsics_src: torch.FloatTensor = None,
+    intrinsics_tgt: torch.FloatTensor = None,
     near: float = 0.1,
     far: float = 100.0,
     antialiasing: bool = True,
     backslash: bool = False,
 ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
     """
-    Warp image by depth. You may provide either view and perspective (OpenGL convention), or extrinsic and intrinsic (OpenCV convention).
+    Warp image by depth. 
     NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
     Otherwise, image mesh will be triangulated simply for batch rendering.
 
@@ -134,10 +134,10 @@ def warp_image_by_depth(
         image (torch.Tensor): (B, C, H, W). None to use image space uv. Defaults to None.
         width (int, optional): width of the output image. None to use the same as depth. Defaults to None.
         height (int, optional): height of the output image. Defaults the same as depth..
-        extrinsic_src (torch.Tensor, optional): (B, 4, 4) extrinsic matrix for source. None to use identity. Defaults to None.
-        extrinsic_tgt (torch.Tensor, optional): (B, 4, 4) extrinsic matrix for target. None to use identity. Defaults to None.
-        intrinsic_src (torch.Tensor, optional): (B, 3, 3) intrinsic matrix for source. None to use the same as target. Defaults to None.
-        intrinsic_tgt (torch.Tensor, optional): (B, 3, 3) intrinsic matrix for target. None to use the same as source. Defaults to None.
+        extrinsics_src (torch.Tensor, optional): (B, 4, 4) extrinsics matrix for source. None to use identity. Defaults to None.
+        extrinsics_tgt (torch.Tensor, optional): (B, 4, 4) extrinsics matrix for target. None to use identity. Defaults to None.
+        intrinsics_src (torch.Tensor, optional): (B, 3, 3) intrinsics matrix for source. None to use the same as target. Defaults to None.
+        intrinsics_tgt (torch.Tensor, optional): (B, 3, 3) intrinsics matrix for target. None to use the same as source. Defaults to None.
         near (float, optional): near plane. Defaults to 0.1. 
         far (float, optional): far plane. Defaults to 100.0.
     
@@ -156,19 +156,19 @@ def warp_image_by_depth(
     if image is not None:
         assert image.shape[-2:] == depth.shape[-2:], f'Shape of image {image.shape} does not match shape of depth {depth.shape}'
 
-    if extrinsic_src is None:
-        extrinsic_src = torch.eye(4).to(depth)
-    if extrinsic_tgt is None:
-        extrinsic_tgt = torch.eye(4).to(depth)
-    if intrinsic_src is None:
-        intrinsic_src = intrinsic_tgt
-    if intrinsic_tgt is None:
-        intrinsic_tgt = intrinsic_src
+    if extrinsics_src is None:
+        extrinsics_src = torch.eye(4).to(depth)
+    if extrinsics_tgt is None:
+        extrinsics_tgt = torch.eye(4).to(depth)
+    if intrinsics_src is None:
+        intrinsics_src = intrinsics_tgt
+    if intrinsics_tgt is None:
+        intrinsics_tgt = intrinsics_src
     
-    assert all(x is not None for x in [extrinsic_src, extrinsic_tgt, intrinsic_src, intrinsic_tgt]), "Make sure you have provided all the necessary camera parameters."
+    assert all(x is not None for x in [extrinsics_src, extrinsics_tgt, intrinsics_src, intrinsics_tgt]), "Make sure you have provided all the necessary camera parameters."
 
-    view_tgt = transforms.extrinsics_to_view(extrinsic_tgt)
-    perspective_tgt = transforms.intrinsics_to_perspective(intrinsic_tgt, near=near, far=far)
+    view_tgt = transforms.extrinsics_to_view(extrinsics_tgt)
+    perspective_tgt = transforms.intrinsics_to_perspective(intrinsics_tgt, near=near, far=far)
         
     uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
     uv, faces = uv.to(depth.device), faces.to(depth.device)
@@ -177,8 +177,8 @@ def warp_image_by_depth(
     pts = transforms.unproject_cv(
         uv,
         depth.flatten(-2, -1),
-        extrinsic_src,
-        intrinsic_src,
+        extrinsics_src,
+        intrinsics_src,
     )
 
     # triangulate

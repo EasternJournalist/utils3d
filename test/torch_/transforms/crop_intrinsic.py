@@ -20,9 +20,9 @@ def run():
         crop_width = np.random.uniform(0, width - left, spatial)
         crop_height = np.random.uniform(0, height - top, spatial)
 
-        expected = utils3d.numpy.crop_intrinsic(
-            utils3d.numpy.normalize_intrinsic(
-                utils3d.numpy.intrinsic_from_fov(fov, width, height),
+        expected = utils3d.numpy.crop_intrinsics(
+            utils3d.numpy.normalize_intrinsics(
+                utils3d.numpy.intrinsics_from_fov(fov, width, height),
                 width, height
             ),
             width, height, left, top, crop_width, crop_height
@@ -37,9 +37,9 @@ def run():
         crop_width = torch.tensor(crop_width, device=device)
         crop_height = torch.tensor(crop_height, device=device)
 
-        actual = utils3d.torch.crop_intrinsic(
-            utils3d.torch.normalize_intrinsic(
-                utils3d.torch.intrinsic_from_fov(fov, width, height),
+        actual = utils3d.torch.crop_intrinsics(
+            utils3d.torch.normalize_intrinsics(
+                utils3d.torch.intrinsics_from_fov(fov, width, height),
                 width, height
             ),
             width, height, left, top, crop_width, crop_height

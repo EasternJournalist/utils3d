@@ -38,8 +38,8 @@ def run():
         expected = np.stack([x, y], axis=-1)
         
         actual, _ = utils3d.numpy.transforms.project_cv(points,
-                                            utils3d.numpy.extrinsic_look_at(eye, lookat, up),
-                                            utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y))
+                                            utils3d.numpy.extrinsics_look_at(eye, lookat, up),
+                                            utils3d.numpy.intrinsics(focal_x, focal_y, center_x, center_y))
         
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

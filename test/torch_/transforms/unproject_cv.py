@@ -25,10 +25,10 @@ def run():
         
         expected = utils3d.numpy.transforms.unproject_cv(
             *utils3d.numpy.transforms.project_cv(points,
-                                     utils3d.numpy.extrinsic_look_at(eye, lookat, up),
-                                     utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y)),
-            utils3d.numpy.extrinsic_look_at(eye, lookat, up),
-            utils3d.numpy.intrinsic(focal_x, focal_y, center_x, center_y)
+                                     utils3d.numpy.extrinsics_look_at(eye, lookat, up),
+                                     utils3d.numpy.intrinsics(focal_x, focal_y, center_x, center_y)),
+            utils3d.numpy.extrinsics_look_at(eye, lookat, up),
+            utils3d.numpy.intrinsics(focal_x, focal_y, center_x, center_y)
         )
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
@@ -43,10 +43,10 @@ def run():
 
         actual = utils3d.torch.unproject_cv(
             *utils3d.torch.project_cv(points,
-                                     utils3d.torch.extrinsic_look_at(eye, lookat, up),
-                                     utils3d.torch.intrinsic(focal_x, focal_y, center_x, center_y)),
-            utils3d.torch.extrinsic_look_at(eye, lookat, up),
-            utils3d.torch.intrinsic(focal_x, focal_y, center_x, center_y)
+                                     utils3d.torch.extrinsics_look_at(eye, lookat, up),
+                                     utils3d.torch.intrinsics(focal_x, focal_y, center_x, center_y)),
+            utils3d.torch.extrinsics_look_at(eye, lookat, up),
+            utils3d.torch.intrinsics(focal_x, focal_y, center_x, center_y)
         )
         actual = actual.cpu().numpy()
         

@@ -16,14 +16,14 @@ def run():
         width = np.random.uniform(1, 10000, spatial)
         height = np.random.uniform(1, 10000, spatial)
 
-        expected = utils3d.numpy.intrinsic_from_fov(fov, width, height)
+        expected = utils3d.numpy.intrinsics_from_fov(fov, width, height)
 
         device = [torch.device('cpu'), torch.device('cuda')][np.random.randint(2)]
         fov = torch.tensor(fov, device=device)
         width = torch.tensor(width, device=device)
         height = torch.tensor(height, device=device)
 
-        actual = utils3d.torch.intrinsic_from_fov(fov, width, height).cpu().numpy()
+        actual = utils3d.torch.intrinsics_from_fov(fov, width, height).cpu().numpy()
 
         assert np.allclose(expected, actual), '\n' + \
             'Input:\n' + \

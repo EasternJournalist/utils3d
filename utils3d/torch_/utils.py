@@ -39,7 +39,7 @@ def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, slop
         atol (float): absolute tolerance
         rtol (float): relative tolerance
         slope_tol (float): slope tolerance, in radians
-        intrinsics (torch.Tensor): shape (..., 3, 3), intrinsic matrix, used to compute slope tolerance
+        intrinsics (torch.Tensor): shape (..., 3, 3), intrinsics matrix, used to compute slope tolerance
 
     Returns:
         edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
@@ -73,23 +73,23 @@ def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, slop
 
 def image_mesh_from_depth(
     depth: torch.Tensor,
-    extrinsic: torch.Tensor = None,
-    intrinsic: torch.Tensor = None
+    extrinsics: torch.Tensor = None,
+    intrinsics: torch.Tensor = None
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     height, width = depth.shape
     image_uv, image_mesh = image_mesh(width, height)
     image_mesh = image_mesh.reshape(-1, 4)
     depth = depth.reshape(-1)
-    pts = transforms.unproject_cv(image_uv, depth, extrinsic, intrinsic)
+    pts = transforms.unproject_cv(image_uv, depth, extrinsics, intrinsics)
     image_mesh = mesh.triangulate(image_mesh, vertices=pts)
     return pts, image_mesh
 
 
-def depth_to_normal(depth: torch.Tensor, intrinsic: torch.Tensor) -> torch.Tensor:
+def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor) -> torch.Tensor:
     """
     Args:
         depth (torch.Tensor): shape (..., height, width), linear depth map
-        intrinsic (torch.Tensor): shape (..., 3, 3), intrinsic matrix
+        intrinsics (torch.Tensor): shape (..., 3, 3), intrinsics matrix
     Returns:
         normal (torch.Tensor): shape (..., 3, height, width), normal map
     """
@@ -98,7 +98,7 @@ def depth_to_normal(depth: torch.Tensor, intrinsic: torch.Tensor) -> torch.Tenso
     faces = mesh.triangulate(faces)
     uv = uv.reshape(-1, 2).to(depth)
     depth = depth.flatten(-2)
-    pts = transforms.unproject_cv(uv, depth, intrinsic=intrinsic, extrinsic=transforms.view_to_extrinsic(torch.eye(4).to(depth)))
+    pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=transforms.view_to_extrinsics(torch.eye(4).to(depth)))
     normal = mesh.compute_vertex_normal(pts, faces.to(pts.device))
     return normal.reshape(*depth.shape[:-1], height, width, 3).permute(*range(len(depth.shape) - 2), -1, -3, -2)
 
