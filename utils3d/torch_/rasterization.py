@@ -170,7 +170,7 @@ def warp_image_by_depth(
     view_tgt = transforms.extrinsics_to_view(extrinsics_tgt)
     perspective_tgt = transforms.intrinsics_to_perspective(intrinsics_tgt, near=near, far=far)
         
-    uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
+    uv, faces = utils.image_mesh(*depth.shape[-2:])
     uv, faces = uv.to(depth.device), faces.to(depth.device)
     if mask is not None:
         depth = torch.where(mask, depth, torch.tensor(far, dtype=depth.dtype, device=depth.device))

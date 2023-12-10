@@ -57,13 +57,13 @@ def image_scrcoord(
 
 
 def image_uv(
-        width: int,
-        height: int,
-        left: int = None,
-        top: int = None,
-        right: int = None,
-        bottom: int = None
-    ) -> np.ndarray:
+    height: int,
+    width: int,
+    left: int = None,
+    top: int = None,
+    right: int = None,
+    bottom: int = None
+) -> np.ndarray:
     """
     Get image space UV grid, ranging in [0, 1]. 
 
@@ -93,10 +93,10 @@ def image_uv(
 
 
 def image_mesh(
-        width: int,
-        height: int,
-        mask: np.ndarray = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    height: int,
+    width: int,
+    mask: np.ndarray = None
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
@@ -112,7 +112,7 @@ def image_mesh(
     if mask is not None:
         assert mask.shape[0] == height and mask.shape[1] == width
         assert mask.dtype == np.bool_
-    uv = image_uv(width, height).reshape((-1, 2))
+    uv = image_uv(height, width).reshape((-1, 2))
     row_faces = np.stack([np.arange(0, width - 1, dtype=np.int32), np.arange(width, 2 * width - 1, dtype=np.int32), np.arange(1 + width, 2 * width, dtype=np.int32), np.arange(1, width, dtype=np.int32)], axis=1)
     faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
     if mask is not None:

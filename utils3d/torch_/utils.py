@@ -19,12 +19,12 @@ __all__ = [
 ]
 
 
-def image_uv(width: int, height: int, left: int = None, top: int = None, right: int = None, bottom: int = None):
-    return torch.from_numpy(__image_uv(width, height, left, top, right, bottom))
+def image_uv(height: int, width: int, left: int = None, top: int = None, right: int = None, bottom: int = None):
+    return torch.from_numpy(__image_uv(height, width, left, top, right, bottom))
 
 
-def image_mesh(width: int, height: int, mask: torch.Tensor = None):
-    uv, faces = __image_mesh(width, height, mask.cpu().numpy() if mask is not None else None)
+def image_mesh(height: int, width: int, mask: torch.Tensor = None):
+    uv, faces = __image_mesh(height, width, mask.cpu().numpy() if mask is not None else None)
     uv, faces = torch.from_numpy(uv), torch.from_numpy(faces)
     if mask is not None:
         uv, faces= uv.to(mask.device), faces.to(mask.device)
@@ -77,12 +77,12 @@ def image_mesh_from_depth(
     intrinsics: torch.Tensor = None
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     height, width = depth.shape
-    image_uv, image_mesh = image_mesh(width, height)
-    image_mesh = image_mesh.reshape(-1, 4)
+    uv, faces = image_mesh(height, width)
+    faces = faces.reshape(-1, 4)
     depth = depth.reshape(-1)
     pts = transforms.unproject_cv(image_uv, depth, extrinsics, intrinsics)
-    image_mesh = mesh.triangulate(image_mesh, vertices=pts)
-    return pts, image_mesh
+    faces = mesh.triangulate(faces, vertices=pts)
+    return pts, faces
 
 
 def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor) -> torch.Tensor:
@@ -94,7 +94,7 @@ def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor) -> torch.Tens
         normal (torch.Tensor): shape (..., 3, height, width), normal map
     """
     height, width = depth.shape[-2:]
-    uv, faces = image_mesh(width, height)
+    uv, faces = image_mesh(height, width)
     faces = mesh.triangulate(faces)
     uv = uv.reshape(-1, 2).to(depth)
     depth = depth.flatten(-2)
