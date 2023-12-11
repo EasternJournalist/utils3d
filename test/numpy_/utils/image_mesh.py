@@ -19,7 +19,7 @@ def run():
 
     for args, expected in zip(args, expected):
         actual = utils3d.numpy.triangulate(
-            utils3d.numpy.image_mesh(args['W'], args['H'])[1],
+            utils3d.numpy.image_mesh(args['H'], args['W'])[1],
             backslash=args.get('backslash', None),
         )
                     

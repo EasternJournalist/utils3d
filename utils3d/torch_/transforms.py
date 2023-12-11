@@ -42,6 +42,7 @@ __all__ = [
     'interpolate_extrinsics',
     'interpolate_view',
     'extrinsics_to_essential',
+    'to4x4',
 ]
 
 
@@ -901,3 +902,23 @@ def extrinsics_to_essential(extrinsics: torch.Tensor):
         -t[..., 1], t[..., 0], zeros
     ]).reshape(*t.shape[:-1], 3, 3)
     return R @ t_x
+
+
+def to4x4(R: torch.Tensor, t: torch.Tensor):
+    """
+    Compose rotation matrix and translation vector to 4x4 transformation matrix
+
+    Args:
+        R (torch.Tensor): [..., 3, 3] rotation matrix
+        t (torch.Tensor): [..., 3] translation vector
+
+    Returns:
+        (torch.Tensor): [..., 4, 4] transformation matrix
+    """
+    assert R.shape[-2:] == (3, 3)
+    assert t.shape[-1] == 3
+    assert R.shape[:-2] == t.shape[:-1]
+    return torch.cat([
+        torch.cat([R, t[..., None]], dim=-1),
+        torch.tensor([0, 0, 0, 1], dtype=R.dtype, device=R.device).expand(*R.shape[:-2], 1, 4)
+    ], dim=-2)

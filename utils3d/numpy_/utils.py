@@ -12,7 +12,8 @@ __all__ = [
     'image_mesh_from_depth',
     'chessboard',
     'cube',
-    'camera_frustum'
+    'camera_frustum',
+    'to4x4'
 ]
 
 
@@ -123,16 +124,16 @@ def image_mesh(
 
 
 def image_mesh_from_depth(
-        depth: np.ndarray,
-        extrinsics: np.ndarray = None,
-        intrinsics: np.ndarray = None,
-        *vertice_attrs: np.ndarray,
-        atol: float = None,
-        rtol: float = None,
-        remove_by_depth: bool = False,
-        return_uv: bool = False,
-        return_indices: bool = False
-    ) -> Tuple[np.ndarray, ...]:
+    depth: np.ndarray,
+    extrinsics: np.ndarray = None,
+    intrinsics: np.ndarray = None,
+    *vertice_attrs: np.ndarray,
+    atol: float = None,
+    rtol: float = None,
+    remove_by_depth: bool = False,
+    return_uv: bool = False,
+    return_indices: bool = False
+) -> Tuple[np.ndarray, ...]:
     """
     Get a triangle mesh by lifting depth map to 3D.
 
@@ -156,7 +157,7 @@ def image_mesh_from_depth(
         ref_indices (np.ndarray, optional): [N] indices of vertices in the original mesh
     """
     height, width = depth.shape
-    image_uv, image_face = image_mesh(width, height)
+    image_uv, image_face = image_mesh(height, width)
     depth = depth.reshape(-1)
     pts = transforms.unproject_cv(image_uv, depth, extrinsics, intrinsics)
     image_face = mesh.triangulate(image_face, vertices=pts)
@@ -253,3 +254,22 @@ def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float 
         [1, 3, 4]
     ], dtype=np.int32)
     return vertices, edges, faces
+
+
+def to4x4(R: np.ndarray, t: np.ndarray) -> np.ndarray:
+    """
+    Convert rotation matrix and translation vector to 4x4 transformation matrix.
+
+    Args:
+        R (np.ndarray): [..., 3, 3] rotation matrix
+        t (np.ndarray): [..., 3] translation vector
+
+    Returns:
+        np.ndarray: [..., 4, 4] transformation matrix
+    """
+    assert R.shape[:-2] == t.shape[:-1]
+    assert R.shape[-1] == 3 and R.shape[-2] == 3
+    return np.concatenate([
+        np.concatenate([R, t[:, None]], axis=1), 
+        np.concatenate([np.zeros_like(t), np.ones_like(t[..., :1])], axis=-1)[..., None, :]
+    ], axis=-2)

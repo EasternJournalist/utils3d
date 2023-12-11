@@ -1,5 +1,7 @@
-import torch
 from typing import *
+
+import torch
+import torch.nn.functional as F
 
 from ..numpy_.utils import (
     image_uv as __image_uv,
@@ -7,6 +9,7 @@ from ..numpy_.utils import (
 )
 from . import transforms
 from . import mesh
+from ._helpers import batched
 
 
 __all__ = [
@@ -15,7 +18,10 @@ __all__ = [
     'chessboard',
     'depth_edge',
     'image_mesh_from_depth',
-    'depth_to_normal'
+    'depth_to_normal',
+    'masked_min',
+    'masked_max',
+    'bounding_rect'
 ]
 
 
@@ -101,6 +107,64 @@ def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor) -> torch.Tens
     pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=transforms.view_to_extrinsics(torch.eye(4).to(depth)))
     normal = mesh.compute_vertex_normal(pts, faces.to(pts.device))
     return normal.reshape(*depth.shape[:-1], height, width, 3).permute(*range(len(depth.shape) - 2), -1, -3, -2)
+
+
+@batched(2, 2, 2)
+def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+    mask = torch.ones_like(depth, dtype=torch.bool) if mask is None else mask
+    mask = F.pad(mask, (1, 1, 1, 1), mode='constant', value=0)
+
+    uv = image_uv(*depth.shape[-2:]).unsqueeze(0).to(depth)
+    pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics)
+    pts = F.pad(pts.permute(0, 3, 1, 2), (1, 1, 1, 1), mode='constant', value=1).permute(0, 2, 3, 1)
+    a = pts[:, :-2, 1:-1, :] - pts[:, 1:-1, 1:-1, :]
+    b = pts[:, 1:-1, :-2, :] - pts[:, 1:-1, 1:-1, :]
+    c = pts[:, 2:, 1:-1, :] - pts[:, 1:-1, 1:-1, :]
+    d = pts[:, 1:-1, 2:, :] - pts[:, 1:-1, 1:-1, :]
+    normal = torch.stack([
+        torch.cross(a, b, dim=-1),
+        torch.cross(b, c, dim=-1),
+        torch.cross(c, d, dim=-1),
+        torch.cross(d, a, dim=-1)
+    ])
+    valid = torch.stack([
+        mask[:, :-2, 1:-1, :]
+    ])
+
+
+def masked_min(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    """Similar to torch.min, but with mask
+    """
+    if dim is None:
+        return torch.where(mask, input, torch.tensor(torch.inf, dtype=input.dtype, device=input.device)).min()
+    else:
+        return torch.where(mask, input, torch.tensor(torch.inf, dtype=input.dtype, device=input.device)).min(dim=dim, keepdim=keepdim)
+
+
+def masked_max(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    """Similar to torch.max, but with mask
+    """
+    if dim is None:
+        return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max()
+    else:
+        return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max(dim=dim, keepdim=keepdim)
+    
+
+def bounding_rect(mask: torch.BoolTensor):
+    """get bounding rectangle of a mask
+
+    Args:
+        mask (torch.Tensor): shape (..., height, width), mask
+
+    Returns:
+        rect (torch.Tensor): shape (..., 4), bounding rectangle (left, top, right, bottom)
+    """
+    height, width = mask.shape[-2:]
+    mask = mask.flatten(-2).unsqueeze(-1)
+    uv = image_uv(height, width).to(mask.device).reshape(-1, 2)
+    left_top = masked_min(uv, mask, dim=-2)[0]
+    right_bottom = masked_max(uv, mask, dim=-2)[0]
+    return torch.cat([left_top, right_bottom], dim=-1)
 
 
 def chessboard(width: int, height: int, grid_size: int, color_a: torch.Tensor, color_b: torch.Tensor) -> torch.Tensor:
