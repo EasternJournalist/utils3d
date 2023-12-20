@@ -122,6 +122,7 @@ def warp_image_by_depth(
     far: float = 100.0,
     antialiasing: bool = True,
     backslash: bool = False,
+    padding: int = 0,
 ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
     """
     Warp image by depth. 
@@ -169,11 +170,22 @@ def warp_image_by_depth(
 
     view_tgt = transforms.extrinsics_to_view(extrinsics_tgt)
     perspective_tgt = transforms.intrinsics_to_perspective(intrinsics_tgt, near=near, far=far)
-        
-    uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
+
+    if padding > 0:
+        uv, faces = utils.image_mesh(width=width+2, height=height+2)
+        uv = (uv - 1 / (width + 2)) * ((width + 2) / width)
+        uv = uv.reshape(height+2, width+2, 2)
+        uv[0, :, 1] -= padding / height
+        uv[-1, :, 1] += padding / height
+        uv[:, 0, 0] -= padding / width
+        uv[:, -1, 0] += padding / width
+        uv = uv.reshape(-1, 2)
+        depth = torch.nn.functional.pad(depth, [1, 1, 1, 1], mode='replicate')
+    else:    
+        uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
+        if mask is not None:
+            depth = torch.where(mask, depth, torch.tensor(far, dtype=depth.dtype, device=depth.device))
     uv, faces = uv.to(depth.device), faces.to(depth.device)
-    if mask is not None:
-        depth = torch.where(mask, depth, torch.tensor(far, dtype=depth.dtype, device=depth.device))
     pts = transforms.unproject_cv(
         uv,
         depth.flatten(-2, -1),
