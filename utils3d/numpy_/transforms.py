@@ -29,6 +29,7 @@ __all__ = [
     'quaternion_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',
+    'euler_axis_angle_rotation',
     'euler_angles_to_matrix'
 ]
 
