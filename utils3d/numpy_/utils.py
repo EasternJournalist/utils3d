@@ -109,6 +109,7 @@ def image_mesh(
     Returns:
         uv (np.ndarray): uv corresponding to pixels as described in image_uv()
         faces (np.ndarray): quad faces connecting neighboring pixels
+        indices (np.ndarray, optional): indices of vertices in the original mesh
     """
     if mask is not None:
         assert mask.shape[0] == height and mask.shape[1] == width
@@ -119,7 +120,8 @@ def image_mesh(
     if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
-        faces, uv = mesh.remove_unreferenced_vertices(faces, uv)
+        faces, uv, indices = mesh.remove_unreferenced_vertices(faces, uv, return_indices=True)
+        return uv, faces, indices
     return uv, faces
 
 

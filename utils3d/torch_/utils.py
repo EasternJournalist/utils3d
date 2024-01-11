@@ -30,14 +30,19 @@ def image_uv(height: int, width: int, left: int = None, top: int = None, right: 
 
 
 def image_mesh(height: int, width: int, mask: torch.Tensor = None):
-    uv, faces = __image_mesh(height, width, mask.cpu().numpy() if mask is not None else None)
+    if mask is None:
+        uv, faces = __image_mesh(height, width)
+    else:
+        uv, faces, indices = __image_mesh(height, width, mask.cpu().numpy())
     uv, faces = torch.from_numpy(uv), torch.from_numpy(faces)
     if mask is not None:
-        uv, faces= uv.to(mask.device), faces.to(mask.device)
+        uv, faces = uv.to(mask.device), faces.to(mask.device)
+        indices = torch.from_numpy(indices).to(mask.device)
+        return uv, faces, indices
     return uv, faces
 
 
-def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, slope_tol: float = None, intrinsics: torch.Tensor = None) -> torch.BoolTensor:
+def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3) -> torch.BoolTensor:
     """
     Compute edge map from depth map. 
     Args:
@@ -50,30 +55,14 @@ def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, slop
     Returns:
         edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
     """
-    diff_x = (depth[..., :-1, :] - depth[..., 1:, :]).abs()
-    diff_x = torch.cat([
-        diff_x[..., :1, :],
-        torch.maximum(diff_x[..., :-1, :], diff_x[..., 1:, :]),
-        diff_x[..., -1:, :],
-    ], dim=-2)
-    diff_y = (depth[..., :, :-1] - depth[..., :, 1:]).abs()
-    diff_y = torch.cat([
-        diff_y[..., :, :1],
-        torch.maximum(diff_y[..., :, :-1], diff_y[..., :, 1:]),
-        diff_y[..., :, -1:],
-    ], dim=-1)
-    diff = torch.maximum(diff_x, diff_y)
+    depth_ = F.pad(depth.unsqueeze(1), (kernel_size // 2, kernel_size // 2, kernel_size // 2, kernel_size // 2), mode='replicate')
+    diff = (F.max_pool2d(depth_, kernel_size, stride=1) + F.max_pool2d(-depth_, kernel_size, stride=1)).squeeze(1)
 
     edge = torch.zeros_like(depth, dtype=torch.bool)
     if atol is not None:
         edge |= diff > atol
     if rtol is not None:
         edge |= (diff / depth).nan_to_num_() > rtol
-    if slope_tol is not None:
-        pixel_width, pixel_height = (torch.inverse(intrinsics[..., :2, :2]) @ torch.tensor([1 / depth.shape[-1], 1 / depth.shape[-2]], dtype=depth.dtype, device=depth.device)).unbind(dim=-1)
-        pixel_width, pixel_height = pixel_width[..., None, None], pixel_height[..., None, None]
-        tan_slope = torch.maximum(diff_x / (pixel_width * depth), diff_y / (pixel_height * depth))
-        edge |= tan_slope > torch.tan(torch.tensor(slope_tol, dtype=depth.dtype, device=depth.device))
     return edge
 
 
