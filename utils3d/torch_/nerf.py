@@ -59,7 +59,7 @@ def get_image_rays(extrinsics: Tensor, intrinsics: Tensor, width: int, height: i
         rays_d: (..., height, width, 3) ray directions. 
             NOTE: ray directions are NOT normalized. They actuallys makes rays_o + rays_d * z = world coordinates, where z is the depth.
     """
-    uv = image_uv(width, height).to(extrinsics).flatten(0, 1)
+    uv = image_uv(height, width).to(extrinsics).flatten(0, 1)
     rays_o, rays_d = get_rays(extrinsics, intrinsics, uv)
     rays_o = rays_o.unflatten(-2, (1, 1))
     rays_d = rays_d.unflatten(-2, (height, width))
@@ -537,7 +537,7 @@ def nerf_render_view(
             rgb_row, depth_row = [], []
             for i_column in range(n_columns):
                 patch_shape = patch_height, patch_width = min(max_patch_height, height - i_row * max_patch_height), min(max_patch_width, width - i_column * max_patch_width)
-                uv = image_uv(width, height, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
+                uv = image_uv(height, width, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
                 uv = uv.flatten(0, 1)                                               # (patch_height * patch_width, 2)
                 ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
                 rgb_, depth_ = nerf_render_rays(nerf, ray_o_, ray_d_, **options, return_dict=False)
@@ -554,7 +554,7 @@ def nerf_render_view(
         return rgb, depth
     else:
         # Full rendering
-        uv = image_uv(width,height).to(extrinsics)
+        uv = image_uv(height, width).to(extrinsics)
         uv = uv.flatten(0, 1)                                                       # (height * width, 2)
         ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
         rgb, depth = nerf_render_rays(nerf, ray_o_, ray_d_, **options, return_dict=False)
@@ -602,7 +602,7 @@ def mipnerf_render_view(
             rgb_row, depth_row = [], []
             for i_column in range(n_columns):
                 patch_shape = patch_height, patch_width = min(max_patch_height, height - i_row * max_patch_height), min(max_patch_width, width - i_column * max_patch_width)
-                uv = image_uv(width, height, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
+                uv = image_uv(height, width, i_column * max_patch_width, i_row * max_patch_height, i_column * max_patch_width + patch_width, i_row * max_patch_height + patch_height).to(extrinsics)
                 uv = uv.flatten(0, 1)                                               # (patch_height * patch_width, 2)
                 ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
                 rgb_, depth_ = mipnerf_render_rays(mipnerf, ray_o_, ray_d_, pixel_width, **options) 
@@ -619,7 +619,7 @@ def mipnerf_render_view(
         return rgb, depth
     else:
         # Full rendering
-        uv = image_uv(width, height).to(extrinsics)
+        uv = image_uv(height, width).to(extrinsics)
         uv = uv.flatten(0, 1)                                                       # (height * width, 2)
         ray_o_, ray_d_ = get_rays(extrinsics, intrinsics, uv)
         rgb, depth = mipnerf_render_rays(mipnerf, ray_o_, ray_d_, pixel_width, **options) 

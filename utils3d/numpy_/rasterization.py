@@ -322,7 +322,7 @@ def warp_image_by_depth(
     perspective_tgt = transforms.intrinsics_to_perspective(intrinsics_tgt, near=near, far=far)
 
     # unproject depth map
-    uv, faces = utils.image_mesh(width=depth.shape[-1], height=depth.shape[-2])
+    uv, faces = utils.image_mesh(*depth.shape[-2:])
     pts = transforms.unproject_cv(uv, depth.reshape(-1), extrinsics_src, intrinsics_src)
     faces = mesh.triangulate(faces, vertices=pts)
 
