@@ -41,7 +41,7 @@ def rasterize_vertex_attr(
     model: torch.Tensor = None,
     view: torch.Tensor = None,
     perspective: torch.Tensor = None,
-    antialiasing: bool = True,
+    antialiasing: Union[bool, List[int]] = True,
     diff_attrs: Union[None, List[int]] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
@@ -57,7 +57,7 @@ def rasterize_vertex_attr(
         model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
         view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
         perspective (torch.Tensor, optional): ([B,] 4, 4) perspective matrix. Defaults to None (identity).
-        antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
+        antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
         diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
     Returns:
@@ -89,8 +89,12 @@ def rasterize_vertex_attr(
     
     rast_out, rast_db = dr.rasterize(ctx.nvd_ctx, pos_clip, faces, resolution=[height, width], grad_db=True)
     image, image_dr = dr.interpolate(attr, rast_out, faces, rast_db, diff_attrs=diff_attrs)
-    if antialiasing:
+    if antialiasing == True:
         image = dr.antialias(image, rast_out, pos_clip, faces)
+    elif isinstance(antialiasing, list):
+        aa_image = dr.antialias(image[..., antialiasing], rast_out, pos_clip, faces)
+        image[..., antialiasing] = aa_image
+
     image = image.flip(1).permute(0, 3, 1, 2)
     
     depth = rast_out[..., 2].flip(1) 
@@ -127,6 +131,7 @@ def warp_image_by_depth(
     antialiasing: bool = True,
     backslash: bool = False,
     padding: int = 0,
+    return_uv: bool = False,
     return_dr: bool = False,
 ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
     """
@@ -149,12 +154,14 @@ def warp_image_by_depth(
         antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
         backslash (bool, optional): whether to use backslash triangulation. Defaults to False.
         padding (int, optional): padding of the image. Defaults to 0.
+        return_uv (bool, optional): whether to return the uv. Defaults to False.
         return_dr (bool, optional): whether to return the image-space derivatives of uv. Defaults to False.
     
     Returns:
         image: (torch.FloatTensor): (B, C, H, W) rendered image
         depth: (torch.FloatTensor): (B, H, W) linear depth, ranging from 0 to inf
         mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
+        uv: (torch.FloatTensor): (B, 2, H, W) image-space uv
         dr: (torch.FloatTensor): (B, 4, H, W) image-space derivatives of uv
     """
     assert depth.ndim == 3
@@ -222,11 +229,19 @@ def warp_image_by_depth(
     diff_attrs = None
     if image is not None:
         attr = image.permute(0, 2, 3, 1).flatten(1, 2)
-        if return_dr:
-            diff_attrs = [image.shape[1], image.shape[1]+1]
+        if return_dr or return_uv:
+            if return_dr:
+                diff_attrs = [image.shape[1], image.shape[1]+1]
+            if return_uv and antialiasing:
+                antialiasing = list(range(image.shape[1]))
             attr = torch.cat([attr, uv.expand(batch_size, -1, -1)], dim=-1)
     else:
         attr = uv.expand(batch_size, -1, -1)
+        if antialiasing:
+            print("\033[93mWarning: you are performing antialiasing on uv. This may cause artifacts.\033[0m")
+        if return_uv:
+            return_uv = False
+            print("\033[93mWarning: image is None, return_uv is ignored.\033[0m")
         if return_dr:
             diff_attrs = [0, 1]
 
@@ -255,12 +270,15 @@ def warp_image_by_depth(
         output_image, rast_mask = output_image[..., :-1, :, :], output_image[..., -1, :, :]
         output_mask &= (rast_mask > 0.9999).reshape(-1, height, width)
 
-    if return_dr and image is not None:
-            output_image = output_image[..., :-2, :, :]
+    if (return_dr or return_uv) and image is not None:
+        output_image, output_uv = output_image[..., :-2, :, :], output_image[..., -2:, :, :]
 
     output_depth = transforms.linearize_depth(screen_depth, near=near, far=far) * output_mask
     output_image = output_image * output_mask.unsqueeze(1)
 
+    outs = [output_image, output_depth, output_mask]
+    if return_uv:
+        outs.append(output_uv)
     if return_dr:
-        return output_image, output_depth, output_mask, output_dr
-    return output_image, output_depth, output_mask
+        outs.append(output_dr)
+    return tuple(outs)
