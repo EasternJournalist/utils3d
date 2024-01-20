@@ -10,7 +10,8 @@ from ._helpers import batched
 __all__ = [
     'RastContext',
     'rasterize_vertex_attr', 
-    'warp_image_by_depth'
+    'warp_image_by_depth',
+    'warp_image_by_forward_flow',
 ]
 
 
@@ -281,4 +282,80 @@ def warp_image_by_depth(
         outs.append(output_uv)
     if return_dr:
         outs.append(output_dr)
+    return tuple(outs)
+
+
+def warp_image_by_forward_flow(
+    ctx: RastContext,
+    image: torch.FloatTensor,
+    flow: torch.FloatTensor,
+    depth: torch.FloatTensor = None,
+    *,
+    antialiasing: bool = True,
+    backslash: bool = False,
+) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
+    """
+    Warp image by forward flow.
+    NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
+    Otherwise, image mesh will be triangulated simply for batch rendering.
+
+    Args:
+        ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
+        image (torch.Tensor): (B, C, H, W) image
+        flow (torch.Tensor): (B, 2, H, W) forward flow
+        depth (torch.Tensor, optional): (B, H, W) linear depth. If None, will use the same for all pixels. Defaults to None.
+        antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
+        backslash (bool, optional): whether to use backslash triangulation. Defaults to False.
+    
+    Returns:
+        image: (torch.FloatTensor): (B, C, H, W) rendered image
+        mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
+    """
+    assert image.ndim == 4, f'Wrong shape of image: {image.shape}'
+    batch_size, _, height, width = image.shape
+
+    if depth is None:
+        depth = torch.ones_like(flow[:, 0])
+
+    extrinsics = torch.eye(4).to(image)
+    fov = torch.deg2rad(torch.tensor([45.0], device=image.device))
+    intrinsics = transforms.intrinsics_from_fov(fov, width, height, normalize=True)[0] 
+   
+    view = transforms.extrinsics_to_view(extrinsics)
+    perspective = transforms.intrinsics_to_perspective(intrinsics, near=0.1, far=100)
+
+    uv, faces = utils.image_mesh(width=width, height=height)
+    uv, faces = uv.to(image.device), faces.to(image.device)
+    uv = uv + flow.permute(0, 2, 3, 1).flatten(1, 2)
+    pts = transforms.unproject_cv(
+        uv,
+        depth.flatten(-2, -1),
+        extrinsics,
+        intrinsics,
+    )
+
+    # triangulate
+    if batch_size == 1:
+        faces = mesh.triangulate(faces, vertices=pts[0])
+    else:
+        faces = mesh.triangulate(faces, backslash=backslash)
+
+    # rasterize attributes
+    attr = image.permute(0, 2, 3, 1).flatten(1, 2)
+    rast = rasterize_vertex_attr(
+        ctx,
+        pts,
+        faces,
+        attr,
+        width,
+        height,
+        view=view,
+        perspective=perspective,
+        antialiasing=antialiasing,
+    )
+    output_image, screen_depth = rast
+    output_mask = screen_depth < 1.0
+    output_image = output_image * output_mask.unsqueeze(1)
+
+    outs = [output_image, output_mask]
     return tuple(outs)
