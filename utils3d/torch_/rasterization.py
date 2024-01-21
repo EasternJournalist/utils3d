@@ -43,7 +43,7 @@ def rasterize_vertex_attr(
     perspective: torch.Tensor = None,
     antialiasing: Union[bool, List[int]] = True,
     diff_attrs: Union[None, List[int]] = None,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     """
     Rasterize a mesh with vertex attributes.
 
