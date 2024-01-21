@@ -293,7 +293,7 @@ def warp_image_by_forward_flow(
     *,
     antialiasing: bool = True,
     backslash: bool = False,
-) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
+) -> Tuple[torch.FloatTensor, torch.BoolTensor]:
     """
     Warp image by forward flow.
     NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
