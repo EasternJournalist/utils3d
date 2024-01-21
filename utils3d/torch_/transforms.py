@@ -30,8 +30,11 @@ __all__ = [
     'project_cv',
     'unproject_gl',
     'unproject_cv',
+    'skew_symmetric',
+    'rotation_matrix_from_vectors',
     'euler_axis_angle_rotation',
     'euler_angles_to_matrix',
+    'matrix_to_euler_angles',
     'matrix_to_quaternion',
     'quaternion_to_matrix',
     'matrix_to_axis_angle',
@@ -654,7 +657,6 @@ def euler_axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
 
 def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str = 'XYZ') -> torch.Tensor:
     """
-    Code MODIFIED from pytorch3d
     Convert rotations given as Euler angles in radians to rotation matrices.
 
     Args:
@@ -679,6 +681,102 @@ def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str = 'XYZ') 
     ]
     # return functools.reduce(torch.matmul, matrices)
     return matrices[2] @ matrices[1] @ matrices[0]
+
+
+def skew_symmetric(v: torch.Tensor):
+    "Skew symmetric matrix from a 3D vector"
+    assert v.shape[-1] == 3, "v must be 3D"
+    x, y, z = v.unbind(dim=-1)
+    zeros = torch.zeros_like(x)
+    return torch.stack([
+        zeros, -z, y,
+        z, zeros, -x,
+        -y, x, zeros,
+    ], dim=-1).reshape(*v.shape[:-1], 3, 3)
+
+
+def rotation_matrix_from_vectors(v1: torch.Tensor, v2: torch.Tensor):
+    "Rotation matrix that rotates v1 to v2"
+    I = torch.eye(3).to(v1)
+    v1 = F.normalize(v1, dim=-1)
+    v2 = F.normalize(v2, dim=-1)
+    v = torch.cross(v1, v2, dim=-1)
+    s = torch.norm(v, dim=-1)
+    c = torch.sum(v1 * v2, dim=-1)
+    K = skew_symmetric(v)
+    R = I + K + (1 / (1 + c))[None, None] * (K @ K)
+    return R
+
+
+def _angle_from_tan(
+    axis: str, other_axis: str, data, horizontal: bool, tait_bryan: bool
+) -> torch.Tensor:
+    """
+    Extract the first or third Euler angle from the two members of
+    the matrix which are positive constant times its sine and cosine.
+
+    Args:
+        axis: Axis label "X" or "Y or "Z" for the angle we are finding.
+        other_axis: Axis label "X" or "Y or "Z" for the middle axis in the
+            convention.
+        data: Rotation matrices as tensor of shape (..., 3, 3).
+        horizontal: Whether we are looking for the angle for the third axis,
+            which means the relevant entries are in the same row of the
+            rotation matrix. If not, they are in the same column.
+        tait_bryan: Whether the first and third axes in the convention differ.
+
+    Returns:
+        Euler Angles in radians for each matrix in data as a tensor
+        of shape (...).
+    """
+
+    i1, i2 = {"X": (2, 1), "Y": (0, 2), "Z": (1, 0)}[axis]
+    if horizontal:
+        i2, i1 = i1, i2
+    even = (axis + other_axis) in ["XY", "YZ", "ZX"]
+    if horizontal == even:
+        return torch.atan2(data[..., i1], data[..., i2])
+    if tait_bryan:
+        return torch.atan2(-data[..., i2], data[..., i1])
+    return torch.atan2(data[..., i2], -data[..., i1])
+
+
+def matrix_to_euler_angles(matrix: torch.Tensor, convention: str) -> torch.Tensor:
+    """
+    Convert rotations given as rotation matrices to Euler angles in radians.
+    NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), instead of `Rx * Ry * Rz` (like pytorch3d)
+
+    Args:
+        matrix: Rotation matrices as tensor of shape (..., 3, 3).
+        convention: Convention string of three uppercase letters.
+
+    Returns:
+        Euler angles in radians as tensor of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)
+    """
+    if not all(c in 'XYZ' for c in convention) or not all(c in convention for c in 'XYZ'):
+        raise ValueError(f"Invalid convention {convention}.")
+    if not matrix.shape[-2:] == (3, 3):
+        raise ValueError(f"Invalid rotation matrix shape {matrix.shape}.")
+    
+    i0 = 'XYZ'.index(convention[0])
+    i2 = 'XYZ'.index(convention[2])
+    tait_bryan = i0 != i2
+    if tait_bryan:
+        central_angle = torch.asin(matrix[..., i2, i0] * (-1.0 if i2 - i0 in [-1, 2] else 1.0))
+    else:
+        central_angle = torch.acos(matrix[..., i2, i2])
+
+    # Angles in composition order
+    o = [
+        _angle_from_tan(
+            convention[0], convention[1], matrix[..., i2, :], True, tait_bryan
+        ),
+        central_angle,
+        _angle_from_tan(
+            convention[2], convention[1], matrix[..., i0], False, tait_bryan
+        ),
+    ]
+    return torch.stack([o[convention.index(c)] for c in 'XYZ'], -1)
 
 
 def axis_angle_to_matrix(axis_angle: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
@@ -856,16 +954,7 @@ def interpolate_extrinsics(ext1: torch.Tensor, ext2: torch.Tensor, t: Union[Numb
     Returns:
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose
     """
-    assert ext1.shape[-2:] == (4, 4) and ext2.shape[-2:] == (4, 4)
-    pos1 = (ext1[..., None, :3, 3] @ ext1[..., :3, :3]).squeeze(-2)
-    pos2 = (ext2[..., None, :3, 3] @ ext2[..., :3, :3]).squeeze(-2)
-    if isinstance(t, Number):
-        t = torch.tensor(t, dtype=ext1.dtype, device=ext1.device)
-    pos = (1 - t[..., None]) * pos1 + t[..., None] * pos2
-    rot = slerp(ext1[..., :3, :3], ext2[..., :3, :3], t)
-    ext = torch.cat([rot, rot @ pos[..., None]], dim=-1)
-    ext = torch.cat([ext, torch.tensor([0, 0, 0, 1], dtype=ext.dtype, device=ext.device).expand_as(ext[..., :1, :])], dim=-2)
-    return ext
+    return torch.inverse(interpolate_transform(torch.inverse(ext1), torch.inverse(ext2), t))
 
 
 def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: Union[Number, torch.Tensor]):
@@ -880,6 +969,17 @@ def interpolate_view(view1: torch.Tensor, view2: torch.Tensor, t: Union[Number, 
         torch.Tensor: shape (..., 4, 4), the interpolated camera pose
     """
     return interpolate_extrinsics(view1, view2, t)
+
+
+def interpolate_transform(transform1: torch.Tensor, transform2: torch.Tensor, t: Union[Number, torch.Tensor]):
+    assert transform1.shape[-2:] == (4, 4) and transform2.shape[-2:] == (4, 4)
+    if isinstance(t, Number):
+        t = torch.tensor(t, dtype=transform1.dtype, device=transform1.device)
+    pos = (1 - t[..., None]) * transform1[..., :3, 3] + t[..., None] * transform2[..., :3, 3]
+    rot = slerp(transform1[..., :3, :3], transform2[..., :3, :3], t)
+    transform = torch.cat([rot, pos[..., None]], dim=-1)
+    transform = torch.cat([ext, torch.tensor([0, 0, 0, 1], dtype=transform.dtype, device=transform.device).expand_as(transform[..., :1, :])], dim=-2)
+    return transform
 
 
 def extrinsics_to_essential(extrinsics: torch.Tensor):
