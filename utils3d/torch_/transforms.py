@@ -46,6 +46,10 @@ __all__ = [
     'interpolate_view',
     'extrinsics_to_essential',
     'to4x4',
+    'rotation_matrix_2d',
+    'rotate_2d',
+    'translate_2d',
+    'scale_2d',
 ]
 
 
@@ -1021,4 +1025,78 @@ def to4x4(R: torch.Tensor, t: torch.Tensor):
     return torch.cat([
         torch.cat([R, t[..., None]], dim=-1),
         torch.tensor([0, 0, 0, 1], dtype=R.dtype, device=R.device).expand(*R.shape[:-2], 1, 4)
+    ], dim=-2)
+
+
+def rotation_matrix_2d(theta: Union[float, torch.Tensor]):
+    """
+    2x2 matrix for 2D rotation
+
+    Args:
+        theta (float | torch.Tensor): rotation angle in radians, arbitrary shape (...,)
+
+    Returns:
+        (torch.Tensor): (..., 2, 2) rotation matrix
+    """
+    if isinstance(theta, float):
+        theta = torch.tensor(theta)
+    return torch.stack([
+        torch.cos(theta), -torch.sin(theta),
+        torch.sin(theta), torch.cos(theta),
+    ], dim=-1).unflatten(-1, (2, 2))
+
+
+def rotate_2d(theta: Union[float, torch.Tensor], center: torch.Tensor = None):
+    """
+    3x3 matrix for 2D rotation around a center
+    ```
+       [[R2x2, t], 
+        [0, 0, 1]]
+    ```
+    Args:
+        theta (float | torch.Tensor): rotation angle in radians, arbitrary shape (...,)
+        center (torch.Tensor): rotation center, arbitrary shape (..., 2). Default to (0, 0)
+        
+    Returns:
+        (torch.Tensor): (..., 3, 3) transformation matrix
+    """
+    if isinstance(theta, float):
+        theta = torch.tensor(theta)
+        if center is not None:
+            theta = theta.to(center)
+    if center is None:
+        center = torch.zeros(2).to(theta).expand(*theta.shape, -1)
+    R = rotation_matrix_2d(theta)
+    return torch.cat([
+        torch.cat([
+            R, 
+            center[..., :, None] - R @ center[..., :, None],
+        ], dim=-1),
+        torch.tensor([[0, 0, 1]], dtype=center.dtype, device=center.device).expand(*center.shape[:-1], -1, -1),
+    ], dim=-2)
+
+
+def translate_2d(translation: torch.Tensor):
+    return torch.cat([
+        torch.cat([
+            torch.eye(2, dtype=translation.dtype, device=translation.device).expand(*translation.shape[:-1], -1, -1),
+            translation[..., None],
+        ], dim=-1),
+        torch.tensor([[0, 0, 1]], dtype=translation.dtype, device=translation.device).expand(*translation.shape[:-1], -1, -1),
+    ], dim=-2)
+
+
+def scale_2d(scale: Union[float, torch.Tensor], center: torch.Tensor = None):
+    if isinstance(scale, float):
+        scale = torch.tensor(scale)
+        if center is not None:
+            scale = scale.to(center)
+    if center is None:
+        center = torch.zeros(2, dtype=scale.dtype, device=scale.device).expand(*scale.shape, -1)
+    return torch.cat([
+        torch.cat([
+            scale * torch.eye(2, dtype=scale.dtype, device=scale.device).expand(*scale.shape[:-1], -1, -1),
+            center[..., :, None] - center[..., :, None] * scale[..., None, None],
+        ], dim=-1),
+        torch.tensor([[0, 0, 1]], dtype=scale.dtype, device=scale.device).expand(*center.shape[:-1], -1, -1),
     ], dim=-2)
