@@ -50,6 +50,7 @@ __all__ = [
     'rotate_2d',
     'translate_2d',
     'scale_2d',
+    'apply_2d',
 ]
 
 
@@ -1050,8 +1051,9 @@ def rotate_2d(theta: Union[float, torch.Tensor], center: torch.Tensor = None):
     """
     3x3 matrix for 2D rotation around a center
     ```
-       [[R2x2, t], 
-        [0, 0, 1]]
+       [[Rxx, Rxy, tx],
+        [Ryx, Ryy, ty],
+        [0,     0,  1]]
     ```
     Args:
         theta (float | torch.Tensor): rotation angle in radians, arbitrary shape (...,)
@@ -1077,6 +1079,19 @@ def rotate_2d(theta: Union[float, torch.Tensor], center: torch.Tensor = None):
 
 
 def translate_2d(translation: torch.Tensor):
+    """
+    Translation matrix for 2D translation
+    ```
+       [[1, 0, tx],
+        [0, 1, ty],
+        [0, 0,  1]]
+    ```
+    Args:
+        translation (torch.Tensor): translation vector, arbitrary shape (..., 2)
+    
+    Returns:
+        (torch.Tensor): (..., 3, 3) transformation matrix
+    """
     return torch.cat([
         torch.cat([
             torch.eye(2, dtype=translation.dtype, device=translation.device).expand(*translation.shape[:-1], -1, -1),
@@ -1087,6 +1102,20 @@ def translate_2d(translation: torch.Tensor):
 
 
 def scale_2d(scale: Union[float, torch.Tensor], center: torch.Tensor = None):
+    """
+    Scale matrix for 2D scaling
+    ```
+       [[s, 0, tx],
+        [0, s, ty],
+        [0, 0,  1]]
+    ```
+    Args:
+        scale (float | torch.Tensor): scale factor, arbitrary shape (...,)
+        center (torch.Tensor): scale center, arbitrary shape (..., 2). Default to (0, 0)
+
+    Returns:
+        (torch.Tensor): (..., 3, 3) transformation matrix
+    """
     if isinstance(scale, float):
         scale = torch.tensor(scale)
         if center is not None:
@@ -1100,3 +1129,21 @@ def scale_2d(scale: Union[float, torch.Tensor], center: torch.Tensor = None):
         ], dim=-1),
         torch.tensor([[0, 0, 1]], dtype=scale.dtype, device=scale.device).expand(*center.shape[:-1], -1, -1),
     ], dim=-2)
+
+
+def apply_2d(transform: torch.Tensor, points: torch.Tensor):
+    """
+    Apply (3x3 or 2x3) 2D affine transformation to points
+    ```
+        p = R @ p + t
+    ```
+    Args:
+        transform (torch.Tensor): (..., 2 or 3, 3) transformation matrix
+        points (torch.Tensor): (..., N, 2) points to transform
+
+    Returns:
+        (torch.Tensor): (..., N, 2) transformed points
+    """
+    assert transform.shape[-2:] == (3, 3) or transform.shape[-2:] == (2, 3), "transform must be 3x3 or 2x3"
+    assert points.shape[-1] == 2, "points must be 2D"
+    return points @ transform[..., :2, :2].mT + transform[..., :2, None, 2] 
