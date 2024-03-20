@@ -2,6 +2,7 @@
 import torch
 from numbers import Number
 import inspect
+from functools import wraps
 
 
 def get_device(args, kwargs):
@@ -60,6 +61,7 @@ def batched(*dims):
     Decorator that allows a function to be called with batched arguments.
     """
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, device=torch.device('cpu'), **kwargs):
             args = list(args)
             # get arguments dimensions

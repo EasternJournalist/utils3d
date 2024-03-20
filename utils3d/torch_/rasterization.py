@@ -134,7 +134,7 @@ def warp_image_by_depth(
     padding: int = 0,
     return_uv: bool = False,
     return_dr: bool = False,
-) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor]:
+) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.BoolTensor, Optional[torch.FloatTensor], Optional[torch.FloatTensor]]:
     """
     Warp image by depth. 
     NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
