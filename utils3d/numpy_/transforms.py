@@ -146,10 +146,10 @@ def intrinsics_from_fov(
         normalize: bool = False
     ) -> np.ndarray:
     """
-    Get OpenCV intrinsics matrix from field of view in largest dimension
+    Get OpenCV intrinsics matrix from field of view in larger dimension
 
     Args:
-        fov (float | np.ndarray): field of view in largest dimension
+        fov (float | np.ndarray): field of view in larger dimension
         width (int | np.ndarray): image width
         height (int | np.ndarray): image height
         normalize (bool): whether to normalize the intrinsics to uv space
