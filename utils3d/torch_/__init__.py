@@ -8,7 +8,12 @@ from .utils import *
 from .nerf import *
 
 
-if importlib.find_loader('nvdiffrast'):
-    from .rasterization import *
-else:
+try:
+    import nvdiffrast
+except ImportError:
+    nvdiffrast = None
     warnings.warn('nvdiffrast not found, torch rasterization functions are not available.')
+
+if nvdiffrast is not None:
+    from .rasterization import *
+del nvdiffrast
