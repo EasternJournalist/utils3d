@@ -20,6 +20,7 @@ __all__ = [
     'crop_intrinsics',
     'pixel_to_uv',
     'pixel_to_ndc',
+    'uv_to_pixel',
     'project_depth',
     'linearize_depth',
     'unproject_cv',
@@ -30,7 +31,10 @@ __all__ = [
     'matrix_to_quaternion',
     'extrinsics_to_essential',
     'euler_axis_angle_rotation',
-    'euler_angles_to_matrix'
+    'euler_angles_to_matrix',
+    'skew_symmetric',
+    'rotation_matrix_from_vectors',
+    'ray_intersection',
 ]
 
 
@@ -220,10 +224,10 @@ def view_look_at(
 
 @batched(1,1,1)
 def extrinsics_look_at(
-        eye: np.ndarray,
-        look_at: np.ndarray,
-        up: np.ndarray
-    ) -> np.ndarray:
+    eye: np.ndarray,
+    look_at: np.ndarray,
+    up: np.ndarray
+) -> np.ndarray:
     """
     Get OpenCV extrinsics matrix looking at something
 
@@ -246,14 +250,14 @@ def extrinsics_look_at(
     t = -np.matmul(R, eye[..., None])
     return np.concatenate([
         np.concatenate([R, t], axis=-1),
-        np.array([[[0., 0., 0., 1.]]]).repeat(eye.shape[0], axis=0)
+        np.array([[[0., 0., 0., 1.]]], dtype=eye.dtype).repeat(eye.shape[0], axis=0)
     ], axis=-2)
 
 
 @batched(2)
 def perspective_to_intrinsics(
-        perspective: np.ndarray
-    ) -> np.ndarray:
+    perspective: np.ndarray
+) -> np.ndarray:
     """
     OpenGL perspective matrix to OpenCV intrinsics
 
@@ -263,26 +267,22 @@ def perspective_to_intrinsics(
     Returns:
         (np.ndarray): shape [..., 3, 3] OpenCV intrinsics
     """
-    N = perspective.shape[0]
-    fx, fy = perspective[:, 0, 0], perspective[:, 1, 1]
-    cx, cy = perspective[:, 0, 2], perspective[:, 1, 2]
-    ret = np.zeros((N, 3, 3), dtype=perspective.dtype)
-    ret[:, 0, 0] = 0.5 * fx
-    ret[:, 1, 1] = 0.5 * fy
-    ret[:, 0, 2] = -0.5 * cx + 0.5
-    ret[:, 1, 2] = 0.5 * cy + 0.5
-    ret[:, 2, 2] = 1.
+    assert np.allclose(perspective[:, [0, 1, 3], 3], 0), "The perspective matrix is not a projection matrix"
+    ret = np.array([[0.5, 0., 0.5], [0., -0.5, 0.5], [0., 0., 1.]], dtype=perspective.dtype) \
+        @ perspective[:, [0, 1, 3], :3] \
+        @ np.diag(np.array([1, -1, -1], dtype=perspective.dtype))
     return ret
 
 
 @batched(2,0,0)
 def intrinsics_to_perspective(
-        intrinsics: np.ndarray,
-        near: Union[float, np.ndarray],
-        far: Union[float, np.ndarray],
-    ) -> np.ndarray:
+    intrinsics: np.ndarray,
+    near: Union[float, np.ndarray],
+    far: Union[float, np.ndarray],
+) -> np.ndarray:
     """
     OpenCV intrinsics to OpenGL perspective matrix
+    NOTE: not work for tile-shifting intrinsics currently
 
     Args:
         intrinsics (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
@@ -339,10 +339,10 @@ def view_to_extrinsics(
 
 @batched(2,0,0)
 def normalize_intrinsics(
-        intrinsics: np.ndarray,
-        width: Union[int, np.ndarray],
-        height: Union[int, np.ndarray]
-    ) -> np.ndarray:
+    intrinsics: np.ndarray,
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray]
+) -> np.ndarray:
     """
     Normalize camera intrinsics(s) to uv space
 
@@ -354,19 +354,26 @@ def normalize_intrinsics(
     Returns:
         (np.ndarray): [..., 3, 3] normalized camera intrinsics(s)
     """
-    return intrinsics * np.stack([1 / width, 1 / height, np.ones_like(width)], axis=-1).astype(intrinsics.dtype)[..., None]
+    zeros = np.zeros_like(width)
+    ones = np.ones_like(width)
+    transform = np.stack([
+        1 / width, zeros, 0.5 / width,
+        zeros, 1 / height, 0.5 / height,
+        zeros, zeros, ones
+    ]).reshape(*zeros.shape, 3, 3)
+    return transform @ intrinsics
 
 
 @batched(2,0,0,0,0,0,0)
 def crop_intrinsics(
-        intrinsics: np.ndarray,
-        width: Union[int, np.ndarray],
-        height: Union[int, np.ndarray],
-        left: Union[int, np.ndarray],
-        top: Union[int, np.ndarray],
-        crop_width: Union[int, np.ndarray],
-        crop_height: Union[int, np.ndarray]
-    ) -> np.ndarray:
+    intrinsics: np.ndarray,
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray],
+    left: Union[int, np.ndarray],
+    top: Union[int, np.ndarray],
+    crop_width: Union[int, np.ndarray],
+    crop_height: Union[int, np.ndarray]
+) -> np.ndarray:
     """
     Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
@@ -382,20 +389,22 @@ def crop_intrinsics(
     Returns:
         (np.ndarray): [..., 3, 3] cropped camera intrinsics(s)
     """
-    intrinsics = intrinsics.copy()
-    intrinsics[..., 0, 0] *= width / crop_width
-    intrinsics[..., 1, 1] *= height / crop_height
-    intrinsics[..., 0, 2] = (intrinsics[..., 0, 2] * width - left) / crop_width
-    intrinsics[..., 1, 2] = (intrinsics[..., 1, 2] * height - top) / crop_height
-    return intrinsics
+    zeros = np.zeros_like(width)
+    ones = np.ones_like(width)
+    transform = np.stack([
+        width / crop_width, zeros, -left / crop_width,
+        zeros, height / crop_height, -top / crop_height,
+        zeros, zeros, ones
+    ]).reshape(*zeros.shape, 3, 3)
+    return transform @ intrinsics
 
 
 @batched(1,0,0)
 def pixel_to_uv(
-        pixel: np.ndarray,
-        width: Union[int, np.ndarray],
-        height: Union[int, np.ndarray]
-    ) -> np.ndarray:
+    pixel: np.ndarray,
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray]
+) -> np.ndarray:
     """
     Args:
         pixel (np.ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
@@ -405,18 +414,38 @@ def pixel_to_uv(
     Returns:
         (np.ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
     """
-    uv = np.zeros(pixel.shape, dtype=np.float32)
-    uv[..., 0] = (pixel[..., 0] + 0.5) / width
-    uv[..., 1] = (pixel[..., 1] + 0.5) / height
+    if not np.issubdtype(pixel.dtype, np.floating):
+        pixel = pixel.astype(np.float32)
+    dtype = pixel.dtype
+    uv = (pixel + np.array(0.5, dtype=dtype)) / np.stack([width, height], axis=-1)
     return uv
 
 
 @batched(1,0,0)
+def uv_to_pixel(
+    uv: np.ndarray,
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray]
+) -> np.ndarray:
+    """
+    Args:
+        pixel (np.ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
+        width (int | np.ndarray): [...] image width(s)
+        height (int | np.ndarray): [...] image height(s)
+
+    Returns:
+        (np.ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
+    """
+    pixel = uv * np.stack([width, height], axis=-1) - 0.5
+    return pixel
+
+
+@batched(1,0,0)
 def pixel_to_ndc(
-        pixel: np.ndarray,
-        width: Union[int, np.ndarray],
-        height: Union[int, np.ndarray]
-    ) -> np.ndarray:
+    pixel: np.ndarray,
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray]
+) -> np.ndarray:
     """
     Args:
         pixel (np.ndarray): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
@@ -426,18 +455,20 @@ def pixel_to_ndc(
     Returns:
         (np.ndarray): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)
     """
-    ndc = np.zeros(pixel.shape, dtype=np.float32)
-    ndc[..., 0] = (pixel[..., 0] + 0.5) / width * 2 - 1
-    ndc[..., 1] = -((pixel[..., 1] + 0.5) / height * 2 - 1)
+    if not np.issubdtype(pixel.dtype, np.floating):
+        pixel = pixel.astype(np.float32)
+    dtype = pixel.dtype
+    ndc = (pixel + np.array(0.5, dtype=dtype)) / (np.stack([width, height], dim=-1) * np.array([2, -2], dtype=dtype)) \
+        + np.array([-1, 1], dtype=dtype)
     return ndc
 
 
 @batched(0,0,0)
 def project_depth(
-        depth: np.ndarray,
-        near: Union[float, np.ndarray],
-        far: Union[float, np.ndarray]
-    ) -> np.ndarray:
+    depth: np.ndarray,
+    near: Union[float, np.ndarray],
+    far: Union[float, np.ndarray]
+) -> np.ndarray:
     """
     Project linear depth to depth value in screen space
 
@@ -575,11 +606,11 @@ def unproject_gl(
 
 @batched(2,1,2,2)
 def unproject_cv(
-        uv_coord: np.ndarray,
-        depth: np.ndarray,
-        extrinsics: np.ndarray = None,
-        intrinsics: np.ndarray = None
-    ) -> np.ndarray:
+    uv_coord: np.ndarray,
+    depth: np.ndarray,
+    extrinsics: np.ndarray = None,
+    intrinsics: np.ndarray = None
+) -> np.ndarray:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention
 
@@ -751,3 +782,57 @@ def euler_angles_to_matrix(euler_angles: np.ndarray, convention: str = 'XYZ') ->
         for c in convention
     ]
     return matrices[2] @ matrices[1] @ matrices[0]
+
+
+def skew_symmetric(v: np.ndarray):
+    "Skew symmetric matrix from a 3D vector"
+    assert v.shape[-1] == 3, "v must be 3D"
+    x, y, z = v[..., 0], v[..., 1], v[..., 2]
+    zeros = np.zeros_like(x)
+    return np.stack([
+        zeros, -z, y,
+        z, zeros, -x,
+        -y, x, zeros,
+    ], axis=-1).reshape(*v.shape[:-1], 3, 3)
+
+
+def rotation_matrix_from_vectors(v1: np.ndarray, v2: np.ndarray):
+    "Rotation matrix that rotates v1 to v2"
+    I = np.eye(3, dtype=v1.dtype)
+    v1 = v1 / np.linalg.norm(v1, axis=-1)
+    v2 = v2 / np.linalg.norm(v2, axis=-1)
+    v = np.cross(v1, v2, axis=-1)
+    c = np.sum(v1 * v2, axis=-1)
+    K = skew_symmetric(v)
+    R = I + K + (1 / (1 + c)).astype(v1.dtype)[None, None] * (K @ K)    # Avoid numpy's default type casting for scalars
+    return R
+
+
+def ray_intersection(p1: np.ndarray, d1: np.ndarray, p2: np.ndarray, d2: np.ndarray):
+    """
+    Compute the intersection/closest point of two D-dimensional rays
+    If the rays are intersecting, the closest point is the intersection point.
+
+    Args:
+        p1 (np.ndarray): (..., D) origin of ray 1
+        d1 (np.ndarray): (..., D) direction of ray 1
+        p2 (np.ndarray): (..., D) origin of ray 2
+        d2 (np.ndarray): (..., D) direction of ray 2
+
+    Returns:
+        (np.ndarray): (..., N) intersection point
+    """
+    p1, d1, p2, d2 = np.broadcast_arrays(p1, d1, p2, d2)
+    dtype = p1.dtype
+    dim = p1.shape[-1]
+    d = np.stack([d1, d2], axis=-2)     # (..., 2, D)
+    p = np.stack([p1, p2], axis=-2)     # (..., 2, D)
+    A = np.concatenate([
+        (np.eye(dim, dtype=dtype) * np.ones((*p.shape[:-2], 2, 1, 1))).reshape(*d.shape[:-2], 2 * dim, dim),         # (..., 2 * D, D)
+        -(np.eye(2, dtype=dtype)[..., None] * d[..., None, :]).swapaxes(-2, -1).reshape(*d.shape[:-2], 2 * dim, 2)    # (..., 2 * D, 2)
+    ], axis=-1)                             # (..., 2 * D, D + 2)
+    b = p.reshape(*p.shape[:-2], 2 * dim)   # (..., 2 * D)
+    x = np.linalg.solve(A.swapaxes(-1, -2) @ A + 1e-12 * np.eye(dim + 2, dtype=dtype), (A.swapaxes(-1, -2) @ b[..., :, None])[..., 0])
+    return x[..., :dim], (x[..., dim], x[..., dim + 1])
+    
+

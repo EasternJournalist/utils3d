@@ -277,8 +277,8 @@ def extrinsics_look_at(
 
 @batched(2)
 def perspective_to_intrinsics(
-        perspective: torch.Tensor
-    ) -> torch.Tensor:
+    perspective: torch.Tensor
+) -> torch.Tensor:
     """
     OpenGL perspective matrix to OpenCV intrinsics
 
@@ -288,16 +288,11 @@ def perspective_to_intrinsics(
     Returns:
         (torch.Tensor): shape [..., 3, 3] OpenCV intrinsics
     """
-    N = perspective.shape[0]
-    fx, fy = perspective[:, 0, 0], perspective[:, 1, 1]
-    cx, cy = perspective[:, 0, 2], perspective[:, 1, 2]
-    ret = torch.zeros((N, 3, 3), dtype=perspective.dtype, device=perspective.device)
-    ret[:, 0, 0] = 0.5 * fx
-    ret[:, 1, 1] = 0.5 * fy
-    ret[:, 0, 2] = -0.5 * cx + 0.5
-    ret[:, 1, 2] = 0.5 * cy + 0.5
-    ret[:, 2, 2] = 1.
-    return ret
+    assert torch.allclose(perspective[:, [0, 1, 3], 3], 0), "The perspective matrix is not a projection matrix"
+    ret = torch.tensor([[0.5, 0., 0.5], [0., -0.5, 0.5], [0., 0., 1.]], dtype=perspective.dtype, device=perspective.device) \
+        @ perspective[:, [0, 1, 3], :3] \
+        @ torch.diag(torch.tensor([1, -1, -1], dtype=perspective.dtype, device=perspective.device))
+    return ret / ret[:, 2, 2, None, None]
 
 
 @batched(2,0,0)
@@ -379,19 +374,27 @@ def normalize_intrinsics(
     Returns:
         (torch.Tensor): [..., 3, 3] normalized camera intrinsics(s)
     """
-    return intrinsics * torch.stack([1 / width, 1 / height, torch.ones_like(width)], dim=-1)[..., None]
+    zeros = torch.zeros_like(width)
+    ones = torch.ones_like(width)
+    transform = torch.stack([
+        1 / width, zeros, 0.5 / width,
+        zeros, 1 / height, 0.5 / height,
+        zeros, zeros, ones
+    ]).reshape(*zeros.shape, 3, 3).to(intrinsics)
+    return transform @ intrinsics
+
 
 
 @batched(2,0,0,0,0,0,0)
 def crop_intrinsics(
-        intrinsics: torch.Tensor,
-        width: Union[int, torch.Tensor],
-        height: Union[int, torch.Tensor],
-        left: Union[int, torch.Tensor],
-        top: Union[int, torch.Tensor],
-        crop_width: Union[int, torch.Tensor],
-        crop_height: Union[int, torch.Tensor]
-    ) -> torch.Tensor:
+    intrinsics: torch.Tensor,
+    width: Union[int, torch.Tensor],
+    height: Union[int, torch.Tensor],
+    left: Union[int, torch.Tensor],
+    top: Union[int, torch.Tensor],
+    crop_width: Union[int, torch.Tensor],
+    crop_height: Union[int, torch.Tensor]
+) -> torch.Tensor:
     """
     Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
@@ -407,20 +410,22 @@ def crop_intrinsics(
     Returns:
         (torch.Tensor): [..., 3, 3] cropped camera intrinsics(s)
     """
-    intrinsics = intrinsics.clone().detach()
-    intrinsics[..., 0, 0] *= width / crop_width
-    intrinsics[..., 1, 1] *= height / crop_height
-    intrinsics[..., 0, 2] = (intrinsics[..., 0, 2] * width - left) / crop_width
-    intrinsics[..., 1, 2] = (intrinsics[..., 1, 2] * height - top) / crop_height
-    return intrinsics
+    zeros = torch.zeros_like(width)
+    ones = torch.ones_like(width)
+    transform = torch.stack([
+        width / crop_width, zeros, -left / crop_width,
+        zeros, height / crop_height, -top / crop_height,
+        zeros, zeros, ones
+    ]).reshape(*zeros.shape, 3, 3).to(intrinsics)
+    return transform @ intrinsics
 
 
 @batched(1,0,0)
 def pixel_to_uv(
-        pixel: torch.Tensor,
-        width: Union[int, torch.Tensor],
-        height: Union[int, torch.Tensor]
-    ) -> torch.Tensor:
+    pixel: torch.Tensor,
+    width: Union[int, torch.Tensor],
+    height: Union[int, torch.Tensor]
+) -> torch.Tensor:
     """
     Args:
         pixel (torch.Tensor): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
@@ -430,18 +435,18 @@ def pixel_to_uv(
     Returns:
         (torch.Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
     """
-    uv = torch.zeros(pixel.shape, dtype=torch.float32)
-    uv[..., 0] = (pixel[..., 0] + 0.5) / width
-    uv[..., 1] = (pixel[..., 1] + 0.5) / height
+    if not torch.is_floating_point(pixel):
+        pixel = pixel.float()
+    uv = (pixel + 0.5) / torch.stack([width, height], dim=-1).to(pixel)
     return uv
 
 
 @batched(1,0,0)
 def pixel_to_ndc(
-        pixel: torch.Tensor,
-        width: Union[int, torch.Tensor],
-        height: Union[int, torch.Tensor]
-    ) -> torch.Tensor:
+    pixel: torch.Tensor,
+    width: Union[int, torch.Tensor],
+    height: Union[int, torch.Tensor]
+) -> torch.Tensor:
     """
     Args:
         pixel (torch.Tensor): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
@@ -451,9 +456,10 @@ def pixel_to_ndc(
     Returns:
         (torch.Tensor): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)
     """
-    ndc = torch.zeros(pixel.shape, dtype=torch.float32)
-    ndc[..., 0] = (pixel[..., 0] + 0.5) / width * 2 - 1
-    ndc[..., 1] = -((pixel[..., 1] + 0.5) / height * 2 - 1)
+    if not torch.is_floating_point(pixel):
+        pixel = pixel.float()
+    ndc = (pixel + 0.5) / (torch.stack([width, height], dim=-1).to(pixel) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device)) \
+        + torch.tensor([-1, 1], dtype=pixel.dtype, device=pixel.device)
     return ndc
 
 
@@ -706,7 +712,6 @@ def rotation_matrix_from_vectors(v1: torch.Tensor, v2: torch.Tensor):
     v1 = F.normalize(v1, dim=-1)
     v2 = F.normalize(v2, dim=-1)
     v = torch.cross(v1, v2, dim=-1)
-    s = torch.norm(v, dim=-1)
     c = torch.sum(v1 * v2, dim=-1)
     K = skew_symmetric(v)
     R = I + K + (1 / (1 + c))[None, None] * (K @ K)

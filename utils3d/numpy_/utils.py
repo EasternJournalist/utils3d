@@ -63,7 +63,8 @@ def image_uv(
     left: int = None,
     top: int = None,
     right: int = None,
-    bottom: int = None
+    bottom: int = None,
+    dtype: np.dtype = np.float32
 ) -> np.ndarray:
     """
     Get image space UV grid, ranging in [0, 1]. 
@@ -85,8 +86,8 @@ def image_uv(
     if top is None: top = 0
     if right is None: right = width
     if bottom is None: bottom = height
-    u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=np.float32)
-    v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=np.float32)
+    u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=dtype)
+    v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=dtype)
     return np.concatenate([
         u[None, :, None].repeat(bottom - top, axis=0),
         v[:, None, None].repeat(right - left, axis=1)
