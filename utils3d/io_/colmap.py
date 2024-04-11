@@ -69,7 +69,7 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
         file: Path to `images.txt` file.
     Returns:
         extrinsics: (N, 4, 4) array of extrinsics.
-        camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap starts from 1.
+        camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap typically starts from 1.
         image_names: List of str, image names. Length is N.
     """
     with open(file) as fp:
@@ -100,23 +100,26 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
     return extrinsics, camera_ids, image_names
 
 
-def read_intrinsics_from_colmap(file: Union[str, Path]) -> Tuple[np.ndarray, np.ndarray]:
+def read_intrinsics_from_colmap(file: Union[str, Path], normalize: bool = False) -> Tuple[List[int], np.ndarray, np.ndarray]:
     """
     Read intrinsics from colmap `cameras.txt` file.
     Args:
         file: Path to `cameras.txt` file.
+        normalize: Whether to normalize the intrinsics. If True, the intrinsics will be normalized. (mapping coordinates to [0, 1] range)
     Returns:
+        camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap typically starts from 1.
         intrinsics: (N, 3, 3) array of intrinsics.
         distortions: (N, 5) array of distortions.
     """
     with open(file) as fp:
         lines = fp.readlines()
-    intrinsics, distortions = [], []
+    intrinsics, distortions, camera_ids = [], [], []
     for line in lines:
         line = line.strip()
         if not line or line.startswith('#'):
             continue
         camera_id, model, width, height, *params = line.split()
+        camera_id, width, height = int(camera_id), int(width), int(height)
         if model == 'PINHOLE':
             fx, fy, cx, cy = map(float, params[:4])
             k1 = k2 = k3 = p1 = p2 = 0.0
@@ -126,8 +129,11 @@ def read_intrinsics_from_colmap(file: Union[str, Path]) -> Tuple[np.ndarray, np.
             f, cx, cy, k = map(float, params[:4])
             fx = fy = f
             k1, k2, p1, p2, k3 = k, 0.0, 0.0, 0.0, 0.0
+        camera_ids.append(camera_id)
+        if normalize:
+            fx, fy, cx, cy = fx / width, fy / height, cx / width, cy / height
         intrinsics.append([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
         distortions.append([k1, k2, p1, p2, k3])
     intrinsics = np.array(intrinsics, dtype=np.float32)
     distortions = np.array(distortions, dtype=np.float32)
-    return intrinsics, distortions
+    return camera_ids, intrinsics, distortions
