@@ -7,9 +7,8 @@ __all__ = [
     'perspective',
     'perspective_from_fov',
     'perspective_from_fov_xy',
-    'intrinsics',
+    'intrinsics_from_focal_center',
     'intrinsics_from_fov',
-    'intrinsics_from_fov_xy',
     'view_look_at',
     'extrinsics_look_at',
     'perspective_to_intrinsics',
@@ -40,11 +39,11 @@ __all__ = [
 
 @batched(0,0,0,0)
 def perspective(
-        fov_y: Union[float, np.ndarray],
-        aspect: Union[float, np.ndarray],
-        near: Union[float, np.ndarray],
-        far: Union[float, np.ndarray]
-    ) -> np.ndarray:
+    fov_y: Union[float, np.ndarray],
+    aspect: Union[float, np.ndarray],
+    near: Union[float, np.ndarray],
+    far: Union[float, np.ndarray]
+) -> np.ndarray:
     """
     Get OpenGL perspective matrix
 
@@ -93,11 +92,11 @@ def perspective_from_fov(
 
 
 def perspective_from_fov_xy(
-        fov_x: Union[float, np.ndarray],
-        fov_y: Union[float, np.ndarray],
-        near: Union[float, np.ndarray],
-        far: Union[float, np.ndarray]
-    ) -> np.ndarray:
+    fov_x: Union[float, np.ndarray],
+    fov_y: Union[float, np.ndarray],
+    near: Union[float, np.ndarray],
+    far: Union[float, np.ndarray]
+) -> np.ndarray:
     """
     Get OpenGL perspective matrix from field of view in x and y axis
 
@@ -114,80 +113,73 @@ def perspective_from_fov_xy(
     return perspective(fov_y, aspect, near, far)
 
 
-@batched(0,0,0,0)
-def intrinsics(
-        focal_x: Union[float, np.ndarray],
-        focal_y: Union[float, np.ndarray],
-        cx: Union[float, np.ndarray],
-        cy: Union[float, np.ndarray]
-    ) -> np.ndarray:
+def intrinsics_from_focal_center(
+    fx: Union[float, np.ndarray],
+    fy: Union[float, np.ndarray],
+    cx: Union[float, np.ndarray],
+    cy: Union[float, np.ndarray],
+    dtype: Optional[np.dtype] = np.float32
+) -> np.ndarray:
     """
     Get OpenCV intrinsics matrix
-
-    Args:
-        focal_x (float | np.ndarray): focal length in x axis
-        focal_y (float | np.ndarray): focal length in y axis
-        cx (float | np.ndarray): principal point in x axis
-        cy (float | np.ndarray): principal point in y axis
 
     Returns:
         (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
     """
-    N = focal_x.shape[0]
-    ret = np.zeros((N, 3, 3), dtype=focal_x.dtype)
-    ret[:, 0, 0] = focal_x
-    ret[:, 1, 1] = focal_y
-    ret[:, 0, 2] = cx
-    ret[:, 1, 2] = cy
-    ret[:, 2, 2] = 1.
+    if any(isinstance(x, np.ndarray) for x in (fx, fy, cx, cy)):
+        dtype = np.result_type(fx, fy, cx, cy)
+    fx, fy, cx, cy = np.broadcast_arrays(fx, fy, cx, cy)
+    ret = np.zeros((*fx.shape, 3, 3), dtype=dtype)
+    ret[..., 0, 0] = fx
+    ret[..., 1, 1] = fy
+    ret[..., 0, 2] = cx
+    ret[..., 1, 2] = cy
+    ret[..., 2, 2] = 1.
     return ret
 
 
 def intrinsics_from_fov(
-        fov: Union[float, np.ndarray],
-        width: Union[int, np.ndarray],
-        height: Union[int, np.ndarray],
-        normalize: bool = False
-    ) -> np.ndarray:
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray],
+    fov_max: Union[float, np.ndarray] = None,
+    fov_min: Union[float, np.ndarray] = None,
+    fov_x: Union[float, np.ndarray] = None,
+    fov_y: Union[float, np.ndarray] = None,
+) -> np.ndarray:
     """
-    Get OpenCV intrinsics matrix from field of view in larger dimension
+    Get normalized OpenCV intrinsics matrix from given field of view.
+    You can provide either fov_max, fov_min, fov_x or fov_y
 
     Args:
-        fov (float | np.ndarray): field of view in larger dimension
         width (int | np.ndarray): image width
         height (int | np.ndarray): image height
-        normalize (bool): whether to normalize the intrinsics to uv space
-
-    Returns:
-        (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
-    """
-    focal = np.maximum(width, height) / (2 * np.tan(fov / 2))
-    cx = width / 2
-    cy = height / 2
-    ret = intrinsics(focal, focal, cx, cy)
-    if normalize:
-        ret = normalize_intrinsics(ret, width, height)
-    return ret
-
-
-def intrinsics_from_fov_xy(
-        fov_x: Union[float, np.ndarray],
-        fov_y: Union[float, np.ndarray]
-    ) -> np.ndarray:
-    """
-    Get OpenCV intrinsics matrix from field of view in x and y axis
-
-    Args:
+        fov_max (float | np.ndarray): field of view in largest dimension
+        fov_min (float | np.ndarray): field of view in smallest dimension
         fov_x (float | np.ndarray): field of view in x axis
         fov_y (float | np.ndarray): field of view in y axis
 
     Returns:
         (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
     """
-    focal_x = 0.5 / np.tan(fov_x / 2)
-    focal_y = 0.5 / np.tan(fov_y / 2)
-    cx = cy = 0.5
-    return intrinsics(focal_x, focal_y, cx, cy)
+    if fov_max is not None:
+        fx = np.maximum(width, height) / width / (2 * np.tan(fov_max / 2))
+        fy = np.maximum(width, height) / height / (2 * np.tan(fov_max / 2))
+    elif fov_min is not None:
+        fx = np.minimum(width, height) / width / (2 * np.tan(fov_min / 2))
+        fy = np.minimum(width, height) / height / (2 * np.tan(fov_min / 2))
+    elif fov_x is not None and fov_y is not None:
+        fx = 1 / (2 * np.tan(fov_x / 2))
+        fy = 1 / (2 * np.tan(fov_y / 2))
+    elif fov_x is not None:
+        fx = 1 / (2 * np.tan(fov_x / 2))
+        fy = fx * width / height
+    elif fov_y is not None:
+        fy = 1 / (2 * np.tan(fov_y / 2))
+        fx = fy * height / width
+    cx = 0.5
+    cy = 0.5
+    ret = intrinsics_from_focal_center(fx, fy, cx, cy)
+    return ret
 
 
 @batched(1,1,1)

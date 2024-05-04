@@ -17,6 +17,7 @@ __all__ = [
     'image_mesh',
     'chessboard',
     'depth_edge',
+    'depth_aliasing',
     'image_mesh_from_depth',
     'depth_to_normal',
     'masked_min',
@@ -42,27 +43,67 @@ def image_mesh(height: int, width: int, mask: torch.Tensor = None):
     return uv, faces
 
 
-def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3) -> torch.BoolTensor:
+def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch.Tensor = None) -> torch.BoolTensor:
     """
-    Compute edge map from depth map. 
+    Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
+    
     Args:
         depth (torch.Tensor): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
-        slope_tol (float): slope tolerance, in radians
-        intrinsics (torch.Tensor): shape (..., 3, 3), intrinsics matrix, used to compute slope tolerance
 
     Returns:
         edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
     """
-    depth_ = F.pad(depth.unsqueeze(1), (kernel_size // 2, kernel_size // 2, kernel_size // 2, kernel_size // 2), mode='replicate')
-    diff = (F.max_pool2d(depth_, kernel_size, stride=1) + F.max_pool2d(-depth_, kernel_size, stride=1)).squeeze(1)
+    shape = depth.shape
+    depth = depth.reshape(-1, 1, *shape[-2:])
+    if mask is not None:
+        mask = mask.reshape(-1, 1, *shape[-2:])
+
+    if mask is None:
+        diff = (F.max_pool2d(depth, kernel_size, stride=1, padding=1) + F.max_pool2d(-depth, kernel_size, stride=1, padding=1))
+    else:
+        diff = (F.max_pool2d(torch.where(mask, depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2) + F.max_pool2d(torch.where(mask, -depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2))
 
     edge = torch.zeros_like(depth, dtype=torch.bool)
     if atol is not None:
         edge |= diff > atol
     if rtol is not None:
         edge |= (diff / depth).nan_to_num_() > rtol
+    edge = edge.reshape(*shape)
+    return edge
+
+
+def depth_aliasing(depth: torch.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch.Tensor = None) -> torch.BoolTensor:
+    """
+    Compute the map that indicates the aliasing of a depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
+    Args:
+        depth (torch.Tensor): shape (..., height, width), linear depth map
+        atol (float): absolute tolerance
+        rtol (float): relative tolerance
+
+    Returns:
+        edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
+    """
+    shape = depth.shape
+    depth = depth.reshape(-1, 1, *shape[-2:])
+    if mask is not None:
+        mask = mask.reshape(-1, 1, *shape[-2:])
+
+    if mask is None:
+        diff_max = F.max_pool2d(depth, kernel_size, stride=1, padding=kernel_size // 2) - depth
+        diff_min = F.max_pool2d(-depth, kernel_size, stride=1, padding=kernel_size // 2) + depth
+    else:
+        diff_max = F.max_pool2d(torch.where(mask, depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2) - depth
+        diff_min = F.max_pool2d(torch.where(mask, -depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2) + depth
+    diff = torch.minimum(diff_max, diff_min)
+
+    edge = torch.zeros_like(depth, dtype=torch.bool)
+    if atol is not None:
+        edge |= diff > atol
+    if rtol is not None:
+        edge |= (diff / depth).nan_to_num_() > rtol
+    edge = edge.reshape(*shape)
     return edge
 
 
