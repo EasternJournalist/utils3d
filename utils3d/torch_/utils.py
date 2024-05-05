@@ -61,7 +61,7 @@ def depth_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, kern
         mask = mask.reshape(-1, 1, *shape[-2:])
 
     if mask is None:
-        diff = (F.max_pool2d(depth, kernel_size, stride=1, padding=1) + F.max_pool2d(-depth, kernel_size, stride=1, padding=1))
+        diff = (F.max_pool2d(depth, kernel_size, stride=1, padding=kernel_size // 2) + F.max_pool2d(-depth, kernel_size, stride=1, padding=kernel_size // 2))
     else:
         diff = (F.max_pool2d(torch.where(mask, depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2) + F.max_pool2d(torch.where(mask, -depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2))
 

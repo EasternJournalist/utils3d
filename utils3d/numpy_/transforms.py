@@ -139,12 +139,12 @@ def intrinsics_from_focal_center(
 
 
 def intrinsics_from_fov(
-    width: Union[int, np.ndarray],
-    height: Union[int, np.ndarray],
     fov_max: Union[float, np.ndarray] = None,
     fov_min: Union[float, np.ndarray] = None,
     fov_x: Union[float, np.ndarray] = None,
     fov_y: Union[float, np.ndarray] = None,
+    width: Union[int, np.ndarray] = None,
+    height: Union[int, np.ndarray] = None,
 ) -> np.ndarray:
     """
     Get normalized OpenCV intrinsics matrix from given field of view.
