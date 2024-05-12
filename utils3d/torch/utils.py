@@ -3,10 +3,6 @@ from typing import *
 import torch
 import torch.nn.functional as F
 
-from ..numpy_.utils import (
-    image_uv as __image_uv,
-    image_mesh as __image_mesh,
-)
 from . import transforms
 from . import mesh
 from ._helpers import batched
@@ -26,19 +22,66 @@ __all__ = [
 ]
 
 
-def image_uv(height: int, width: int, left: int = None, top: int = None, right: int = None, bottom: int = None):
-    return torch.from_numpy(__image_uv(height, width, left, top, right, bottom))
+def image_uv(height: int, width: int, left: int = None, top: int = None, right: int = None, bottom: int = None, device: torch.device = None, dtype: torch.dtype = None) -> torch.Tensor:
+    """
+    Get image space UV grid, ranging in [0, 1]. 
+
+    >>> image_uv(10, 10):
+    [[[0.05, 0.05], [0.15, 0.05], ..., [0.95, 0.05]],
+     [[0.05, 0.15], [0.15, 0.15], ..., [0.95, 0.15]],
+      ...             ...                  ...
+     [[0.05, 0.95], [0.15, 0.95], ..., [0.95, 0.95]]]
+
+    Args:
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        np.ndarray: shape (height, width, 2)
+    """
+    if left is None: left = 0
+    if top is None: top = 0
+    if right is None: right = width
+    if bottom is None: bottom = height
+    u = torch.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, device=device, dtype=dtype)
+    v = torch.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, device=device, dtype=dtype)
+    return torch.cat([
+        u[None, :, None].repeat(bottom - top, axis=0),
+        v[:, None, None].repeat(right - left, axis=1)
+    ], dim=2)
 
 
-def image_mesh(height: int, width: int, mask: torch.Tensor = None):
-    if mask is None:
-        uv, faces = __image_mesh(height, width)
-    else:
-        uv, faces, indices = __image_mesh(height, width, mask.cpu().numpy())
-    uv, faces = torch.from_numpy(uv), torch.from_numpy(faces)
+def image_mesh(height: int, width: int, mask: torch.Tensor = None, device: torch.device = None, dtype: torch.dtype = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
+
+    Args:
+        width (int): image width
+        height (int): image height
+        mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+
+    Returns:
+        uv (np.ndarray): uv corresponding to pixels as described in image_uv()
+        faces (np.ndarray): quad faces connecting neighboring pixels
+        indices (np.ndarray, optional): indices of vertices in the original mesh
+    """
+    if device is None and mask is not None:
+        device = mask.device
     if mask is not None:
-        uv, faces = uv.to(mask.device), faces.to(mask.device)
-        indices = torch.from_numpy(indices).to(mask.device)
+        assert mask.shape[0] == height and mask.shape[1] == width
+        assert mask.dtype == torch.bool
+    uv = image_uv(height, width, device=device, dtype=dtype).reshape((-1, 2))
+    row_faces = torch.stack([
+        torch.arange(0, width - 1, dtype=torch.int32, device=device), 
+        torch.arange(width, 2 * width - 1, dtype=torch.int32, device=device), 
+        torch.arange(1 + width, 2 * width, dtype=torch.int32, device=device), 
+        torch.arange(1, width, dtype=torch.int32, device=device)
+    ], dim=1)
+    faces = (torch.arange(0, (height - 1) * width, width, device=device, dtype=torch.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
+    if mask is not None:
+        quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
+        faces = faces[quad_mask]
+        faces, uv, indices = mesh.remove_unreferenced_vertices(faces, uv, return_indices=True)
         return uv, faces, indices
     return uv, faces
 

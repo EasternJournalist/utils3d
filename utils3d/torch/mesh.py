@@ -10,6 +10,7 @@ __all__ = [
     'compute_face_angles',
     'compute_vertex_normal',
     'compute_vertex_normal_weighted',
+    'remove_unreferenced_vertices',
     'remove_corrupted_faces',
     'merge_duplicate_vertices',
     'subdivide_mesh_simple',
@@ -180,6 +181,35 @@ def compute_vertex_normal_weighted(
     vertex_normal = torch.index_put(torch.zeros_like(vertices), (torch.arange(N)[:, None], faces.view(N, -1)), face_normal.view(N, -1, 3), accumulate=True)
     vertex_normal = F.normalize(vertex_normal, p=2, dim=-1)
     return vertex_normal
+
+
+def remove_unreferenced_vertices(
+    faces: torch.Tensor,
+    *vertice_attrs,
+    return_indices: bool = False
+) -> Tuple[torch.Tensor, ...]:
+    """
+    Remove unreferenced vertices of a mesh. 
+    Unreferenced vertices are removed, and the face indices are updated accordingly.
+
+    Args:
+        faces (torch.Tensor): [T, P] face indices
+        *vertice_attrs: vertex attributes
+
+    Returns:
+        faces (torch.Tensor): [T, P] face indices
+        *vertice_attrs: vertex attributes
+        indices (torch.Tensor, optional): [N] indices of vertices that are kept. Defaults to None.
+    """
+    P = faces.shape[-1]
+    fewer_indices, inv_map = torch.unique(faces, return_inverse=True)
+    faces = inv_map.astype(torch.int32).reshape(-1, P)
+    ret = [faces]
+    for attr in vertice_attrs:
+        ret.append(attr[fewer_indices])
+    if return_indices:
+        ret.append(fewer_indices)
+    return tuple(ret)
 
 
 def remove_corrupted_faces(

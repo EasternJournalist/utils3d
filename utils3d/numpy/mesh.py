@@ -222,10 +222,10 @@ def merge_duplicate_vertices(
 
 
 def remove_unreferenced_vertices(
-        faces: np.ndarray,
-        *vertice_attrs,
-        return_indices: bool = False
-    ) -> Tuple[np.ndarray, ...]:
+    faces: np.ndarray,
+    *vertice_attrs,
+    return_indices: bool = False
+) -> Tuple[np.ndarray, ...]:
     """
     Remove unreferenced vertices of a mesh. 
     Unreferenced vertices are removed, and the face indices are updated accordingly.

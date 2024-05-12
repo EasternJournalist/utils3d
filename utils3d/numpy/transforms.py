@@ -1,5 +1,6 @@
 import numpy as np
 from typing import *
+from numbers import Number
 from ._helpers import batched
 
 
@@ -329,30 +330,39 @@ def view_to_extrinsics(
     return view * np.array([1, -1, -1, 1], dtype=view.dtype)[:, None]
 
 
-@batched(2,0,0)
+@batched(2, 0, 0, None)
 def normalize_intrinsics(
     intrinsics: np.ndarray,
     width: Union[int, np.ndarray],
-    height: Union[int, np.ndarray]
+    height: Union[int, np.ndarray],
+    integer_pixel_centers: bool = True
 ) -> np.ndarray:
     """
-    Normalize camera intrinsics(s) to uv space
+    Normalize intrinsics from pixel cooridnates to uv coordinates
 
     Args:
         intrinsics (np.ndarray): [..., 3, 3] camera intrinsics(s) to normalize
         width (int | np.ndarray): [...] image width(s)
         height (int | np.ndarray): [...] image height(s)
+        integer_pixel_centers (bool): whether the integer pixel coordinates are at the center of the pixel. If False, the integer coordinates are at the left-top corner of the pixel.
 
     Returns:
         (np.ndarray): [..., 3, 3] normalized camera intrinsics(s)
     """
     zeros = np.zeros_like(width)
     ones = np.ones_like(width)
-    transform = np.stack([
-        1 / width, zeros, 0.5 / width,
-        zeros, 1 / height, 0.5 / height,
-        zeros, zeros, ones
-    ]).reshape(*zeros.shape, 3, 3)
+    if integer_pixel_centers:
+        transform = np.stack([
+            1 / width, zeros, 0.5 / width,
+            zeros, 1 / height, 0.5 / height,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
+    else:
+        transform = np.stack([
+            1 / width, zeros, zeros,
+            zeros, 1 / height, zeros,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 
