@@ -6,6 +6,9 @@ from . import transforms
 from . import mesh
 
 __all__ = [
+    'sliding_window_1d',
+    'sliding_window_nd',
+    'sliding_window_2d',
     'max_pool_1d',
     'max_pool_2d',
     'max_pool_nd',
@@ -23,26 +26,60 @@ __all__ = [
 ]
 
 
-def max_pool_1d(a: np.ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
-    axis = axis % a.ndim
+def sliding_window_1d(x: np.ndarray, window_size: int, stride: int, axis: int = -1):
+    """
+    Return x view of the input array with x sliding window of the given kernel size and stride.
+    The sliding window is performed over the given axis, and the window dimension is append to the end of the output array's shape.
+
+    Args:
+        x (np.ndarray): input array with shape (..., axis_size, ...)
+        kernel_size (int): size of the sliding window
+        stride (int): stride of the sliding window
+        axis (int): axis to perform sliding window over
+    
+    Returns:
+        a_sliding (np.ndarray): view of the input array with shape (..., n_windows, ..., kernel_size), where n_windows = (axis_size - kernel_size + 1) // stride
+    """
+    axis = axis % x.ndim
+    shape = (*x.shape[:axis], (x.shape[axis] - window_size + 1) // stride, *x.shape[axis + 1:], window_size)
+    strides = (*x.strides[:axis], stride * x.strides[axis], *x.strides[axis + 1:], x.strides[axis])
+    x_sliding = np.lib.stride_tricks.as_strided(x, shape=shape, strides=strides)
+    return x_sliding
+
+
+def sliding_window_nd(x: np.ndarray, window_size: Tuple[int,...], stride: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
+    axis = [axis[i] % x.ndim for i in range(len(axis))]
+    for i in range(x.ndim):
+        x = sliding_window_1d(x, window_size[i], stride[i], axis[i])
+    return x
+
+
+def sliding_window_2d(x: np.ndarray, window_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)) -> np.ndarray:
+    if isinstance(window_size, int):
+        window_size = (window_size, window_size)
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    return sliding_window_nd(x, window_size, stride, axis)
+
+
+def max_pool_1d(x: np.ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
+    axis = axis % x.ndim
     if padding > 0:
-        fill_value = np.nan if a.dtype.kind == 'f' else np.iinfo(a.dtype).min
-        padding_arr = np.full((*a.shape[:axis], padding, *a.shape[axis + 1:]), fill_value=fill_value, dtype=a.dtype)
-        a = np.concatenate([padding_arr, a, padding_arr], axis=axis)
-    shape = (*a.shape[:axis], (a.shape[axis] - kernel_size + 1) // stride, kernel_size, *a.shape[axis + 1:])
-    strides = (*a.strides[:axis], stride * a.strides[axis], a.strides[axis], *a.strides[axis + 1:])
-    a_rolling = np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
-    max_pool = np.nanmax(a_rolling, axis=axis + 1)
+        fill_value = np.nan if x.dtype.kind == 'f' else np.iinfo(x.dtype).min
+        padding_arr = np.full((*x.shape[:axis], padding, *x.shape[axis + 1:]), fill_value=fill_value, dtype=x.dtype)
+        x = np.concatenate([padding_arr, x, padding_arr], axis=axis)
+    a_sliding = sliding_window_1d(x, kernel_size, stride, axis)
+    max_pool = np.nanmax(a_sliding, axis=-1)
     return max_pool
 
 
-def max_pool_nd(a: np.ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
-    for i in range(a.ndim):
-        a = max_pool_1d(a, kernel_size[i], stride[i], padding[i], axis[i])
-    return a
+def max_pool_nd(x: np.ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
+    for i in range(x.ndim):
+        x = max_pool_1d(x, kernel_size[i], stride[i], padding[i], axis[i])
+    return x
 
 
-def max_pool_2d(a: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
+def max_pool_2d(x: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
     if isinstance(kernel_size, int):
         kernel_size = (kernel_size, kernel_size)
     if isinstance(stride, int):
@@ -50,12 +87,12 @@ def max_pool_2d(a: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride:
     if isinstance(padding, int):
         padding = (padding, padding)
     axis = tuple(axis)
-    return max_pool_nd(a, kernel_size, stride, padding, axis)
+    return max_pool_nd(x, kernel_size, stride, padding, axis)
 
 
 def depth_edge(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
     """
-    Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
+    Compute the edge mask of x depth map. The edge is defined as the pixels whose neighbors have x large difference in depth.
     
     Args:
         depth (np.ndarray): shape (..., height, width), linear depth map
@@ -80,7 +117,7 @@ def depth_edge(depth: np.ndarray, atol: float = None, rtol: float = None, kernel
 
 def depth_aliasing(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
     """
-    Compute the map that indicates the aliasing of a depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
+    Compute the map that indicates the aliasing of x depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
     Args:
         depth (np.ndarray): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
@@ -188,7 +225,7 @@ def image_mesh(
     mask: np.ndarray = None
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
+    Get x quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
     Args:
         width (int): image width
@@ -226,7 +263,7 @@ def image_mesh_from_depth(
     return_indices: bool = False
 ) -> Tuple[np.ndarray, ...]:
     """
-    Get a triangle mesh by lifting depth map to 3D.
+    Get x triangle mesh by lifting depth map to 3D.
 
     Args:
         depth (np.ndarray): [H, W] depth map
@@ -278,7 +315,7 @@ def image_mesh_from_depth(
 
 
 def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, color_b: np.ndarray) -> np.ndarray:
-    """get a chessboard image
+    """get x chessboard image
 
     Args:
         width (int): image width
@@ -298,7 +335,7 @@ def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, col
 
 def cube():
     """
-    Get a cube mesh of size 1 centered at origin.
+    Get x cube mesh of size 1 centered at origin.
 
     Returns:
         vertices (np.ndarray): shape (8, 3) 
@@ -323,7 +360,7 @@ def cube():
 
 def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float = 1.0) -> Tuple[np.ndarray, ...]:
     """
-    Get a triangle mesh of camera frustum.
+    Get x triangle mesh of camera frustum.
     """
     assert extrinsics.shape == (4, 4) and intrinsics.shape == (3, 3)
     vertices = transforms.unproject_cv(

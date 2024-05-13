@@ -9,6 +9,9 @@ from ._helpers import batched
 
 
 __all__ = [
+    'sliding_window_1d',
+    'sliding_window_2d',
+    'sliding_window_nd',
     'image_uv',
     'image_mesh',
     'chessboard',
@@ -20,6 +23,30 @@ __all__ = [
     'masked_max',
     'bounding_rect'
 ]
+
+
+def sliding_window_1d(x: torch.Tensor, window_size: int, stride: int = 1, dim: int = -1) -> torch.Tensor:
+    """
+    Sliding window view of the input tensor. The dimension of the sliding window is appended to the end of the input tensor's shape.
+    NOTE: Since Pytorch has `unfold` function, 1D sliding window view is just a wrapper of it.
+    """
+    return x.unfold(dim, window_size, stride)
+
+
+def sliding_window_nd(x: torch.Tensor, window_size: Tuple[int, ...], stride: Tuple[int, ...], dim: Tuple[int, ...]) -> torch.Tensor:
+    dim = [dim[i] % x.ndim for i in range(len(dim))]
+    assert len(window_size) == len(stride) == len(dim)
+    for i in range(len(window_size)):
+        x = sliding_window_1d(x, window_size[i], stride[i], dim[i])
+    return x
+
+
+def sliding_window_2d(x: torch.Tensor, window_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], dim: Union[int, Tuple[int, int]] = (-2, -1)) -> torch.Tensor:
+    if isinstance(window_size, int):
+        window_size = (window_size, window_size)
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    return sliding_window_nd(x, window_size, stride, dim)
 
 
 def image_uv(height: int, width: int, left: int = None, top: int = None, right: int = None, bottom: int = None, device: torch.device = None, dtype: torch.dtype = None) -> torch.Tensor:
