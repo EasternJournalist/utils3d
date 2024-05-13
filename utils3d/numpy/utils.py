@@ -38,7 +38,7 @@ def max_pool_1d(a: np.ndarray, kernel_size: int, stride: int, padding: int = 0, 
 
 def max_pool_nd(a: np.ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
     for i in range(a.ndim):
-        a = max_pool_2d(a, kernel_size[i], stride[i], padding[i], axis[i])
+        a = max_pool_1d(a, kernel_size[i], stride[i], padding[i], axis[i])
     return a
 
 
