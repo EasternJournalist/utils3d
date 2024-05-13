@@ -1,10 +1,16 @@
 import numpy as np
-from typing import Tuple
+from typing import *
+
 from ._helpers import batched
 from . import transforms
 from . import mesh
 
 __all__ = [
+    'max_pool_1d',
+    'max_pool_2d',
+    'max_pool_nd',
+    'depth_edge',
+    'depth_aliasing',
     'interpolate',
     'image_scrcoord',
     'image_uv',
@@ -15,6 +21,88 @@ __all__ = [
     'camera_frustum',
     'to4x4'
 ]
+
+
+def max_pool_1d(a: np.ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
+    axis = axis % a.ndim
+    if padding > 0:
+        fill_value = np.nan if a.dtype.kind == 'f' else np.iinfo(a.dtype).min
+        padding_arr = np.full((*a.shape[:axis], padding, *a.shape[axis + 1:]), fill_value=fill_value, dtype=a.dtype)
+        a = np.concatenate([padding_arr, a, padding_arr], axis=axis)
+    shape = (*a.shape[:axis], (a.shape[axis] - kernel_size + 1) // stride, kernel_size, *a.shape[axis + 1:])
+    strides = (*a.strides[:axis], stride * a.strides[axis], a.strides[axis], *a.strides[axis + 1:])
+    a_rolling = np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+    max_pool = np.nanmax(a_rolling, axis=axis + 1)
+    return max_pool
+
+
+def max_pool_nd(a: np.ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
+    for i in range(a.ndim):
+        a = max_pool_2d(a, kernel_size[i], stride[i], padding[i], axis[i])
+    return a
+
+
+def max_pool_2d(a: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
+    if isinstance(kernel_size, int):
+        kernel_size = (kernel_size, kernel_size)
+    if isinstance(stride, int):
+        stride = (stride, stride)
+    if isinstance(padding, int):
+        padding = (padding, padding)
+    axis = tuple(axis)
+    return max_pool_nd(a, kernel_size, stride, padding, axis)
+
+
+def depth_edge(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
+    """
+    Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
+    
+    Args:
+        depth (np.ndarray): shape (..., height, width), linear depth map
+        atol (float): absolute tolerance
+        rtol (float): relative tolerance
+
+    Returns:
+        edge (np.ndarray): shape (..., height, width) of dtype torch.bool
+    """
+    if mask is None:
+        diff = (max_pool_2d(depth, kernel_size, stride=1, padding=kernel_size // 2) + max_pool_2d(-depth, kernel_size, stride=1, padding=kernel_size // 2))
+    else:
+        diff = (max_pool_2d(np.where(mask, depth, -np.inf), kernel_size, stride=1, padding=kernel_size // 2) + max_pool_2d(np.where(mask, -depth, -np.inf), kernel_size, stride=1, padding=kernel_size // 2))
+
+    edge = np.zeros_like(depth, dtype=bool)
+    if atol is not None:
+        edge |= diff > atol
+    if rtol is not None:
+        edge |= diff / depth > rtol
+    return edge
+
+
+def depth_aliasing(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
+    """
+    Compute the map that indicates the aliasing of a depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
+    Args:
+        depth (np.ndarray): shape (..., height, width), linear depth map
+        atol (float): absolute tolerance
+        rtol (float): relative tolerance
+
+    Returns:
+        edge (np.ndarray): shape (..., height, width) of dtype torch.bool
+    """
+    if mask is None:
+        diff_max = max_pool_2d(depth, kernel_size, stride=1, padding=kernel_size // 2) - depth
+        diff_min = max_pool_2d(-depth, kernel_size, stride=1, padding=kernel_size // 2) + depth
+    else:
+        diff_max = max_pool_2d(np.where(mask, depth, -np.inf), kernel_size, stride=1, padding=kernel_size // 2) - depth
+        diff_min = max_pool_2d(np.where(mask, -depth, -np.inf), kernel_size, stride=1, padding=kernel_size // 2) + depth
+    diff = np.minimum(diff_max, diff_min)
+
+    edge = np.zeros_like(depth, dtype=bool)
+    if atol is not None:
+        edge |= diff > atol
+    if rtol is not None:
+        edge |= diff / depth > rtol
+    return edge
 
 
 def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
