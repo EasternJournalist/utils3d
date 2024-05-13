@@ -40,6 +40,7 @@ def sliding_window_1d(x: np.ndarray, window_size: int, stride: int, axis: int = 
     Returns:
         a_sliding (np.ndarray): view of the input array with shape (..., n_windows, ..., kernel_size), where n_windows = (axis_size - kernel_size + 1) // stride
     """
+    assert x.shape[axis] >= window_size, f"kernel_size ({window_size}) is larger than axis_size ({x.shape[axis]})"
     axis = axis % x.ndim
     shape = (*x.shape[:axis], (x.shape[axis] - window_size + 1) // stride, *x.shape[axis + 1:], window_size)
     strides = (*x.strides[:axis], stride * x.strides[axis], *x.strides[axis + 1:], x.strides[axis])
@@ -49,7 +50,7 @@ def sliding_window_1d(x: np.ndarray, window_size: int, stride: int, axis: int = 
 
 def sliding_window_nd(x: np.ndarray, window_size: Tuple[int,...], stride: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
     axis = [axis[i] % x.ndim for i in range(len(axis))]
-    for i in range(x.ndim):
+    for i in range(len(axis)):
         x = sliding_window_1d(x, window_size[i], stride[i], axis[i])
     return x
 

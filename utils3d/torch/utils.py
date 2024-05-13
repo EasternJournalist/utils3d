@@ -72,10 +72,9 @@ def image_uv(height: int, width: int, left: int = None, top: int = None, right: 
     if bottom is None: bottom = height
     u = torch.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, device=device, dtype=dtype)
     v = torch.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, device=device, dtype=dtype)
-    return torch.cat([
-        u[None, :, None].repeat(bottom - top, axis=0),
-        v[:, None, None].repeat(right - left, axis=1)
-    ], dim=2)
+    u, v = torch.meshgrid(u, v, indexing='xy')
+    uv = torch.stack([u, v], dim=-1)
+    return uv
 
 
 def image_mesh(height: int, width: int, mask: torch.Tensor = None, device: torch.device = None, dtype: torch.dtype = None) -> Tuple[torch.Tensor, torch.Tensor]:
