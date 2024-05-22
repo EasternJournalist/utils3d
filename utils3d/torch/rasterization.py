@@ -42,7 +42,7 @@ def rasterize_vertex_attr(
     height: int,
     model: torch.Tensor = None,
     view: torch.Tensor = None,
-    perspective: torch.Tensor = None,
+    projection: torch.Tensor = None,
     antialiasing: Union[bool, List[int]] = True,
     diff_attrs: Union[None, List[int]] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
@@ -58,7 +58,7 @@ def rasterize_vertex_attr(
         height (int): height of the output image
         model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
         view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
-        perspective (torch.Tensor, optional): ([B,] 4, 4) perspective matrix. Defaults to None (identity).
+        projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
         antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
         diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
@@ -79,7 +79,7 @@ def rasterize_vertex_attr(
     else:
         raise ValueError(f'Wrong shape of vertices: {vertices.shape}')
     
-    mvp = perspective if perspective is not None else torch.eye(4).to(vertices)
+    mvp = projection if projection is not None else torch.eye(4).to(vertices)
     if view is not None:
         mvp = mvp @ view
     if model is not None:

@@ -108,7 +108,9 @@ def rasterize_vertex_attr(
     attr: np.ndarray,
     width: int,
     height: int,
-    mvp: np.ndarray = None,
+    model: np.ndarray = None,
+    view: np.ndarray = None,
+    projection: np.ndarray = None,
     cull_backface: bool = True,
     return_depth: bool = False,
     ssaa: int = 1,
@@ -140,6 +142,12 @@ def rasterize_vertex_attr(
 
     C = attr.shape[1]
     prog = ctx.program_vertex_attribute(C)
+
+    mvp = projection if projection is not None else np.eye(4, np.float32)
+    if view is not None:
+        mvp = mvp @ view
+    if model is not None:
+        mvp = mvp @ model
 
     # Create buffers
     ibo = ctx.mgl_ctx.buffer(np.ascontiguousarray(faces, dtype='i4'))

@@ -1,5 +1,5 @@
 """
-A package for common utility functions in 3D computer graphics and vision.
+A package for common utility functions in 3D computer graphics and vision. Providing numpy utilities in `utils3d.numpy`, PyTorch utilities in `utils3d.torch`, and IO utilities in `utils3d.io`.
 """
 
 import importlib

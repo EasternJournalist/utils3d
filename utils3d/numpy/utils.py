@@ -1,5 +1,6 @@
 import numpy as np
 from typing import *
+from numbers import Number
 
 from ._helpers import batched
 from . import transforms
@@ -75,17 +76,17 @@ def max_pool_1d(x: np.ndarray, kernel_size: int, stride: int, padding: int = 0, 
 
 
 def max_pool_nd(x: np.ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
-    for i in range(x.ndim):
+    for i in range(len(axis)):
         x = max_pool_1d(x, kernel_size[i], stride[i], padding[i], axis[i])
     return x
 
 
 def max_pool_2d(x: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
-    if isinstance(kernel_size, int):
+    if isinstance(kernel_size, Number):
         kernel_size = (kernel_size, kernel_size)
-    if isinstance(stride, int):
+    if isinstance(stride, Number):
         stride = (stride, stride)
-    if isinstance(padding, int):
+    if isinstance(padding, Number):
         padding = (padding, padding)
     axis = tuple(axis)
     return max_pool_nd(x, kernel_size, stride, padding, axis)
