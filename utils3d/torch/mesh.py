@@ -203,7 +203,7 @@ def remove_unreferenced_vertices(
     """
     P = faces.shape[-1]
     fewer_indices, inv_map = torch.unique(faces, return_inverse=True)
-    faces = inv_map.astype(torch.int32).reshape(-1, P)
+    faces = inv_map.to(torch.int32).reshape(-1, P)
     ret = [faces]
     for attr in vertice_attrs:
         ret.append(attr[fewer_indices])
