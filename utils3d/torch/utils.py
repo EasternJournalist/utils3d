@@ -13,6 +13,7 @@ __all__ = [
     'sliding_window_2d',
     'sliding_window_nd',
     'image_uv',
+    'image_pixel_center',
     'image_mesh',
     'chessboard',
     'depth_edge',
@@ -75,6 +76,43 @@ def image_uv(height: int, width: int, left: int = None, top: int = None, right: 
     u, v = torch.meshgrid(u, v, indexing='xy')
     uv = torch.stack([u, v], dim=-1)
     return uv
+
+
+def image_pixel_center(
+    height: int,
+    width: int,
+    left: int = None,
+    top: int = None,
+    right: int = None,
+    bottom: int = None,
+    dtype: torch.dtype = None,
+    device: torch.device = None
+) -> torch.Tensor:
+    """
+    Get image pixel center coordinates, ranging in [0, width] and [0, height].
+    `image[i, j]` has pixel center coordinates `(j + 0.5, i + 0.5)`.
+
+    >>> image_pixel_center(10, 10):
+    [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
+     [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
+      ...             ...                  ...
+    [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
+
+    Args:
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        np.ndarray: shape (height, width, 2)
+    """
+    if left is None: left = 0
+    if top is None: top = 0
+    if right is None: right = width
+    if bottom is None: bottom = height
+    u = torch.linspace(left + 0.5, right - 0.5, right - left, dtype=dtype, device=device)
+    v = torch.linspace(top + 0.5, bottom - 0.5, bottom - top, dtype=dtype, device=device)
+    u, v = torch.meshgrid(u, v, indexing='xy')
+    return torch.stack([u, v], dim=2)
 
 
 def image_mesh(height: int, width: int, mask: torch.Tensor = None, device: torch.device = None, dtype: torch.dtype = None) -> Tuple[torch.Tensor, torch.Tensor]:

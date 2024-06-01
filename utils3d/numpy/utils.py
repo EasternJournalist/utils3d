@@ -18,6 +18,7 @@ __all__ = [
     'interpolate',
     'image_scrcoord',
     'image_uv',
+    'image_pixel_center',
     'image_mesh',
     'image_mesh_from_depth',
     'chessboard',
@@ -162,11 +163,11 @@ def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: n
 
 
 def image_scrcoord(
-        width: int,
-        height: int,
-    ) -> np.ndarray:
+    width: int,
+    height: int,
+) -> np.ndarray:
     """
-    Get image space coordinates, ranging in [0, 1].
+    Get OpenGL's screen space coordinates, ranging in [0, 1].
     [0, 0] is the bottom-left corner of the image.
 
     Args:
@@ -215,10 +216,44 @@ def image_uv(
     if bottom is None: bottom = height
     u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=dtype)
     v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=dtype)
-    return np.concatenate([
-        u[None, :, None].repeat(bottom - top, axis=0),
-        v[:, None, None].repeat(right - left, axis=1)
-    ], axis=2)
+    u, v = np.meshgrid(u, v, indexing='xy')
+    return np.stack([u, v], axis=2)
+
+
+def image_pixel_center(
+    height: int,
+    width: int,
+    left: int = None,
+    top: int = None,
+    right: int = None,
+    bottom: int = None,
+    dtype: np.dtype = np.float32
+) -> np.ndarray:
+    """
+    Get image pixel center coordinates, ranging in [0, width] and [0, height].
+    `image[i, j]` has pixel center coordinates `(j + 0.5, i + 0.5)`.
+
+    >>> image_pixel_center(10, 10):
+    [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
+     [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
+      ...             ...                  ...
+    [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
+
+    Args:
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        np.ndarray: shape (height, width, 2)
+    """
+    if left is None: left = 0
+    if top is None: top = 0
+    if right is None: right = width
+    if bottom is None: bottom = height
+    u = np.linspace(left + 0.5, right - 0.5, right - left, dtype=dtype)
+    v = np.linspace(top + 0.5, bottom - 0.5, bottom - top, dtype=dtype)
+    u, v = np.meshgrid(u, v, indexing='xy')
+    return np.stack([u, v], axis=2)
 
 
 def image_mesh(
