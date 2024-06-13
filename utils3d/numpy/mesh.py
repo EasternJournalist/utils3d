@@ -12,7 +12,8 @@ __all__ = [
     'remove_corrupted_faces',
     'merge_duplicate_vertices',
     'remove_unreferenced_vertices',
-    'subdivide_mesh_simple'
+    'subdivide_mesh_simple',
+    'mesh_relations'
 ]
 
 
@@ -251,10 +252,10 @@ def remove_unreferenced_vertices(
 
 
 def subdivide_mesh_simple(
-        vertices: np.ndarray,
-        faces: np.ndarray, 
-        n: int = 1
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    vertices: np.ndarray,
+    faces: np.ndarray, 
+    n: int = 1
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
     NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
@@ -284,3 +285,44 @@ def subdivide_mesh_simple(
             np.stack([n_vertices + uni_inv[0], n_vertices + uni_inv[1], n_vertices + uni_inv[2]], axis=1),
         ], axis=0)
     return vertices, faces
+
+
+def mesh_relations(
+    faces: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate the relation between vertices and faces.
+    NOTE: The input mesh must be a manifold triangle mesh.
+
+    Args:
+        vertices (np.ndarray): [N, 3] 3-dimensional vertices
+        faces (np.ndarray): [T, 3] triangular face indices
+
+    Returns:
+        edges (np.ndarray): [E, 2] edge indices
+        edge2face (np.ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
+        face2edge (np.ndarray): [T, 3] face to edge relation
+        face2face (np.ndarray): [T, 3] face to face relation
+    """
+    T = faces.shape[0]
+    edges = np.stack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=1).reshape(-1, 2)  # [3T, 2]
+    edges = np.sort(edges, axis=1)  # [3T, 2]
+    edges, face2edge, occurence = np.unique(edges, axis=0, return_inverse=True, return_counts=True) # [E, 2], [3T], [E]
+    E = edges.shape[0]
+    assert np.all(occurence <= 2), "The input mesh is not a manifold mesh."
+
+    # Edge to face relation
+    padding = np.arange(E, dtype=np.int32)[occurence == 1]
+    padded_face2edge = np.concatenate([face2edge, padding], axis=0)  # [2E]
+    edge2face = np.argsort(padded_face2edge, kind='stable').reshape(-1, 2) // 3  # [E, 2]
+    edge2face_valid = edge2face[:, 1] < T   # [E]
+    edge2face[~edge2face_valid, 1] = -1
+
+    # Face to edge relation
+    face2edge = face2edge.reshape(-1, 3)  # [T, 3]
+
+    # Face to face relation
+    face2face = edge2face[face2edge]  # [T, 3, 2]
+    face2face = face2face[face2face != np.arange(T)[:, None, None]].reshape(T, 3)  # [T, 3]
+    
+    return edges, edge2face, face2edge, face2face
