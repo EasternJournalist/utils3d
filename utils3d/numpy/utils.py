@@ -19,6 +19,7 @@ __all__ = [
     'image_scrcoord',
     'image_uv',
     'image_pixel_center',
+    'image_pixel',
     'image_mesh',
     'image_mesh_from_depth',
     'chessboard',
@@ -252,6 +253,41 @@ def image_pixel_center(
     if bottom is None: bottom = height
     u = np.linspace(left + 0.5, right - 0.5, right - left, dtype=dtype)
     v = np.linspace(top + 0.5, bottom - 0.5, bottom - top, dtype=dtype)
+    u, v = np.meshgrid(u, v, indexing='xy')
+    return np.stack([u, v], axis=2)
+
+def image_pixel(
+    height: int,
+    width: int,
+    left: int = None,
+    top: int = None,
+    right: int = None,
+    bottom: int = None,
+    dtype: np.dtype = np.int32
+) -> np.ndarray:
+    """
+    Get image pixel coordinates grid, ranging in [0, width - 1] and [0, height - 1].
+    `image[i, j]` has pixel center coordinates `(j, i)`.
+
+    >>> image_pixel_center(10, 10):
+    [[[0, 0], [1, 0], ..., [9, 0]],
+     [[0, 1.5], [1, 1], ..., [9, 1]],
+      ...             ...                  ...
+    [[0, 9.5], [1, 9], ..., [9, 9 ]]]
+
+    Args:
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        np.ndarray: shape (height, width, 2)
+    """
+    if left is None: left = 0
+    if top is None: top = 0
+    if right is None: right = width
+    if bottom is None: bottom = height
+    u = np.arange(left, right, dtype=dtype)
+    v = np.arange(top, bottom, dtype=dtype)
     u, v = np.meshgrid(u, v, indexing='xy')
     return np.stack([u, v], axis=2)
 

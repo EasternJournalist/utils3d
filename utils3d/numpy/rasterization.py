@@ -232,13 +232,13 @@ def texture(
     screen_quad_vao = ctx.mgl_ctx.vertex_array(ctx.program_texture(texture.shape[2]), [(screen_quad_vbo, '2f4', 'in_vert')], index_buffer=screen_quad_ibo, index_element_size=4)
 
     # Create texture, set filter and bind. TODO: min mag filter, mipmap
-    texture_tex = ctx.mgl_ctx.texture((texture.shape[1], texture.shape[0]), texture.shape[2], dtype=texture_dtype, data=texture)
+    texture_tex = ctx.mgl_ctx.texture((texture.shape[1], texture.shape[0]), texture.shape[2], dtype=texture_dtype, data=np.ascontiguousarray(texture))
     if interpolation == 'linear':
         texture_tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
     elif interpolation == 'nearest':
         texture_tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
     texture_tex.use(location=0)
-    texture_uv = ctx.mgl_ctx.texture((width, height), 2, dtype='f4', data=uv.astype('f4', copy=False))
+    texture_uv = ctx.mgl_ctx.texture((width, height), 2, dtype='f4', data=np.ascontiguousarray(uv.astype('f4', copy=False)))
     texture_uv.filter = (moderngl.NEAREST, moderngl.NEAREST)
     texture_uv.use(location=1)
 

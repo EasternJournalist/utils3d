@@ -28,6 +28,7 @@ __all__ = [
     'project_cv',
     'project_gl',
     'quaternion_to_matrix',
+    'axis_angle_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',
     'euler_axis_angle_rotation',
@@ -808,6 +809,33 @@ def rotation_matrix_from_vectors(v1: np.ndarray, v2: np.ndarray):
     K = skew_symmetric(v)
     R = I + K + (1 / (1 + c)).astype(v1.dtype)[None, None] * (K @ K)    # Avoid numpy's default type casting for scalars
     return R
+
+
+def axis_angle_to_matrix(axis_angle: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+    """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
+
+    Args:
+        axis_angle (np.ndarray): shape (..., 3), axis-angle vcetors
+
+    Returns:
+        np.ndarray: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters
+    """
+    batch_shape = axis_angle.shape[:-1]
+    dtype = axis_angle.dtype
+
+    angle = np.linalg.norm(axis_angle, axis=-1, keepdims=True) 
+    axis = axis_angle / (angle + eps)
+
+    cos = np.cos(angle)[..., None, :]
+    sin = np.sin(angle)[..., None, :]
+
+    rx, ry, rz = np.split(axis, 3, axis=-1)
+    zeros = np.zeros((*batch_shape, 1), dtype=dtype)
+    K = np.concatenate([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], axis=-1).reshape((*batch_shape, 3, 3))
+
+    ident = np.eye(3, dtype=dtype)
+    rot_mat = ident + sin * K + (1 - cos) * (K @ K)
+    return rot_mat
 
 
 def ray_intersection(p1: np.ndarray, d1: np.ndarray, p2: np.ndarray, d2: np.ndarray):

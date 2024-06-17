@@ -7,5 +7,5 @@ in vec2 scr_coord;
 out vecN tex_color;
 
 void main() {
-    tex_color = texture(tex, texture(uv, scr_coord).xy);
+    tex_color = vecN(texture(tex, texture(uv, scr_coord).xy));
 }

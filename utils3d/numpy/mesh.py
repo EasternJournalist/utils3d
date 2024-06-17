@@ -13,7 +13,8 @@ __all__ = [
     'merge_duplicate_vertices',
     'remove_unreferenced_vertices',
     'subdivide_mesh_simple',
-    'mesh_relations'
+    'mesh_relations',
+    'flatten_mesh_indices'
 ]
 
 
@@ -295,7 +296,6 @@ def mesh_relations(
     NOTE: The input mesh must be a manifold triangle mesh.
 
     Args:
-        vertices (np.ndarray): [N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
 
     Returns:
@@ -326,3 +326,30 @@ def mesh_relations(
     face2face = face2face[face2face != np.arange(T)[:, None, None]].reshape(T, 3)  # [T, 3]
     
     return edges, edge2face, face2edge, face2face
+
+
+@overload
+def flatten_mesh_indices(faces1: np.ndarray, attr1: np.ndarray, *other_faces_attrs_pairs: np.ndarray) -> Tuple[np.ndarray, ...]: 
+    """
+    Rearrange the indices of a mesh to a flattened version. Vertices will be no longer shared.
+
+    ### Parameters:
+    - `faces1`: [T, P] face indices of the first attribute
+    - `attr1`: [N1, ...] attributes of the first mesh
+    - ...
+
+    ### Returns:
+    - `faces`: [T, P] flattened face indices, contigous from 0 to T * P - 1
+    - `attr1`: [T * P, ...] attributes of the first mesh, where every P values correspond to a face
+    _ ...
+    """
+def flatten_mesh_indices(*args: np.ndarray) -> Tuple[np.ndarray, ...]:
+    assert len(args) % 2 == 0, "The number of arguments must be even."
+    T, P = args[0].shape
+    assert all(arg.shape[0] == T and arg.shape[1] == P for arg in args[::2]), "The faces must have the same shape."
+    attr_flat = []
+    for faces_, attr_ in zip(args[::2], args[1::2]):
+        attr_flat_ = attr_[faces_].reshape(-1, *attr_.shape[1:])
+        attr_flat.append(attr_flat_)
+    faces_flat = np.arange(T * P, dtype=np.int32).reshape(T, P)
+    return faces_flat, *attr_flat

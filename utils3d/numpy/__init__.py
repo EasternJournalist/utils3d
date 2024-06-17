@@ -1,3 +1,6 @@
+"""
+3D utility functions workings with NumPy.
+"""
 import importlib
 import itertools
 import numpy
@@ -14,7 +17,8 @@ __modules_all__ = {
         'merge_duplicate_vertices',
         'remove_unreferenced_vertices',
         'subdivide_mesh_simple',
-        'mesh_relations'
+        'mesh_relations',
+        'flatten_mesh_indices'
     ],
     'quadmesh': [
         'calc_quad_candidates',
@@ -38,6 +42,7 @@ __modules_all__ = {
         'image_scrcoord',
         'image_uv',
         'image_pixel_center',
+        'image_pixel',
         'image_mesh',
         'image_mesh_from_depth',
         'chessboard',
@@ -69,6 +74,7 @@ __modules_all__ = {
         'project_cv',
         'project_gl',
         'quaternion_to_matrix',
+        'axis_angle_to_matrix',
         'matrix_to_quaternion',
         'extrinsics_to_essential',
         'euler_axis_angle_rotation',
