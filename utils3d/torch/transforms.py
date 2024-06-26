@@ -25,7 +25,7 @@ __all__ = [
     'pixel_to_uv',
     'pixel_to_ndc',
     'project_depth',
-    'linearize_depth',
+    'depth_buffer_to_linear',
     'project_gl',
     'project_cv',
     'unproject_gl',
@@ -484,7 +484,7 @@ def project_depth(
 
 
 @batched(0,0,0)
-def linearize_depth(
+def depth_buffer_to_linear(
         depth: torch.Tensor,
         near: Union[float, torch.Tensor],
         far: Union[float, torch.Tensor]

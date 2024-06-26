@@ -68,7 +68,7 @@ __modules_all__ = {
         'pixel_to_uv',
         'pixel_to_ndc',
         'project_depth',
-        'linearize_depth',
+        'depth_buffer_to_linear',
         'project_gl',
         'project_cv',
         'unproject_gl',

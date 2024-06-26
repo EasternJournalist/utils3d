@@ -13,6 +13,7 @@ __all__ = [
     'view_look_at',
     'extrinsics_look_at',
     'perspective_to_intrinsics',
+    'perspective_to_near_far',
     'intrinsics_to_perspective',
     'extrinsics_to_view',
     'view_to_extrinsics',
@@ -22,7 +23,7 @@ __all__ = [
     'pixel_to_ndc',
     'uv_to_pixel',
     'project_depth',
-    'linearize_depth',
+    'depth_buffer_to_linear',
     'unproject_cv',
     'unproject_gl',
     'project_cv',
@@ -248,7 +249,6 @@ def extrinsics_look_at(
     ], axis=-2)
 
 
-@batched(2)
 def perspective_to_intrinsics(
     perspective: np.ndarray
 ) -> np.ndarray:
@@ -261,11 +261,21 @@ def perspective_to_intrinsics(
     Returns:
         (np.ndarray): shape [..., 3, 3] OpenCV intrinsics
     """
-    assert np.allclose(perspective[:, [0, 1, 3], 3], 0), "The perspective matrix is not a projection matrix"
     ret = np.array([[0.5, 0., 0.5], [0., -0.5, 0.5], [0., 0., 1.]], dtype=perspective.dtype) \
-        @ perspective[:, [0, 1, 3], :3] \
+        @ perspective[..., [0, 1, 3], :3] \
         @ np.diag(np.array([1, -1, -1], dtype=perspective.dtype))
     return ret
+
+
+def perspective_to_near_far(perspective: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get near and far planes from OpenGL perspective matrix
+
+    Args:
+    """
+    a, b = perspective[..., 2, 2], perspective[..., 2, 3]
+    near, far =  b / (a - 1), b / (a + 1)
+    return near, far
 
 
 @batched(2,0,0)
@@ -487,23 +497,23 @@ def project_depth(
 
 
 @batched(0,0,0)
-def linearize_depth(
-        depth: np.ndarray,
-        near: Union[float, np.ndarray],
-        far: Union[float, np.ndarray]
-    ) -> np.ndarray:
+def depth_buffer_to_linear(
+    depth_buffer: np.ndarray,
+    near: Union[float, np.ndarray],
+    far: Union[float, np.ndarray]
+) -> np.ndarray:
     """
-    Linearize depth value to linear depth
+    OpenGL depth buffer to linear depth
 
     Args:
-        depth (np.ndarray): [...] depth value
+        depth_buffer (np.ndarray): [...] depth value
         near (float | np.ndarray): [...] near plane to clip
         far (float | np.ndarray): [...] far plane to clip
 
     Returns:
         (np.ndarray): [..., 1] linear depth
     """
-    return near * far / (far - (far - near) * depth)
+    return near * far / (far - (far - near) * depth_buffer)
 
 
 @batched(2,2,2,2)

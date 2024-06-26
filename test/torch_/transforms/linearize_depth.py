@@ -23,7 +23,7 @@ def run():
         far = torch.tensor(far, device=device)
         depth = torch.tensor(depth, device=device)
         
-        actual = utils3d.torch.linearize_depth(
+        actual = utils3d.torch.depth_buffer_to_linear(
             utils3d.torch.project_depth(depth, near, far),
             near, far
         ).cpu().numpy()

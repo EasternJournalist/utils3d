@@ -18,7 +18,7 @@ def run():
         
         expected = depth
         
-        actual = utils3d.numpy.linearize_depth(
+        actual = utils3d.numpy.depth_buffer_to_linear(
             utils3d.numpy.project_depth(depth, near, far),
             near, far
         )

@@ -275,7 +275,7 @@ def warp_image_by_depth(
     if (return_dr or return_uv) and image is not None:
         output_image, output_uv = output_image[..., :-2, :, :], output_image[..., -2:, :, :]
 
-    output_depth = transforms.linearize_depth(screen_depth, near=near, far=far) * output_mask
+    output_depth = transforms.depth_buffer_to_linear(screen_depth, near=near, far=far) * output_mask
     output_image = output_image * output_mask.unsqueeze(1)
 
     outs = [output_image, output_depth, output_mask]
