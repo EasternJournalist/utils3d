@@ -456,21 +456,3 @@ def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float 
     ], dtype=np.int32)
     return vertices, edges, faces
 
-
-def to4x4(R: np.ndarray, t: np.ndarray) -> np.ndarray:
-    """
-    Convert rotation matrix and translation vector to 4x4 transformation matrix.
-
-    Args:
-        R (np.ndarray): [..., 3, 3] rotation matrix
-        t (np.ndarray): [..., 3] translation vector
-
-    Returns:
-        np.ndarray: [..., 4, 4] transformation matrix
-    """
-    assert R.shape[:-2] == t.shape[:-1]
-    assert R.shape[-1] == 3 and R.shape[-2] == 3
-    return np.concatenate([
-        np.concatenate([R, t[:, None]], axis=1), 
-        np.concatenate([np.zeros_like(t), np.ones_like(t[..., :1])], axis=-1)[..., None, :]
-    ], axis=-2)

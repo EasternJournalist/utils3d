@@ -48,7 +48,6 @@ __modules_all__ = {
         'chessboard',
         'cube',
         'camera_frustum',
-        'to4x4'
     ],
     'transforms': [
         'perspective',
@@ -83,6 +82,17 @@ __modules_all__ = {
         'skew_symmetric',
         'rotation_matrix_from_vectors',
         'ray_intersection',
+        'se3_matrix',
+        'slerp_quaternion',
+        'slerp_vector',
+        'lerp',
+        'lerp_se3_matrix',
+        'piecewise_lerp',
+        'piecewise_lerp_se3_matrix',
+        'apply_transform'
+    ],
+    'spline': [
+        'linear_spline_interpolate',
     ],
     'rasterization': [
         'RastContext',
@@ -118,3 +128,4 @@ if __name__ == '__main__':
     from .mesh import *
     from .utils import *
     from .rasterization import *
+    from .spline import *

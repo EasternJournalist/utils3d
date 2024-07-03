@@ -1,18 +1,38 @@
+from typing import *
+
 import numpy as np
 
 
-def linear_spline(x: np.ndarray, t: np.ndarray, s: np.ndarray) -> np.ndarray:
+__all__ = ['linear_spline_interpolate']
+
+
+def linear_spline_interpolate(x: np.ndarray, t: np.ndarray, s: np.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> np.ndarray:
     """
     Linear spline interpolation.
 
     ### Parameters:
-    - `x`: np.ndarray, shape (..., n,): the x-coordinates of the data points.
-    - `t`: np.ndarray, shape (..., n,): the knot vector. NOTE: t must be sorted in ascending order.
-    - `s`: np.ndarray, shape (..., m,): the y-coordinates of the data points.
+    - `x`: np.ndarray, shape (n, d): the values of data points.
+    - `t`: np.ndarray, shape (n,): the times of the data points.
+    - `s`: np.ndarray, shape (m,): the times to be interpolated.
+    - `extrapolation_mode`: str, the mode of extrapolation. 'constant' means extrapolate the boundary values, 'linear' means extrapolate linearly.
     
     ### Returns:
-    - `y`: np.ndarray, shape (..., m): the interpolated values.
+    - `y`: np.ndarray, shape (..., m, d): the interpolated values.
     """
+    i = np.searchsorted(t, s, side='left')
+    if extrapolation_mode == 'constant':
+        prev = np.clip(i - 1, 0, len(t) - 1)
+        suc = np.clip(i, 0, len(t) - 1)
+    elif extrapolation_mode == 'linear':
+        prev = np.clip(i - 1, 0, len(t) - 2)
+        suc = np.clip(i, 1, len(t) - 1)
+    else:
+        raise ValueError(f'Invalid extrapolation_mode: {extrapolation_mode}')
+    
+    u = (s - t[prev]) / np.maximum(t[suc] - t[prev], 1e-12)
+    y = u * x[suc] + (1 - u) * x[prev]
+
+    return y
     
 
 
