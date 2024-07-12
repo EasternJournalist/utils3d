@@ -19,6 +19,7 @@ __all__ = [
     'depth_edge',
     'depth_aliasing',
     'image_mesh_from_depth',
+    'point_to_normal',
     'depth_to_normal',
     'masked_min',
     'masked_max',
@@ -228,6 +229,49 @@ def image_mesh_from_depth(
     return pts, faces
 
 
+@batched(3, 2, 2)
+def point_to_normal(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+    """
+    Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+
+    Args:
+        point (torch.Tensor): shape (..., height, width, 3), point map
+    Returns:
+        normal (torch.Tensor): shape (..., height, width, 3), normal map. 
+    """
+    has_mask = mask is not None
+
+    if mask is None:
+        mask = torch.ones_like(point[..., 0], dtype=torch.bool)
+    mask = F.pad(mask, (1, 1, 1, 1), mode='constant', value=0)
+
+    pts = F.pad(point.permute(0, 3, 1, 2), (1, 1, 1, 1), mode='constant', value=1).permute(0, 2, 3, 1)
+    up = pts[:, :-2, 1:-1, :] - pts[:, 1:-1, 1:-1, :]
+    left = pts[:, 1:-1, :-2, :] - pts[:, 1:-1, 1:-1, :]
+    down = pts[:, 2:, 1:-1, :] - pts[:, 1:-1, 1:-1, :]
+    right = pts[:, 1:-1, 2:, :] - pts[:, 1:-1, 1:-1, :]
+    normal = torch.stack([
+        torch.cross(up, left, dim=-1),
+        torch.cross(left, down, dim=-1),
+        torch.cross(down, right, dim=-1),
+        torch.cross(right, up, dim=-1),
+    ])
+    valid = torch.stack([
+        mask[:, :-2, 1:-1] & mask[:, 1:-1, :-2],
+        mask[:, 1:-1, :-2] & mask[:, 2:, 1:-1],
+        mask[:, 2:, 1:-1] & mask[:, 1:-1, 2:],
+        mask[:, 1:-1, 2:] & mask[:, :-2, 1:-1],
+    ]) & mask[None, :, 1:-1, 1:-1]
+    normal = (normal * valid[..., None]).sum(dim=0)
+    normal = F.normalize(normal, dim=-1)
+    normal = normal
+    
+    if has_mask:
+        return normal, valid.any(dim=0)
+    else:
+        return normal
+
+
 @batched(2, 2, 2)
 def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
@@ -248,31 +292,8 @@ def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.T
 
     uv = image_uv(*depth.shape[-2:]).unsqueeze(0).to(depth)
     pts = transforms.unproject_cv(uv.reshape(-1, 2), depth.flatten(-2), intrinsics=intrinsics, extrinsics=transforms.view_to_extrinsics(torch.eye(4).to(depth))).unflatten(-2, (height, width))
-    pts = F.pad(pts.permute(0, 3, 1, 2), (1, 1, 1, 1), mode='constant', value=1).permute(0, 2, 3, 1)
-    up = pts[:, :-2, 1:-1, :] - pts[:, 1:-1, 1:-1, :]
-    left = pts[:, 1:-1, :-2, :] - pts[:, 1:-1, 1:-1, :]
-    down = pts[:, 2:, 1:-1, :] - pts[:, 1:-1, 1:-1, :]
-    right = pts[:, 1:-1, 2:, :] - pts[:, 1:-1, 1:-1, :]
-    normal = torch.stack([
-        torch.cross(up, left, dim=-1),
-        torch.cross(left, down, dim=-1),
-        torch.cross(down, right, dim=-1),
-        torch.cross(right, up, dim=-1),
-    ])
-    valid = torch.stack([
-        mask[:, :-2, 1:-1] & mask[:, 1:-1, :-2],
-        mask[:, 1:-1, :-2] & mask[:, 2:, 1:-1],
-        mask[:, 2:, 1:-1] & mask[:, 1:-1, 2:],
-        mask[:, 1:-1, 2:] & mask[:, :-2, 1:-1],
-    ]) & mask[None, :, 1:-1, 1:-1]
-    normal = (normal * valid[..., None]).sum(dim=0)
-    normal = F.normalize(normal, dim=-1)
-    normal = normal.permute(0, 3, 1, 2)
     
-    if has_mask:
-        return normal, valid.any(dim=0)
-    else:
-        return normal
+    return point_to_normal(pts, mask)
 
 
 def masked_min(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:

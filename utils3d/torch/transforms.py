@@ -11,7 +11,7 @@ __all__ = [
     'perspective',
     'perspective_from_fov',
     'perspective_from_fov_xy',
-    'intrinsics',
+    'intrinsics_from_focal_center',
     'intrinsics_from_fov',
     'intrinsics_from_fov_xy',
     'view_look_at',
@@ -131,12 +131,12 @@ def perspective_from_fov_xy(
 
 
 @batched(0,0,0,0)
-def intrinsics(
-        focal_x: Union[float, torch.Tensor],
-        focal_y: Union[float, torch.Tensor],
-        cx: Union[float, torch.Tensor],
-        cy: Union[float, torch.Tensor]
-    ) -> torch.Tensor:
+def intrinsics_from_focal_center(
+    fx: Union[float, torch.Tensor],
+    fy: Union[float, torch.Tensor],
+    cx: Union[float, torch.Tensor],
+    cy: Union[float, torch.Tensor]
+) -> torch.Tensor:
     """
     Get OpenCV intrinsics matrix
 
@@ -149,23 +149,20 @@ def intrinsics(
     Returns:
         (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
     """
-    N = focal_x.shape[0]
-    ret = torch.zeros((N, 3, 3), dtype=focal_x.dtype, device=focal_x.device)
-    ret[:, 0, 0] = focal_x
-    ret[:, 1, 1] = focal_y
-    ret[:, 0, 2] = cx
-    ret[:, 1, 2] = cy
-    ret[:, 2, 2] = 1.
+    N = fx.shape[0]
+    ret = torch.zeros((N, 3, 3), dtype=fx.dtype, device=fx.device)
+    zeros, ones = torch.zeros(N, dtype=fx.dtype, device=fx.device), torch.ones(N, dtype=fx.dtype, device=fx.device)
+    ret = torch.stack([fx, zeros, cx, zeros, fy, cy, zeros, zeros, ones], dim=-1).unflatten(-1, (3, 3))
     return ret
 
 
 @batched(0, 0, 0, None)
 def intrinsics_from_fov(
-        fov: Union[float, torch.Tensor],
-        width: Union[int, torch.Tensor],
-        height: Union[int, torch.Tensor],
-        normalize: bool = False
-    ) -> torch.Tensor:
+    fov: Union[float, torch.Tensor],
+    width: Union[int, torch.Tensor],
+    height: Union[int, torch.Tensor],
+    normalize: bool = False
+) -> torch.Tensor:
     """
     Get OpenCV intrinsics matrix from field of view in largest dimension
 
@@ -181,7 +178,7 @@ def intrinsics_from_fov(
     focal = torch.maximum(width, height) / (2 * torch.tan(fov / 2))
     cx = width / 2
     cy = height / 2
-    ret = intrinsics(focal, focal, cx, cy)
+    ret = intrinsics_from_focal_center(focal, focal, cx, cy)
     if normalize:
         ret = normalize_intrinsics(ret, width, height)
     return ret
@@ -204,7 +201,7 @@ def intrinsics_from_fov_xy(
     focal_x = 0.5 / torch.tan(fov_x / 2)
     focal_y = 0.5 / torch.tan(fov_y / 2)
     cx = cy = 0.5
-    return intrinsics(focal_x, focal_y, cx, cy)
+    return intrinsics_from_focal_center(focal_x, focal_y, cx, cy)
 
 
 @batched(1,1,1)
