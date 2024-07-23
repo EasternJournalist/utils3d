@@ -256,6 +256,7 @@ def point_to_normal(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Ten
         torch.cross(down, right, dim=-1),
         torch.cross(right, up, dim=-1),
     ])
+    normal = F.normalize(normal, dim=-1)
     valid = torch.stack([
         mask[:, :-2, 1:-1] & mask[:, 1:-1, :-2],
         mask[:, 1:-1, :-2] & mask[:, 2:, 1:-1],
@@ -264,7 +265,6 @@ def point_to_normal(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Ten
     ]) & mask[None, :, 1:-1, 1:-1]
     normal = (normal * valid[..., None]).sum(dim=0)
     normal = F.normalize(normal, dim=-1)
-    normal = normal
     
     if has_mask:
         return normal, valid.any(dim=0)
