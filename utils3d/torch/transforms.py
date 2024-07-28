@@ -156,32 +156,50 @@ def intrinsics_from_focal_center(
     return ret
 
 
-@batched(0, 0, 0, None)
+@batched(0, 0, 0, 0, 0, 0)
 def intrinsics_from_fov(
-    fov: Union[float, torch.Tensor],
-    width: Union[int, torch.Tensor],
-    height: Union[int, torch.Tensor],
-    normalize: bool = False
+    fov_max: Union[float, torch.Tensor] = None,
+    fov_min: Union[float, torch.Tensor] = None,
+    fov_x: Union[float, torch.Tensor] = None,
+    fov_y: Union[float, torch.Tensor] = None,
+    width: Union[int, torch.Tensor] = None,
+    height: Union[int, torch.Tensor] = None,
 ) -> torch.Tensor:
     """
-    Get OpenCV intrinsics matrix from field of view in largest dimension
+    Get normalized OpenCV intrinsics matrix from given field of view.
+    You can provide either fov_max, fov_min, fov_x or fov_y
 
     Args:
-        fov (float | torch.Tensor): field of view in largest dimension
         width (int | torch.Tensor): image width
         height (int | torch.Tensor): image height
-        normalize (bool, optional): whether to normalize the intrinsics matrix. Defaults to False.
+        fov_max (float | torch.Tensor): field of view in largest dimension
+        fov_min (float | torch.Tensor): field of view in smallest dimension
+        fov_x (float | torch.Tensor): field of view in x axis
+        fov_y (float | torch.Tensor): field of view in y axis
 
     Returns:
         (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
     """
-    focal = torch.maximum(width, height) / (2 * torch.tan(fov / 2))
-    cx = width / 2
-    cy = height / 2
-    ret = intrinsics_from_focal_center(focal, focal, cx, cy)
-    if normalize:
-        ret = normalize_intrinsics(ret, width, height)
+    if fov_max is not None:
+        fx = torch.maximum(width, height) / width / (2 * torch.tan(fov_max / 2))
+        fy = torch.maximum(width, height) / height / (2 * torch.tan(fov_max / 2))
+    elif fov_min is not None:
+        fx = torch.minimum(width, height) / width / (2 * torch.tan(fov_min / 2))
+        fy = torch.minimum(width, height) / height / (2 * torch.tan(fov_min / 2))
+    elif fov_x is not None and fov_y is not None:
+        fx = 1 / (2 * torch.tan(fov_x / 2))
+        fy = 1 / (2 * torch.tan(fov_y / 2))
+    elif fov_x is not None:
+        fx = 1 / (2 * torch.tan(fov_x / 2))
+        fy = fx * width / height
+    elif fov_y is not None:
+        fy = 1 / (2 * torch.tan(fov_y / 2))
+        fx = fy * height / width
+    cx = 0.5
+    cy = 0.5
+    ret = intrinsics_from_focal_center(fx, fy, cx, cy)
     return ret
+
 
 
 def intrinsics_from_fov_xy(

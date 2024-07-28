@@ -22,6 +22,8 @@ __all__ = [
     'image_pixel',
     'image_mesh',
     'image_mesh_from_depth',
+    'depth_to_normal',
+    'point_to_normal',
     'chessboard',
     'cube',
     'camera_frustum',
@@ -145,6 +147,72 @@ def depth_aliasing(depth: np.ndarray, atol: float = None, rtol: float = None, ke
         edge |= diff / depth > rtol
     return edge
 
+def point_to_normal(point: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
+    """
+    Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+
+    Args:
+        point (np.ndarray): shape (height, width, 3), point map
+    Returns:
+        normal (np.ndarray): shape (height, width, 3), normal map. 
+    """
+    height, width = point.shape[-3:-1]
+    has_mask = mask is not None
+
+    if mask is None:
+        mask = np.ones_like(point[..., 0], dtype=bool)
+    mask_pad = np.zeros((height + 2, width + 2), dtype=bool)
+    mask_pad[1:-1, 1:-1] = mask
+    mask = mask_pad
+
+    pts = np.zeros((height + 2, width + 2, 3), dtype=point.dtype)
+    pts[1:-1, 1:-1, :] = point
+    up = pts[:-2, 1:-1, :] - pts[1:-1, 1:-1, :]
+    left = pts[1:-1, :-2, :] - pts[1:-1, 1:-1, :]
+    down = pts[2:, 1:-1, :] - pts[1:-1, 1:-1, :]
+    right = pts[1:-1, 2:, :] - pts[1:-1, 1:-1, :]
+    normal = np.stack([
+        np.cross(up, left, axis=-1),
+        np.cross(left, down, axis=-1),
+        np.cross(down, right, axis=-1),
+        np.cross(right, up, axis=-1),
+    ])
+    normal = normal / (np.linalg.norm(normal, axis=-1, keepdims=True) + 1e-12)
+    valid = np.stack([
+        mask[:-2, 1:-1] & mask[1:-1, :-2],
+        mask[1:-1, :-2] & mask[2:, 1:-1],
+        mask[2:, 1:-1] & mask[1:-1, 2:],
+        mask[1:-1, 2:] & mask[:-2, 1:-1],
+    ]) & mask[None, 1:-1, 1:-1]
+    normal = (normal * valid[..., None]).sum(axis=0)
+    normal = normal / (np.linalg.norm(normal, axis=-1, keepdims=True) + 1e-12)
+    
+    if has_mask:
+        return normal, valid.any(axis=0)
+    else:
+        return normal
+
+
+def depth_to_normal(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
+    """
+    Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+
+    Args:
+        depth (np.ndarray): shape (height, width), linear depth map
+        intrinsics (np.ndarray): shape (3, 3), intrinsics matrix
+    Returns:
+        normal (np.ndarray): shape (height, width, 3), normal map. 
+    """
+    has_mask = mask is not None
+
+    height, width = depth.shape[-2:]
+    if mask is None:
+        mask = np.ones_like(depth, dtype=bool)
+
+    uv = image_uv(width=width, height=height, dtype=np.float32)
+    pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=None)
+    
+    return point_to_normal(pts, mask)
 
 def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
     """Interpolate with given barycentric coordinates and triangle indices

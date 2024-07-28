@@ -45,6 +45,8 @@ __modules_all__ = {
         'image_pixel',
         'image_mesh',
         'image_mesh_from_depth',
+        'depth_to_normal',
+        'point_to_normal',
         'chessboard',
         'cube',
         'camera_frustum',

@@ -291,7 +291,7 @@ def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.T
     mask = F.pad(mask, (1, 1, 1, 1), mode='constant', value=0)
 
     uv = image_uv(*depth.shape[-2:]).unsqueeze(0).to(depth)
-    pts = transforms.unproject_cv(uv.reshape(-1, 2), depth.flatten(-2), intrinsics=intrinsics, extrinsics=transforms.view_to_extrinsics(torch.eye(4).to(depth))).unflatten(-2, (height, width))
+    pts = transforms.unproject_cv(uv.reshape(-1, 2), depth.flatten(-2), intrinsics=intrinsics, extrinsics=None).unflatten(-2, (height, width))
     
     return point_to_normal(pts, mask)
 
