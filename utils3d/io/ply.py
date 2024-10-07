@@ -1,5 +1,5 @@
 import numpy as np
-import plyfile
+
 from typing import *
 from pathlib import Path
 
@@ -19,6 +19,7 @@ def read_ply(
     Returns:
         Tuple[np.ndarray, np.ndarray]: vertices, faces
     """
+    import plyfile
     plydata = plyfile.PlyData.read(file)
     vertices = np.stack([plydata['vertex'][k] for k in ['x', 'y', 'z']], axis=-1)
     if 'face' in plydata:
@@ -49,6 +50,7 @@ def write_ply(
         edge_colors (np.ndarray, optional): [E, 3]. Defaults to None.
         text (bool, optional): save data in text format. Defaults to False.
     """
+    import plyfile
     assert vertices.ndim == 2 and vertices.shape[1] == 3
     vertices = vertices.astype(np.float32)
     if faces is not None:
