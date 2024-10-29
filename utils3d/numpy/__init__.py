@@ -49,6 +49,7 @@ __modules_all__ = {
         'point_to_normal',
         'chessboard',
         'cube',
+        'square',
         'camera_frustum',
     ],
     'transforms': [
@@ -57,6 +58,9 @@ __modules_all__ = {
         'perspective_from_fov_xy',
         'intrinsics_from_focal_center',
         'intrinsics_from_fov',
+        'fov_to_focal',
+        'focal_to_fov',
+        'intrinsics_to_fov',
         'view_look_at',
         'extrinsics_look_at',
         'perspective_to_intrinsics',
@@ -98,7 +102,8 @@ __modules_all__ = {
     ],
     'rasterization': [
         'RastContext',
-        'rasterize_vertex_attr',
+        'rasterize_triangle_faces',
+        'rasterize_edges',
         'texture',
         'warp_image_by_depth',
     ],

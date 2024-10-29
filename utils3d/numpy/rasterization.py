@@ -9,7 +9,8 @@ from . import transforms, utils, mesh
 
 __all__ = [
     'RastContext',
-    'rasterize_vertex_attr',
+    'rasterize_triangle_faces',
+    'rasterize_edges',
     'texture',
     'warp_image_by_depth',
 ]
@@ -101,20 +102,19 @@ class RastContext:
         return self.__prog[f'texture_{n}']
 
     
-def rasterize_vertex_attr(
+def rasterize_triangle_faces(
     ctx: RastContext,
     vertices: np.ndarray,
     faces: np.ndarray,
     attr: np.ndarray,
     width: int,
     height: int,
-    model: np.ndarray = None,
-    view: np.ndarray = None,
-    projection: np.ndarray = None,
+    transform: np.ndarray = None,
     cull_backface: bool = True,
     return_depth: bool = False,
-    ssaa: int = 1,
-) -> Tuple[np.ndarray, ...]:
+    image: np.ndarray = None,
+    depth: np.ndarray = None
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Rasterize vertex attribute.
 
@@ -124,30 +124,27 @@ def rasterize_vertex_attr(
         attr (np.ndarray): [N, C]
         width (int): width of rendered image
         height (int): height of rendered image
-        mvp (np.ndarray): [4, 4] model-view-projection matrix
+        transform (np.ndarray): [4, 4] model-view-projection transformation matrix. 
         cull_backface (bool): whether to cull backface
-        ssaa (int): super sampling anti-aliasing
+        image: (np.ndarray): [H, W, C] background image
+        depth: (np.ndarray): [H, W] background depth
 
     Returns:
         image (np.ndarray): [H, W, C] rendered image
         depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None.
     """
     assert vertices.ndim == 2 and vertices.shape[1] == 3
-    assert faces.ndim == 2 and faces.shape[1] == 3
-    assert attr.ndim == 2 and attr.shape[1] in [1, 2, 3, 4], 'vertex attribute only supports channels 1, 2, 3, 4, but got {}'.format(attr.shape)
+    assert faces.ndim == 2 and faces.shape[1] == 3, f"Faces should be a 2D array with shape (T, 3), but got {faces.shape}"
+    assert attr.ndim == 2 and attr.shape[1] in [1, 2, 3, 4], f'Vertex attribute only supports channels 1, 2, 3, 4, but got {attr.shape}'
     assert vertices.shape[0] == attr.shape[0]
     assert vertices.dtype == np.float32
     assert faces.dtype == np.uint32 or faces.dtype == np.int32
-    assert attr.dtype == np.float32
+    assert attr.dtype == np.float32, "Attribute should be float32"
 
     C = attr.shape[1]
     prog = ctx.program_vertex_attribute(C)
 
-    mvp = projection if projection is not None else np.eye(4, np.float32)
-    if view is not None:
-        mvp = mvp @ view
-    if model is not None:
-        mvp = mvp @ model
+    transform = np.eye(4, np.float32) if transform is None else transform
 
     # Create buffers
     ibo = ctx.mgl_ctx.buffer(np.ascontiguousarray(faces, dtype='i4'))
@@ -160,19 +157,19 @@ def rasterize_vertex_attr(
             (vbo_attr, f'{C}f', 'i_attr'),
         ],
         ibo,
+        mode=moderngl.TRIANGLES,
     )
 
     # Create framebuffer
-    width, height = width * ssaa, height * ssaa
-    attr_tex = ctx.mgl_ctx.texture((width, height), C, dtype='f4')
-    depth_tex = ctx.mgl_ctx.depth_texture((width, height))
+    image_tex = ctx.mgl_ctx.texture((width, height), C, dtype='f4', data=np.ascontiguousarray(image[::-1, :, :]) if image is not None else None)
+    depth_tex = ctx.mgl_ctx.depth_texture((width, height), data=np.ascontiguousarray(depth[::-1, :]) if depth is not None else None)
     fbo = ctx.mgl_ctx.framebuffer(
-        color_attachments=[attr_tex],
+        color_attachments=[image_tex],
         depth_attachment=depth_tex,
     )
 
     # Render
-    prog['u_mvp'].write(mvp.transpose().copy().astype('f4') if mvp is not None else np.eye(4, 4, dtype='f4'))
+    prog['u_mvp'].write(transform.transpose().copy().astype('f4'))
     fbo.use()
     fbo.viewport = (0, 0, width, height)
     ctx.mgl_ctx.depth_func = '<'
@@ -181,23 +178,19 @@ def rasterize_vertex_attr(
         ctx.mgl_ctx.enable(ctx.mgl_ctx.CULL_FACE)
     else:
         ctx.mgl_ctx.disable(ctx.mgl_ctx.CULL_FACE)
-    vao.render(moderngl.TRIANGLES)
+    vao.render()
     ctx.mgl_ctx.disable(ctx.mgl_ctx.DEPTH_TEST)
 
     # Read
-    attr_map = np.zeros((height, width, C), dtype='f4')
-    attr_tex.read_into(attr_map)
-    if ssaa > 1:
-        attr_map = attr_map.reshape(height // ssaa, ssaa, width // ssaa, ssaa, C).mean(axis=(1, 3))
-    attr_map = attr_map[::-1, :, :]
+    image = np.zeros((height, width, C), dtype='f4') 
+    image_tex.read_into(image)
+    image = image[::-1, :, :]
     if return_depth:
-        depth_map = np.zeros((height, width), dtype='f4')
-        depth_tex.read_into(depth_map)
-        if ssaa > 1:
-            depth_map = depth_map.reshape(height // ssaa, ssaa, width // ssaa, ssaa).mean(axis=(1, 3))
-        depth_map = depth_map[::-1, :]
+        depth = np.zeros((height, width), dtype='f4')
+        depth_tex.read_into(depth)
+        depth = depth[::-1, :]
     else:
-        depth_map = None
+        depth = None
 
     # Release
     vao.release()
@@ -205,10 +198,108 @@ def rasterize_vertex_attr(
     vbo_vertices.release()
     vbo_attr.release()
     fbo.release()
-    attr_tex.release()
+    image_tex.release()
     depth_tex.release()
 
-    return attr_map, depth_map
+    return image, depth
+
+
+def rasterize_edges(
+    ctx: RastContext,
+    vertices: np.ndarray,
+    edges: np.ndarray,
+    attr: np.ndarray,
+    width: int,
+    height: int,
+    transform: np.ndarray = None,
+    line_width: float = 1.0,
+    return_depth: bool = False,
+    image: np.ndarray = None,
+    depth: np.ndarray = None
+) -> Tuple[np.ndarray, ...]:
+    """
+    Rasterize vertex attribute.
+
+    Args:
+        vertices (np.ndarray): [N, 3]
+        faces (np.ndarray): [T, 3]
+        attr (np.ndarray): [N, C]
+        width (int): width of rendered image
+        height (int): height of rendered image
+        transform (np.ndarray): [4, 4] model-view-projection matrix
+        line_width (float): width of line. Defaults to 1.0. NOTE: Values other than 1.0 may not work across all platforms.
+        cull_backface (bool): whether to cull backface
+
+    Returns:
+        image (np.ndarray): [H, W, C] rendered image
+        depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None.
+    """
+    assert vertices.ndim == 2 and vertices.shape[1] == 3
+    assert edges.ndim == 2 and edges.shape[1] == 2, f"Edges should be a 2D array with shape (T, 2), but got {edges.shape}"
+    assert attr.ndim == 2 and attr.shape[1] in [1, 2, 3, 4], f'Vertex attribute only supports channels 1, 2, 3, 4, but got {attr.shape}'
+    assert vertices.shape[0] == attr.shape[0]
+    assert vertices.dtype == np.float32
+    assert edges.dtype == np.uint32 or edges.dtype == np.int32
+    assert attr.dtype == np.float32, "Attribute should be float32"
+
+    C = attr.shape[1]
+    prog = ctx.program_vertex_attribute(C)
+
+    transform = transform if transform is not None else np.eye(4, np.float32)
+
+    # Create buffers
+    ibo = ctx.mgl_ctx.buffer(np.ascontiguousarray(edges, dtype='i4'))
+    vbo_vertices = ctx.mgl_ctx.buffer(np.ascontiguousarray(vertices, dtype='f4'))
+    vbo_attr = ctx.mgl_ctx.buffer(np.ascontiguousarray(attr, dtype='f4'))
+    vao = ctx.mgl_ctx.vertex_array(
+        prog,
+        [
+            (vbo_vertices, '3f', 'i_position'),
+            (vbo_attr, f'{C}f', 'i_attr'),
+        ],
+        ibo,
+        mode=moderngl.LINES,
+    )
+
+    # Create framebuffer
+    image_tex = ctx.mgl_ctx.texture((width, height), C, dtype='f4', data=np.ascontiguousarray(image[::-1, :, :]) if image is not None else None)
+    depth_tex = ctx.mgl_ctx.depth_texture((width, height), data=np.ascontiguousarray(depth[::-1, :]) if depth is not None else None)
+    fbo = ctx.mgl_ctx.framebuffer(
+        color_attachments=[image_tex],
+        depth_attachment=depth_tex,
+    )
+
+    # Render
+    prog['u_mvp'].write(transform.transpose().copy().astype('f4'))
+    fbo.use()
+    fbo.viewport = (0, 0, width, height)
+    ctx.mgl_ctx.depth_func = '<'
+    ctx.mgl_ctx.enable(ctx.mgl_ctx.DEPTH_TEST)
+    ctx.mgl_ctx.line_width = line_width
+    vao.render()
+    ctx.mgl_ctx.disable(ctx.mgl_ctx.DEPTH_TEST)
+
+    # Read
+    image = np.zeros((height, width, C), dtype='f4')
+    image_tex.read_into(image)
+    image = image[::-1, :, :]
+    if return_depth:
+        depth = np.zeros((height, width), dtype='f4')
+        depth_tex.read_into(depth)
+        depth = depth[::-1, :]
+    else:
+        depth = None
+
+    # Release
+    vao.release()
+    ibo.release()
+    vbo_vertices.release()
+    vbo_attr.release()
+    fbo.release()
+    image_tex.release()
+    depth_tex.release()
+
+    return image, depth
 
 
 def texture(
@@ -265,8 +356,8 @@ def texture(
 
 def warp_image_by_depth(
     ctx: RastContext,
-    depth: np.ndarray,
-    image: np.ndarray = None,
+    src_depth: np.ndarray,
+    src_image: np.ndarray = None,
     width: int = None,
     height: int = None,
     *,
@@ -285,8 +376,8 @@ def warp_image_by_depth(
 
     Args:
         ctx (RastContext): rasterizer context
-        depth (np.ndarray): [H, W]
-        image (np.ndarray, optional): [H, W, C]. The image to warp. Defaults to None (use uv coordinates).
+        src_depth (np.ndarray): [H, W]
+        src_image (np.ndarray, optional): [H, W, C]. The image to warp. Defaults to None (use uv coordinates).
         width (int, optional): width of the output image. None to use depth map width. Defaults to None.
         height (int, optional): height of the output image. None to use depth map height. Defaults to None.
         extrinsics_src (np.ndarray, optional): extrinsics matrix of the source camera. Defaults to None (identity).
@@ -297,27 +388,23 @@ def warp_image_by_depth(
         ssaa (int, optional): super sampling anti-aliasing. Defaults to 1.
     
     Returns:
-        image (np.ndarray): [H, W, C] warped image (or uv coordinates if image is None).
-        depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None.
+        tgt_image (np.ndarray): [H, W, C] warped image (or uv coordinates if image is None).
+        tgt_depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None.
     """
-    assert depth.ndim == 2
+    assert src_depth.ndim == 2
 
     if width is None:
-        width = depth.shape[1]
+        width = src_depth.shape[1]
     if height is None:
-        height = depth.shape[0]
-    if image is not None:
-        assert image.shape[-2:] == depth.shape[-2:], f'Shape of image {image.shape} does not match shape of depth {depth.shape}'
+        height = src_depth.shape[0]
+    if src_image is not None:
+        assert src_image.shape[-2:] == src_depth.shape[-2:], f'Shape of source image {src_image.shape} does not match shape of source depth {src_depth.shape}'
 
     # set up default camera parameters
-    if extrinsics_src is None:
-        extrinsics_src = np.eye(4)
-    if extrinsics_tgt is None:
-        extrinsics_tgt = np.eye(4)
-    if intrinsics_src is None:
-        intrinsics_src = intrinsics_tgt
-    if intrinsics_tgt is None:
-        intrinsics_tgt = intrinsics_src
+    extrinsics_src = np.eye(4) if extrinsics_src is None else extrinsics_src
+    extrinsics_tgt = np.eye(4) if extrinsics_tgt is None else extrinsics_tgt
+    intrinsics_src = intrinsics_tgt if intrinsics_src is None else intrinsics_src
+    intrinsics_tgt = intrinsics_src if intrinsics_tgt is None else intrinsics_tgt
     
     assert all(x is not None for x in [extrinsics_src, extrinsics_tgt, intrinsics_src, intrinsics_tgt]), "Make sure you have provided all the necessary camera parameters."
 
@@ -330,27 +417,55 @@ def warp_image_by_depth(
     perspective_tgt = transforms.intrinsics_to_perspective(intrinsics_tgt, near=near, far=far)
 
     # unproject depth map
-    uv, faces = utils.image_mesh(*depth.shape[-2:])
-    pts = transforms.unproject_cv(uv, depth.reshape(-1), extrinsics_src, intrinsics_src)
+    uv, faces = utils.image_mesh(*src_depth.shape[-2:])
+    pts = transforms.unproject_cv(uv, src_depth.reshape(-1), extrinsics_src, intrinsics_src)
     faces = mesh.triangulate(faces, vertices=pts)
 
     # rasterize attributes
-    if image is not None:
-        attr = image.reshape(-1, image.shape[-1])
+    if src_image is not None:
+        attr = src_image.reshape(-1, src_image.shape[-1])
     else:
         attr = uv
 
-    return rasterize_vertex_attr(
+    tgt_image, tgt_depth = rasterize_triangle_faces(
         ctx,
         pts,
         faces,
         attr,
-        width,
-        height,
-        mvp=perspective_tgt @ view_tgt,
+        width * ssaa,
+        height * ssaa,
+        transform=perspective_tgt @ view_tgt,
         cull_backface=cull_backface,
-        ssaa=ssaa,
         return_depth=return_depth,
     )
 
+    if ssaa > 1:
+        tgt_image = tgt_image.reshape(height, ssaa, width, ssaa, -1).mean(axis=(1, 3))
+        tgt_depth = tgt_depth.reshape(height, ssaa, width, ssaa, -1).mean(axis=(1, 3)) if return_depth else None
 
+    return tgt_image, tgt_depth
+
+def test():
+    """
+    Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file.
+    """
+    ctx = RastContext(backend='egl')
+    vertices, faces = utils.cube(tri=True)
+    attr = np.random.rand(len(vertices), 3).astype(np.float32)
+    perspective = transforms.perspective(np.deg2rad(60), 1, 0.01, 100)
+    view = transforms.view_look_at(np.array([2, 2, 2]), np.array([0, 0, 0]), np.array([0, 1, 0]))
+    image, _ = rasterize_triangle_faces(
+        ctx, 
+        vertices, 
+        faces, 
+        attr, 
+        512, 512, 
+        view=view, 
+        projection=perspective, 
+        cull_backface=True,
+        ssaa=1,
+        return_depth=True,
+    )   
+    import cv2
+    cv2.imwrite('CHECKME.png', cv2.cvtColor((image.clip(0, 1) * 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
+    

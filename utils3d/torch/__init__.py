@@ -68,6 +68,7 @@ __modules_all__ = {
         'crop_intrinsics',
         'pixel_to_uv',
         'pixel_to_ndc',
+        'uv_to_pixel',
         'project_depth',
         'depth_buffer_to_linear',
         'project_gl',
@@ -98,7 +99,7 @@ __modules_all__ = {
     ],
     'rasterization': [
         'RastContext',
-        'rasterize_vertex_attr', 
+        'rasterize_triangle_faces', 
         'warp_image_by_depth',
         'warp_image_by_forward_flow',
     ],

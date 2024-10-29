@@ -26,7 +26,7 @@ def run():
         backend='egl',
         device_index=0,
     )
-    uv = utils3d.numpy.rasterization.rasterize_vertex_attr(
+    uv = utils3d.numpy.rasterization.rasterize_triangle_faces(
         ctx,
         pts,
         image_mesh,

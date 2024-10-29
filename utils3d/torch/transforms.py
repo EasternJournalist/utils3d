@@ -24,6 +24,7 @@ __all__ = [
     'crop_intrinsics',
     'pixel_to_uv',
     'pixel_to_ndc',
+    'uv_to_pixel',
     'project_depth',
     'depth_buffer_to_linear',
     'project_gl',
@@ -454,6 +455,25 @@ def pixel_to_uv(
         pixel = pixel.float()
     uv = (pixel + 0.5) / torch.stack([width, height], dim=-1).to(pixel)
     return uv
+
+
+@batched(1,0,0)
+def uv_to_pixel(
+    uv: torch.Tensor,
+    width: Union[int, torch.Tensor],
+    height: Union[int, torch.Tensor]
+) -> torch.Tensor:
+    """
+    Args:
+        uv (torch.Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
+        width (int | torch.Tensor): [...] image width(s)
+        height (int | torch.Tensor): [...] image height(s)
+
+    Returns:
+        (torch.Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
+    """
+    pixel = uv * torch.stack([width, height], dim=-1).to(uv) - 0.5
+    return pixel
 
 
 @batched(1,0,0)

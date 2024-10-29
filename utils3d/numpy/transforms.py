@@ -10,6 +10,9 @@ __all__ = [
     'perspective_from_fov_xy',
     'intrinsics_from_focal_center',
     'intrinsics_from_fov',
+    'fov_to_focal',
+    'focal_to_fov',
+    'intrinsics_to_fov',
     'view_look_at',
     'extrinsics_look_at',
     'perspective_to_intrinsics',
@@ -78,12 +81,12 @@ def perspective(
 
 
 def perspective_from_fov(
-        fov: Union[float, np.ndarray],
-        width: Union[int, np.ndarray],
-        height: Union[int, np.ndarray],
-        near: Union[float, np.ndarray],
-        far: Union[float, np.ndarray]
-    ) -> np.ndarray:
+    fov: Union[float, np.ndarray],
+    width: Union[int, np.ndarray],
+    height: Union[int, np.ndarray],
+    near: Union[float, np.ndarray],
+    far: Union[float, np.ndarray]
+) -> np.ndarray:
     """
     Get OpenGL perspective matrix from field of view in largest dimension
 
@@ -191,6 +194,20 @@ def intrinsics_from_fov(
     cy = 0.5
     ret = intrinsics_from_focal_center(fx, fy, cx, cy)
     return ret
+
+
+def focal_to_fov(focal: np.ndarray):
+    return 2 * np.arctan(0.5 / focal)
+
+
+def fov_to_focal(fov: np.ndarray):
+    return 0.5 / np.tan(fov / 2)
+
+
+def intrinsics_to_fov(intrinsics: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    fov_x = focal_to_fov(intrinsics[..., 0, 0])
+    fov_y = focal_to_fov(intrinsics[..., 1, 1])
+    return fov_x, fov_y
 
 
 @batched(1,1,1)

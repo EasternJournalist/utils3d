@@ -9,7 +9,7 @@ from ._helpers import batched
 
 __all__ = [
     'RastContext',
-    'rasterize_vertex_attr', 
+    'rasterize_triangle_faces', 
     'warp_image_by_depth',
     'warp_image_by_forward_flow',
 ]
@@ -33,7 +33,7 @@ class RastContext:
             raise ValueError(f'Unknown backend: {backend}')
 
 
-def rasterize_vertex_attr(
+def rasterize_triangle_faces(
     ctx: RastContext,
     vertices: torch.Tensor,
     faces: torch.Tensor,
@@ -250,7 +250,7 @@ def warp_image_by_depth(
     if mask is not None:
         attr = torch.cat([attr, mask.float().flatten(1, 2).unsqueeze(-1)], dim=-1)
 
-    rast = rasterize_vertex_attr(
+    rast = rasterize_triangle_faces(
         ctx,
         pts,
         faces,
@@ -343,7 +343,7 @@ def warp_image_by_forward_flow(
 
     # rasterize attributes
     attr = image.permute(0, 2, 3, 1).flatten(1, 2)
-    rast = rasterize_vertex_attr(
+    rast = rasterize_triangle_faces(
         ctx,
         pts,
         faces,
