@@ -5,10 +5,10 @@ from pathlib import Path
 
 
 def read_ply(
-        file: Union[str, Path],
-        encoding: Union[str, None] = None,
-        ignore_unknown: bool = False
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    file: Union[str, Path],
+    encoding: Union[str, None] = None,
+    ignore_unknown: bool = False
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Read .ply file, without preprocessing.
     
@@ -34,7 +34,7 @@ def write_ply(
     vertices: np.ndarray,
     faces: np.ndarray = None,
     edges: np.ndarray = None,
-    colors: np.ndarray = None,
+    vertex_colors: np.ndarray = None,
     edge_colors: np.ndarray = None,
     text: bool = False
 ):
@@ -60,18 +60,18 @@ def write_ply(
         assert edges.ndim == 2 and edges.shape[1] == 2
         edges = edges.astype(np.int32)
 
-    if colors is not None:
-        assert colors.ndim == 2 and colors.shape[1] == 3
-        if colors.dtype in [np.float32, np.float64]:
-            colors = colors * 255
-        colors = np.clip(colors, 0, 255).astype(np.uint8)
+    if vertex_colors is not None:
+        assert vertex_colors.ndim == 2 and vertex_colors.shape[1] == 3
+        if vertex_colors.dtype in [np.float32, np.float64]:
+            vertex_colors = vertex_colors * 255
+        vertex_colors = np.clip(vertex_colors, 0, 255).astype(np.uint8)
         vertices_data = np.zeros(len(vertices), dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
         vertices_data['x'] = vertices[:, 0]
         vertices_data['y'] = vertices[:, 1]
         vertices_data['z'] = vertices[:, 2]
-        vertices_data['red'] = colors[:, 0]
-        vertices_data['green'] = colors[:, 1]
-        vertices_data['blue'] = colors[:, 2]
+        vertices_data['red'] = vertex_colors[:, 0]
+        vertices_data['green'] = vertex_colors[:, 1]
+        vertices_data['blue'] = vertex_colors[:, 2]
     else:
         vertices_data = np.array([tuple(v) for v in vertices], dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
 
