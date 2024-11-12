@@ -26,6 +26,7 @@ __all__ = [
     'point_to_normal',
     'chessboard',
     'cube',
+    'square',
     'camera_frustum',
     'to4x4'
 ]
@@ -361,36 +362,46 @@ def image_pixel(
 
 
 def image_mesh(
-    height: int,
-    width: int,
-    mask: np.ndarray = None
-) -> Tuple[np.ndarray, np.ndarray]:
+    *image_attrs: np.ndarray,
+    mask: np.ndarray = None,
+    tri: bool = False,
+    return_indices: bool = False
+) -> Tuple[np.ndarray, ...]:
     """
     Get x quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
     Args:
-        width (int): image width
-        height (int): image height
+        *image_attrs (np.ndarray): image attributes in shape (height, width, [channels])
         mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
     Returns:
-        uv (np.ndarray): uv corresponding to pixels as described in image_uv()
-        faces (np.ndarray): quad faces connecting neighboring pixels
+        faces (np.ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
+        *vertex_attrs (np.ndarray): vertex attributes in corresponding order with input image_attrs
         indices (np.ndarray, optional): indices of vertices in the original mesh
     """
-    if mask is not None:
-        assert mask.shape[0] == height and mask.shape[1] == width
-        assert mask.dtype == np.bool_
-    uv = image_uv(height, width).reshape((-1, 2))
+    assert (len(image_attrs) > 0) or (mask is not None), "At least one of image_attrs or mask should be provided"
+    height, width = next(image_attrs).shape[:2] if mask is None else mask.shape
+    assert all(img.shape[:2] == (height, width) for img in image_attrs), "All image_attrs should have the same shape"
+    
     row_faces = np.stack([np.arange(0, width - 1, dtype=np.int32), np.arange(width, 2 * width - 1, dtype=np.int32), np.arange(1 + width, 2 * width, dtype=np.int32), np.arange(1, width, dtype=np.int32)], axis=1)
     faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
-    if mask is not None:
+    if mask is None:
+        if tri:
+            faces = mesh.triangulate(faces)
+        ret = [faces, *(img.reshape(-1, *img.shape[2:]) for img in image_attrs)]
+        if return_indices:
+            ret.append(np.arange(height * width, dtype=np.int32))
+        return tuple(ret)
+    else:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
-        faces, uv, indices = mesh.remove_unreferenced_vertices(faces, uv, return_indices=True)
-        return uv, faces, indices
-    return uv, faces
-
+        if tri:
+            faces = mesh.triangulate(faces)
+        return mesh.remove_unreferenced_vertices(
+            faces, 
+            *(x.reshape(-1, *x.shape[2:]) for x in image_attrs), 
+            return_indices=return_indices
+        )
 
 def image_mesh_from_depth(
     depth: np.ndarray,
@@ -474,11 +485,33 @@ def chessboard(width: int, height: int, grid_size: int, color_a: np.ndarray, col
     image = (1 - mask[..., None]) * color_a + mask[..., None] * color_b
     return image
 
-def cube():
+
+def square(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]: 
+    """
+    Get a square mesh of area 1 centered at origin in the xy-plane.
+
+    ### Returns
+        vertices (np.ndarray): shape (4, 3)
+        faces (np.ndarray): shape (1, 4)
+    """
+    vertices = np.array([
+        [-0.5, 0.5, 0],   [0.5, 0.5, 0],   [0.5, -0.5, 0],   [-0.5, -0.5, 0] # v0-v1-v2-v3
+    ], dtype=np.float32)
+    if tri:
+        faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
+    else:
+        faces = np.array([[0, 1, 2, 3]], dtype=np.int32)
+    return vertices, faces  
+
+
+def cube(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get x cube mesh of size 1 centered at origin.
 
-    Returns:
+    ### Parameters
+        tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
+
+    ### Returns
         vertices (np.ndarray): shape (8, 3) 
         faces (np.ndarray): shape (12, 3)
     """
@@ -496,10 +529,13 @@ def cube():
         [4, 0, 3, 7]  # v4-v0-v3-v7 (left)
     ], dtype=np.int32)
 
+    if tri:
+        faces = mesh.triangulate(faces, vertices=vertices)
+
     return vertices, faces
 
 
-def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float = 1.0) -> Tuple[np.ndarray, ...]:
+def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float = 1.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Get x triangle mesh of camera frustum.
     """
@@ -509,7 +545,7 @@ def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float 
         np.array([0] + [depth] * 4, dtype=np.float32), 
         extrinsics, 
         intrinsics
-    )
+    ).astype(np.float32)
     edges = np.array([
         [0, 1], [0, 2], [0, 3], [0, 4], 
         [1, 2], [2, 3], [3, 4], [4, 1]

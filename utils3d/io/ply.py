@@ -46,7 +46,7 @@ def write_ply(
         vertices (np.ndarray): [N, 3]
         faces (np.ndarray): [T, E]
         edges (np.ndarray): [E, 2]
-        colors (np.ndarray, optional): [N, 3]. Defaults to None.
+        vertex_colors (np.ndarray, optional): [N, 3]. Defaults to None.
         edge_colors (np.ndarray, optional): [E, 3]. Defaults to None.
         text (bool, optional): save data in text format. Defaults to False.
     """
