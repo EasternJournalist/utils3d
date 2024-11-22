@@ -368,7 +368,7 @@ def image_mesh(
     return_indices: bool = False
 ) -> Tuple[np.ndarray, ...]:
     """
-    Get x quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
+    Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
     Args:
         *image_attrs (np.ndarray): image attributes in shape (height, width, [channels])
