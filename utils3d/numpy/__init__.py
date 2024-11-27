@@ -49,6 +49,7 @@ __modules_all__ = {
         'point_to_normal',
         'chessboard',
         'cube',
+        'icosahedron',
         'square',
         'camera_frustum',
     ],
