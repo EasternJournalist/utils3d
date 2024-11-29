@@ -33,7 +33,7 @@ def write_extrinsics_as_colmap(file: Union[str, Path], extrinsics: np.ndarray, i
     with open(file, 'w') as fp:
         print("# IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME", file=fp)
         for i, (quat, t, name, camera_id) in enumerate(zip(quats.tolist(), trans.tolist(), image_names, camera_ids)):
-            # Colmap has wxyz order while scipy.spatial.transform.Rotation has xyzw order. Haha, wcnm.
+            # Colmap has wxyz order while scipy.spatial.transform.Rotation has xyzw order.
             qx, qy, qz, qw = quat
             tx, ty, tz = t
             print(f'{i + 1} {qw:f} {qx:f} {qy:f} {qz:f} {tx:f} {ty:f} {tz:f} {camera_id:d} {name}', file=fp)
