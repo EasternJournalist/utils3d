@@ -20,7 +20,6 @@ class RastContext:
     Create a rasterization context. Nothing but a wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext.
     """
     def __init__(self, nvd_ctx: Union[dr.RasterizeCudaContext, dr.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'gl',  device: Union[str, torch.device] = None):
-        import nvdiffrast.torch as dr
         if nvd_ctx is not None:
             self.nvd_ctx = nvd_ctx
             return 

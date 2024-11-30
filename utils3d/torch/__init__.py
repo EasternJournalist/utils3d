@@ -1,7 +1,7 @@
 import importlib
 import itertools
 import torch
-
+from typing import TYPE_CHECKING
 
 __modules_all__ = {
     'mesh': [
@@ -125,7 +125,7 @@ def __getattr__(name):
     return globals()[name]
 
 
-if __name__ == '__main__':
+if TYPE_CHECKING:
     from .transforms import *
     from .mesh import *
     from .utils import *

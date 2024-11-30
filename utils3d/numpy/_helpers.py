@@ -2,6 +2,8 @@
 import numpy as np
 from numbers import Number
 import inspect
+from functools import wraps
+from .._helpers import suppress_traceback
 
 
 def get_args_order(func, args, kwargs):
@@ -49,6 +51,8 @@ def batched(*dims):
     Decorator that allows a function to be called with batched arguments.
     """
     def decorator(func):
+        @wraps(func)
+        @suppress_traceback
         def wrapper(*args, **kwargs):
             args = list(args)
             # get arguments dimensions
