@@ -20,7 +20,7 @@ def _contains_tensor(obj):
         import torch
         return isinstance(obj, torch.Tensor)
 
-
+@suppress_traceback
 def _call_based_on_args(fname, args, kwargs):
     if 'torch' in sys.modules:
         if any(_contains_tensor(arg) for arg in args) or any(_contains_tensor(v) for v in kwargs.values()):
