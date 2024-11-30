@@ -3,7 +3,11 @@ A package for common utility functions in 3D computer graphics and vision. Provi
 """
 import importlib
 from typing import TYPE_CHECKING
-from ._unified import *
+
+try:
+    from ._unified import *
+except ImportError:
+    pass
 
 __all__ = ['numpy', 'torch', 'io']
 

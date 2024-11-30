@@ -86,8 +86,9 @@ if __name__ == "__main__":
         f.write(inspect.cleandoc(
             f"""
             # Auto-generated implementation redirecting to numpy/torch implementations
-            import utils3d
             import sys
+            from typing import TYPE_CHECKING
+            import utils3d
             from .._helpers import suppress_traceback
             """
         ))
@@ -99,4 +100,7 @@ if __name__ == "__main__":
         for fname in {**numpy_funcs, **torch_funcs}:
             f.write(f'@suppress_traceback\n')
             f.write(f"def {fname}(*args, **kwargs):\n")
+            f.write(f"    if TYPE_CHECKING:  # redirected to:\n")
+            f.write(f"        {'utils3d.numpy.' + fname if fname in numpy_funcs else 'None'}, {'utils3d.torch.'+ fname if fname in torch_funcs else 'None'}\n")
             f.write(f"    return _call_based_on_args('{fname}', args, kwargs)\n\n")
+            
