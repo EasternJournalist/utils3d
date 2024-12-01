@@ -4,6 +4,7 @@
 import importlib
 import itertools
 import numpy
+from typing import TYPE_CHECKING
 
 
 __modules_all__ = {
@@ -37,6 +38,7 @@ __modules_all__ = {
         'max_pool_2d',
         'max_pool_nd',
         'depth_edge',
+        'normals_edge',
         'depth_aliasing',
         'interpolate',
         'image_scrcoord',
@@ -45,10 +47,11 @@ __modules_all__ = {
         'image_pixel',
         'image_mesh',
         'image_mesh_from_depth',
-        'depth_to_normal',
-        'point_to_normal',
+        'depth_to_normals',
+        'points_to_normals',
         'chessboard',
         'cube',
+        'icosahedron',
         'square',
         'camera_frustum',
     ],
@@ -106,6 +109,7 @@ __modules_all__ = {
         'rasterize_edges',
         'texture',
         'warp_image_by_depth',
+        'test_rasterization'
     ],
 }
 
@@ -129,7 +133,7 @@ def __getattr__(name):
     return globals()[name]
 
 
-if __name__ == '__main__':
+if TYPE_CHECKING:
     from .quadmesh import *
     from .transforms import *
     from .mesh import *
