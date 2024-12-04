@@ -10,6 +10,9 @@ from ._helpers import batched
 __all__ = [
     'RastContext',
     'rasterize_triangle_faces', 
+    'rasterize_triangle_faces_depth_peeling',
+    'texture',
+    'texture_composite',
     'warp_image_by_depth',
     'warp_image_by_forward_flow',
 ]
@@ -58,7 +61,7 @@ def rasterize_triangle_faces(
         height (int): height of the output image
         attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
         uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
-        texture (torch.Tensor, optional): (B, H, W, C) texture. Defaults to None.
+        texture (torch.Tensor, optional): (B, C, H, W) texture. Defaults to None.
         model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
         view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
         projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
@@ -71,11 +74,11 @@ def rasterize_triangle_faces(
           - depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
                    NOTE: Empty pixels will have depth 1., i.e. far plane.
           - mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
-          - image_dr: (torch.Tensor): (B, 4, H, W) screen space derivatives of the attributes
+          - image_dr: (torch.Tensor): (B, *, H, W) screen space derivatives of the attributes
           - face_id: (torch.Tensor): (B, H, W) face ids
-          - uv: (torch.Tensor): (B, N, 2) uv coordinates (if uv is not None)
-          - uv_dr: (torch.Tensor): (B, N, 4) uv derivatives (if uv is not None)
-          - texture: (torch.Tensor): (B, H, W, C) texture (if uv and texture are not None)
+          - uv: (torch.Tensor): (B, H, W, 2) uv coordinates (if uv is not None)
+          - uv_dr: (torch.Tensor): (B, H, W, 4) uv derivatives (if uv is not None)
+          - texture: (torch.Tensor): (B, C, H, W) texture (if uv and texture are not None)
     """
     assert vertices.ndim == 3
     assert faces.ndim == 2
@@ -127,7 +130,8 @@ def rasterize_triangle_faces(
         ret['uv'] = uv_map
         ret['uv_dr'] = uv_map_dr
         if texture is not None:
-            texture_map = dr.texture(ctx.nvd_ctx, uv_map, uv_map_dr)
+            texture = texture.flip(1).permute(0, 2, 3, 1)
+            texture_map = dr.texture(texture, uv_map, uv_map_dr)
             ret['texture'] = texture_map.flip(1).permute(0, 3, 1, 2)
 
     if diff_attrs is not None:
@@ -137,13 +141,191 @@ def rasterize_triangle_faces(
     return ret
 
 
-def texture(
+def rasterize_triangle_faces_depth_peeling(
     ctx: RastContext,
+    vertices: torch.Tensor,
+    faces: torch.Tensor,
+    width: int,
+    height: int,
+    max_layers: int,
+    attr: torch.Tensor = None,
+    uv: torch.Tensor = None,
+    texture: torch.Tensor = None,
+    model: torch.Tensor = None,
+    view: torch.Tensor = None,
+    projection: torch.Tensor = None,
+    antialiasing: Union[bool, List[int]] = True,
+    diff_attrs: Union[None, List[int]] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+    """
+    Rasterize a mesh with vertex attributes using depth peeling.
+
+    Args:
+        ctx (GLContext): rasterizer context
+        vertices (np.ndarray): (B, N, 2 or 3 or 4)
+        faces (torch.Tensor): (T, 3)
+        width (int): width of the output image
+        height (int): height of the output image
+        max_layers (int): maximum number of layers
+            NOTE: if the number of layers is less than max_layers, the output will contain less than max_layers images.
+        attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
+        uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
+        texture (torch.Tensor, optional): (B, C, H, W) texture. Defaults to None.
+        model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
+        view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
+        projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
+        antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
+        diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
+
+    Returns:
+        Dictionary containing:
+          - image: (List[torch.Tensor]): list of (B, C, H, W) rendered images
+          - depth: (List[torch.Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
+                     NOTE: Empty pixels will have depth 1., i.e. far plane.
+          - mask: (List[torch.BoolTensor]): list of (B, H, W) mask of valid pixels
+          - image_dr: (List[torch.Tensor]): list of (B, *, H, W) screen space derivatives of the attributes
+          - face_id: (List[torch.Tensor]): list of (B, H, W) face ids
+          - uv: (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates (if uv is not None)
+          - uv_dr: (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives (if uv is not None)
+          - texture: (List[torch.Tensor]): list of (B, C, H, W) texture (if uv and texture are not None)
+    """
+    assert vertices.ndim == 3
+    assert faces.ndim == 2
+
+    if vertices.shape[-1] == 2:
+        vertices = torch.cat([vertices, torch.zeros_like(vertices[..., :1]), torch.ones_like(vertices[..., :1])], dim=-1)
+    elif vertices.shape[-1] == 3:
+        vertices = torch.cat([vertices, torch.ones_like(vertices[..., :1])], dim=-1)
+    elif vertices.shape[-1] == 4:
+        pass
+    else:
+        raise ValueError(f'Wrong shape of vertices: {vertices.shape}')
+    
+    mvp = projection if projection is not None else torch.eye(4).to(vertices)
+    if view is not None:
+        mvp = mvp @ view
+    if model is not None:
+        mvp = mvp @ model
+    
+    pos_clip = vertices @ mvp.transpose(-1, -2)
+    faces = faces.contiguous()
+    if attr is not None:
+        attr = attr.contiguous()
+        
+    ret = {
+        'depth': [],
+        'mask': [],
+        'face_id': [],
+    }
+    with dr.DepthPeeler(ctx.nvd_ctx, pos_clip, faces, resolution=[height, width]) as peeler:
+        for i in range(max_layers):
+            rast_out, rast_db = peeler.rasterize_next_layer()
+            face_id = rast_out[..., 3].flip(1)
+            depth = rast_out[..., 2].flip(1)
+            mask = (face_id > 0).float()
+            depth = (depth * 0.5 + 0.5) * mask + (1.0 - mask)
+            
+            if torch.all(mask == 0):
+                break
+            
+            ret['depth'].append(depth)
+            ret['mask'].append(mask)
+            ret['face_id'].append(face_id)
+            
+            if attr is not None:
+                image, image_dr = dr.interpolate(attr, rast_out, faces, rast_db, diff_attrs=diff_attrs)
+                if antialiasing == True:
+                    image = dr.antialias(image, rast_out, pos_clip, faces)
+                elif isinstance(antialiasing, list):
+                    aa_image = dr.antialias(image[..., antialiasing], rast_out, pos_clip, faces)
+                    image[..., antialiasing] = aa_image
+                image = image.flip(1).permute(0, 3, 1, 2)
+                if 'image' not in ret:
+                    ret['image'] = []
+                ret['image'].append(image)
+                
+            if uv is not None:
+                uv_map, uv_map_dr = dr.interpolate(uv, rast_out, faces, rast_db, diff_attrs='all')
+                if 'uv' not in ret:
+                    ret['uv'] = []
+                    ret['uv_dr'] = []
+                ret['uv'].append(uv_map)
+                ret['uv_dr'].append(uv_map_dr)
+                if texture is not None:
+                    texture = texture.flip(1).permute(0, 2, 3, 1)
+                    texture_map = dr.texture(texture, uv_map, uv_map_dr)
+                    if 'texture' not in ret:
+                        ret['texture'] = []
+                    ret['texture'].append(texture_map.flip(1).permute(0, 3, 1, 2))
+                    
+            if diff_attrs is not None:
+                image_dr = image_dr.flip(1).permute(0, 3, 1, 2)
+                if 'image_dr' not in ret:
+                    ret['image_dr'] = []
+                ret['image_dr'].append(image_dr)
+                
+    return ret
+
+
+def texture(
+    texture: torch.Tensor,
     uv: torch.Tensor,
     uv_da: torch.Tensor,
-    texture: torch.Tensor,
 ) -> torch.Tensor:
-    dr.texture(ctx.nvd_ctx, uv, texture)
+    """
+    Interpolate texture using uv coordinates.
+    
+    Args:
+        texture (torch.Tensor): (B, C, H, W) texture
+        uv (torch.Tensor): (B, H, W, 2) uv coordinates
+        uv_da (torch.Tensor): (B, H, W, 4) uv derivatives
+        
+    Returns:
+        torch.Tensor: (B, C, H, W) interpolated texture
+    """
+    texture = texture.flip(2).permute(0, 2, 3, 1).contiguous()
+    return dr.texture(texture, uv, uv_da).flip(1).permute(0, 3, 1, 2)
+    
+    
+def texture_composite(
+    texture: torch.Tensor,
+    uv: List[torch.Tensor],
+    uv_da: List[torch.Tensor],
+    background: torch.Tensor = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Composite textures with depth peeling output.
+    
+    Args:
+        texture (torch.Tensor): (B, C+1, H, W) texture
+            NOTE: the last channel is alpha channel
+        uv (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates
+        uv_da (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives
+        background (Optional[torch.Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
+        
+    Returns:
+        image: (torch.Tensor): (B, C, H, W) rendered image
+        alpha: (torch.Tensor): (B, H, W) alpha channel
+    """
+    assert len(uv) == len(uv_da)
+    if background is not None:
+        assert texture.shape[1] == background.shape[1] + 1
+    
+    C = texture.shape[1] - 1
+    B, H, W = uv[0].shape[:3]
+    texture = texture.flip(2).permute(0, 2, 3, 1).contiguous()
+    alpha = torch.zeros(B, H, W, device=texture.device)
+    if background is None:
+        image = torch.zeros(B, H, W, C, device=texture.device)
+    else:
+        image = background.clone().permute(0, 2, 3, 1)      # [B, H, W, C]
+    for i in range(len(uv)):
+        texture_map = dr.texture(texture, uv[i], uv_da[i])      # [B, H, W, C+1]
+        _alpha = texture_map[..., -1]                           # [B, H, W]
+        _weight = _alpha * (1 - alpha)                          # [B, H, W]
+        image = image + texture_map[..., :-1] * _weight.unsqueeze(-1)   # [B, H, W, C]
+        alpha = alpha + _weight                         # [B, H, W]
+    return image.flip(1).permute(0, 3, 1, 2), alpha.flip(1)
 
 
 def warp_image_by_depth(
