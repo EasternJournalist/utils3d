@@ -900,7 +900,7 @@ def ray_intersection(p1: np.ndarray, d1: np.ndarray, p2: np.ndarray, d2: np.ndar
         -(np.eye(2, dtype=dtype)[..., None] * d[..., None, :]).swapaxes(-2, -1).reshape(*d.shape[:-2], 2 * dim, 2)    # (..., 2 * D, 2)
     ], axis=-1)                             # (..., 2 * D, D + 2)
     b = p.reshape(*p.shape[:-2], 2 * dim)   # (..., 2 * D)
-    x = np.linalg.solve(A.swapaxes(-1, -2) @ A + 1e-12 * np.eye(dim + 2, dtype=dtype), (A.swapaxes(-1, -2) @ b[..., :, None])[..., 0])
+    x = np.linalg.solve(A.swapaxes(-1, -2) @ A + 1e-12 * np.eye(dim + 2, dtype=dtype), (A.swapaxes(-1, -2) @ b[..., :, None]))[..., 0]
     return x[..., :dim], (x[..., dim], x[..., dim + 1])
 
 
