@@ -186,7 +186,7 @@ def normals_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask: np
             stride=1, 
             axis=(-3, -2)
         )
-        angle_diff = np.where(mask_window, np.acos((normals[..., None, None] * normals_window).sum(axis=-3)), 0).max(axis=(-2, -1))
+        angle_diff = np.where(mask_window, np.arccos((normals[..., None, None] * normals_window).sum(axis=-3)), 0).max(axis=(-2, -1))
 
     angle_diff = max_pool_2d(angle_diff, kernel_size, stride=1, padding=kernel_size // 2)
     edge = angle_diff > np.deg2rad(tol)
