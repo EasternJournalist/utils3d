@@ -29,3 +29,6 @@ Homepage = "https://github.com/EasternJournalist/utils3d"
 
 [tool.setuptools.package-data]
 "utils3d.numpy.shaders" = ["*"]
+
+[tool.setuptools]
+py-modules = ["utils3d"]
