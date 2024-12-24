@@ -49,6 +49,7 @@ __modules_all__ = {
         'image_mesh_from_depth',
         'depth_to_normals',
         'points_to_normals',
+        'depth_to_points',
         'chessboard',
         'cube',
         'icosahedron',

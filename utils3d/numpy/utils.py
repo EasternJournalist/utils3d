@@ -28,6 +28,7 @@ __all__ = [
     'image_mesh_from_depth',
     'points_to_normals',
     'points_to_normals',
+    'depth_to_points',
     'chessboard',
     'cube',
     'icosahedron',
@@ -263,6 +264,34 @@ def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray
     
     return points_to_normals(pts, mask)
 
+
+def depth_to_points(
+    depth: np.ndarray,
+    extrinsics: np.ndarray = None,
+    intrinsics: np.ndarray = None
+) -> np.ndarray:
+    """
+    Unproject depth map to 3D points.
+
+    Args:
+        depth (np.ndarray): [..., H, W] depth value
+        extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
+        intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
+
+    Returns:
+        points (np.ndarray): [..., N, 3] 3d points
+    """
+    assert intrinsics is not None, "intrinsics matrix is required"
+    uv = image_uv(width=depth.shape[-1], height=depth.shape[-2], dtype=depth.dtype)
+    points = transforms.unproject_cv(
+        uv, 
+        depth, 
+        intrinsics=intrinsics[..., None, :, :], 
+        extrinsics=extrinsics[..., None, :, :] if extrinsics is not None else None
+    )
+    return points
+
+
 def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
     """Interpolate with given barycentric coordinates and triangle indices
 
@@ -450,6 +479,7 @@ def image_mesh(
             *(x.reshape(-1, *x.shape[2:]) for x in image_attrs), 
             return_indices=return_indices
         )
+
 
 def image_mesh_from_depth(
     depth: np.ndarray,

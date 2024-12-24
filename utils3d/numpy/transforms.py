@@ -647,7 +647,7 @@ def unproject_gl(
 @batched(2,1,2,2)
 def unproject_cv(
     uv_coord: np.ndarray,
-    depth: np.ndarray = None,
+    depth: np.ndarray,
     extrinsics: np.ndarray = None,
     intrinsics: np.ndarray = None
 ) -> np.ndarray:
@@ -667,8 +667,7 @@ def unproject_cv(
     assert intrinsics is not None, "intrinsics matrix is required"
     points = np.concatenate([uv_coord, np.ones_like(uv_coord[..., :1])], axis=-1)
     points = points @ np.linalg.inv(intrinsics).swapaxes(-1, -2)
-    if depth is not None:
-        points = points * depth[..., None]
+    points = points * depth[..., None]
     if extrinsics is not None:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
         points = (points @ np.linalg.inv(extrinsics).swapaxes(-1, -2))[..., :3]
