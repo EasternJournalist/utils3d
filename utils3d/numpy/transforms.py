@@ -2,6 +2,7 @@ import numpy as np
 from typing import *
 from numbers import Number
 from ._helpers import batched
+from .._helpers import no_warnings
 
 
 __all__ = [
@@ -603,7 +604,8 @@ def project_cv(
     if extrinsics is not None:
         points = points @ extrinsics.swapaxes(-1, -2)
     points = points[..., :3] @ intrinsics.swapaxes(-1, -2)
-    uv_coord = points[..., :2] / points[..., 2:]
+    with no_warnings():
+        uv_coord = points[..., :2] / points[..., 2:]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
 
@@ -645,7 +647,7 @@ def unproject_gl(
 @batched(2,1,2,2)
 def unproject_cv(
     uv_coord: np.ndarray,
-    depth: np.ndarray = None,
+    depth: np.ndarray,
     extrinsics: np.ndarray = None,
     intrinsics: np.ndarray = None
 ) -> np.ndarray:
@@ -665,8 +667,7 @@ def unproject_cv(
     assert intrinsics is not None, "intrinsics matrix is required"
     points = np.concatenate([uv_coord, np.ones_like(uv_coord[..., :1])], axis=-1)
     points = points @ np.linalg.inv(intrinsics).swapaxes(-1, -2)
-    if depth is not None:
-        points = points * depth[..., None]
+    points = points * depth[..., None]
     if extrinsics is not None:
         points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
         points = (points @ np.linalg.inv(extrinsics).swapaxes(-1, -2))[..., :3]
@@ -898,7 +899,7 @@ def ray_intersection(p1: np.ndarray, d1: np.ndarray, p2: np.ndarray, d2: np.ndar
         -(np.eye(2, dtype=dtype)[..., None] * d[..., None, :]).swapaxes(-2, -1).reshape(*d.shape[:-2], 2 * dim, 2)    # (..., 2 * D, 2)
     ], axis=-1)                             # (..., 2 * D, D + 2)
     b = p.reshape(*p.shape[:-2], 2 * dim)   # (..., 2 * D)
-    x = np.linalg.solve(A.swapaxes(-1, -2) @ A + 1e-12 * np.eye(dim + 2, dtype=dtype), (A.swapaxes(-1, -2) @ b[..., :, None])[..., 0])
+    x = np.linalg.solve(A.swapaxes(-1, -2) @ A + 1e-12 * np.eye(dim + 2, dtype=dtype), (A.swapaxes(-1, -2) @ b[..., :, None]))[..., 0]
     return x[..., :dim], (x[..., dim], x[..., dim + 1])
 
 

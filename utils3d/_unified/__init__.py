@@ -40,6 +40,7 @@ __all__ = ["triangulate",
 "image_mesh_from_depth", 
 "depth_to_normals", 
 "points_to_normals", 
+"depth_to_points", 
 "chessboard", 
 "cube", 
 "icosahedron", 
@@ -96,6 +97,12 @@ __all__ = ["triangulate",
 "warp_image_by_depth", 
 "test_rasterization", 
 "compute_face_angles", 
+"compute_edges", 
+"compute_connected_components", 
+"compute_edge_connected_components", 
+"compute_boundarys", 
+"compute_dual_graph", 
+"remove_isolated_pieces", 
 "compute_face_tbn", 
 "compute_vertex_tbn", 
 "laplacian", 
@@ -373,6 +380,12 @@ def points_to_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.points_to_normals, None
     return _call_based_on_args('points_to_normals', args, kwargs)
+
+@suppress_traceback
+def depth_to_points(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_to_points, None
+    return _call_based_on_args('depth_to_points', args, kwargs)
 
 @suppress_traceback
 def chessboard(*args, **kwargs):
@@ -709,6 +722,42 @@ def compute_face_angles(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.compute_face_angles
     return _call_based_on_args('compute_face_angles', args, kwargs)
+
+@suppress_traceback
+def compute_edges(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.compute_edges
+    return _call_based_on_args('compute_edges', args, kwargs)
+
+@suppress_traceback
+def compute_connected_components(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.compute_connected_components
+    return _call_based_on_args('compute_connected_components', args, kwargs)
+
+@suppress_traceback
+def compute_edge_connected_components(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.compute_edge_connected_components
+    return _call_based_on_args('compute_edge_connected_components', args, kwargs)
+
+@suppress_traceback
+def compute_boundarys(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.compute_boundarys
+    return _call_based_on_args('compute_boundarys', args, kwargs)
+
+@suppress_traceback
+def compute_dual_graph(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.compute_dual_graph
+    return _call_based_on_args('compute_dual_graph', args, kwargs)
+
+@suppress_traceback
+def remove_isolated_pieces(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.remove_isolated_pieces
+    return _call_based_on_args('remove_isolated_pieces', args, kwargs)
 
 @suppress_traceback
 def compute_face_tbn(*args, **kwargs):

@@ -5,6 +5,7 @@ import warnings
 import functools
 
 from ._helpers import batched
+from .._helpers import no_warnings
 from . import transforms
 from . import mesh
 
@@ -27,6 +28,7 @@ __all__ = [
     'image_mesh_from_depth',
     'points_to_normals',
     'points_to_normals',
+    'depth_to_points',
     'chessboard',
     'cube',
     'icosahedron',
@@ -35,16 +37,6 @@ __all__ = [
     'to4x4'
 ]
 
-def no_runtime_warnings(fn: Callable):
-    """
-    Disable runtime warnings in numpy.
-    """
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            return fn(*args, **kwargs)
-    return wrapper
 
 
 def sliding_window_1d(x: np.ndarray, window_size: int, stride: int, axis: int = -1):
@@ -111,8 +103,7 @@ def max_pool_2d(x: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride:
     axis = tuple(axis)
     return max_pool_nd(x, kernel_size, stride, padding, axis)
 
-
-@no_runtime_warnings
+@no_warnings(category=RuntimeWarning)
 def depth_edge(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
     """
     Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
@@ -134,14 +125,11 @@ def depth_edge(depth: np.ndarray, atol: float = None, rtol: float = None, kernel
     if atol is not None:
         edge |= diff > atol
     
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        if rtol is not None:
-            edge |= diff / depth > rtol
+    if rtol is not None:
+        edge |= diff / depth > rtol
     return edge
 
 
-@no_runtime_warnings
 def depth_aliasing(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
     """
     Compute the map that indicates the aliasing of x depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
@@ -168,8 +156,7 @@ def depth_aliasing(depth: np.ndarray, atol: float = None, rtol: float = None, ke
         edge |= diff / depth > rtol
     return edge
 
-
-@no_runtime_warnings
+@no_warnings(category=RuntimeWarning)
 def normals_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
     """
     Compute the edge mask from normal map.
@@ -192,7 +179,7 @@ def normals_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask: np
         axis=(-3, -2)
     )
     if mask is None:
-        angle_diff = np.acos((normals[..., None, None] * normals_window).sum(axis=-3)).max(axis=(-2, -1))
+        angle_diff = np.arccos((normals[..., None, None] * normals_window).sum(axis=-3)).max(axis=(-2, -1))
     else:
         mask_window = sliding_window_2d(
             np.pad(mask, (*([(0, 0)] * (mask.ndim - 3)), (padding, padding), (padding, padding)), mode='edge'), 
@@ -200,13 +187,14 @@ def normals_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask: np
             stride=1, 
             axis=(-3, -2)
         )
-        angle_diff = np.where(mask_window, np.acos((normals[..., None, None] * normals_window).sum(axis=-3)), 0).max(axis=(-2, -1))
+        angle_diff = np.where(mask_window, np.arccos((normals[..., None, None] * normals_window).sum(axis=-3)), 0).max(axis=(-2, -1))
 
     angle_diff = max_pool_2d(angle_diff, kernel_size, stride=1, padding=kernel_size // 2)
     edge = angle_diff > np.deg2rad(tol)
     return edge
 
-@no_runtime_warnings
+
+@no_warnings(category=RuntimeWarning)
 def points_to_normals(point: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
     """
     Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
@@ -275,6 +263,34 @@ def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray
     pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=None)
     
     return points_to_normals(pts, mask)
+
+
+def depth_to_points(
+    depth: np.ndarray,
+    extrinsics: np.ndarray = None,
+    intrinsics: np.ndarray = None
+) -> np.ndarray:
+    """
+    Unproject depth map to 3D points.
+
+    Args:
+        depth (np.ndarray): [..., H, W] depth value
+        extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
+        intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
+
+    Returns:
+        points (np.ndarray): [..., N, 3] 3d points
+    """
+    assert intrinsics is not None, "intrinsics matrix is required"
+    uv = image_uv(width=depth.shape[-1], height=depth.shape[-2], dtype=depth.dtype)
+    points = transforms.unproject_cv(
+        uv, 
+        depth, 
+        intrinsics=intrinsics[..., None, :, :], 
+        extrinsics=extrinsics[..., None, :, :] if extrinsics is not None else None
+    )
+    return points
+
 
 def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
     """Interpolate with given barycentric coordinates and triangle indices
@@ -463,6 +479,7 @@ def image_mesh(
             *(x.reshape(-1, *x.shape[2:]) for x in image_attrs), 
             return_indices=return_indices
         )
+
 
 def image_mesh_from_depth(
     depth: np.ndarray,

@@ -3,6 +3,7 @@ import numpy as np
 from numbers import Number
 import inspect
 from functools import wraps
+from typing import *
 from .._helpers import suppress_traceback
 
 

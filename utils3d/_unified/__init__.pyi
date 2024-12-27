@@ -43,6 +43,7 @@ __all__ = ["triangulate",
 "image_mesh_from_depth", 
 "depth_to_normals", 
 "points_to_normals", 
+"depth_to_points", 
 "chessboard", 
 "cube", 
 "icosahedron", 
@@ -99,6 +100,12 @@ __all__ = ["triangulate",
 "warp_image_by_depth", 
 "test_rasterization", 
 "compute_face_angles", 
+"compute_edges", 
+"compute_connected_components", 
+"compute_edge_connected_components", 
+"compute_boundarys", 
+"compute_dual_graph", 
+"remove_isolated_pieces", 
 "compute_face_tbn", 
 "compute_vertex_tbn", 
 "laplacian", 
@@ -596,6 +603,19 @@ Returns:
     utils3d.numpy.utils.points_to_normals
 
 @overload
+def depth_to_points(depth: numpy_.ndarray, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
+    """Unproject depth map to 3D points.
+
+Args:
+    depth (np.ndarray): [..., H, W] depth value
+    extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
+    intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
+
+Returns:
+    points (np.ndarray): [..., N, 3] 3d points"""
+    utils3d.numpy.utils.depth_to_points
+
+@overload
 def chessboard(width: int, height: int, grid_size: int, color_a: numpy_.ndarray, color_b: numpy_.ndarray) -> numpy_.ndarray:
     """get x chessboard image
 
@@ -890,7 +910,7 @@ Returns:
     utils3d.numpy.transforms.depth_buffer_to_linear
 
 @overload
-def unproject_cv(uv_coord: numpy_.ndarray, depth: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
+def unproject_cv(uv_coord: numpy_.ndarray, depth: numpy_.ndarray, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
 Args:
@@ -1310,6 +1330,71 @@ Returns:
     utils3d.torch.mesh.compute_vertex_normal_weighted
 
 @overload
+def compute_edges(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Compute edges of a mesh.
+
+Args:
+    faces (torch.Tensor): [T, 3] triangular face indices
+    
+Returns:
+    edges (torch.Tensor): [E, 2] edge indices
+    face2edge (torch.Tensor): [T, 3] mapping from face to edge
+    counts (torch.Tensor): [E] degree of each edge"""
+    utils3d.torch.mesh.compute_edges
+
+@overload
+def compute_connected_components(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None) -> List[torch_.Tensor]:
+    """Compute connected faces of a mesh.
+
+Args:
+    faces (torch.Tensor): [T, 3] triangular face indices
+    edges (torch.Tensor, optional): [E, 2] edge indices. Defaults to None.
+    face2edge (torch.Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
+        NOTE: If edges and face2edge are not provided, they will be computed.
+
+Returns:
+    components (List[torch.Tensor]): list of connected faces"""
+    utils3d.torch.mesh.compute_connected_components
+
+@overload
+def compute_edge_connected_components(edges: torch_.Tensor) -> List[torch_.Tensor]:
+    """Compute connected edges of a mesh.
+
+Args:
+    edges (torch.Tensor): [E, 2] edge indices
+
+Returns:
+    components (List[torch.Tensor]): list of connected edges"""
+    utils3d.torch.mesh.compute_edge_connected_components
+
+@overload
+def compute_boundarys(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None, edge_degrees: torch_.Tensor = None) -> Tuple[List[torch_.Tensor], List[torch_.Tensor]]:
+    """Compute boundary edges of a mesh.
+
+Args:
+    faces (torch.Tensor): [T, 3] triangular face indices
+    edges (torch.Tensor): [E, 2] edge indices.
+    face2edge (torch.Tensor): [T, 3] mapping from face to edge.
+    edge_degrees (torch.Tensor): [E] degree of each edge.
+
+Returns:
+    boundary_edge_indices (List[torch.Tensor]): list of boundary edge indices
+    boundary_face_indices (List[torch.Tensor]): list of boundary face indices"""
+    utils3d.torch.mesh.compute_boundarys
+
+@overload
+def compute_dual_graph(face2edge: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Compute dual graph of a mesh.
+
+Args:
+    face2edge (torch.Tensor): [T, 3] mapping from face to edge.
+        
+Returns:
+    dual_edges (torch.Tensor): [DE, 2] face indices of dual edges
+    dual_edge2edge (torch.Tensor): [DE] mapping from dual edge to edge"""
+    utils3d.torch.mesh.compute_dual_graph
+
+@overload
 def remove_unreferenced_vertices(faces: torch_.Tensor, *vertice_attrs, return_indices: bool = False) -> Tuple[torch_.Tensor, ...]:
     """Remove unreferenced vertices of a mesh. 
 Unreferenced vertices are removed, and the face indices are updated accordingly.
@@ -1334,6 +1419,25 @@ Args:
 Returns:
     torch.Tensor: [T_, 3] triangular face indices"""
     utils3d.torch.mesh.remove_corrupted_faces
+
+@overload
+def remove_isolated_pieces(vertices: torch_.Tensor, faces: torch_.Tensor, connected_components: List[torch_.Tensor] = None, thresh_num_faces: int = None, thresh_radius: float = None, thresh_boundary_ratio: float = None, remove_unreferenced: bool = True) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Remove isolated pieces of a mesh. 
+Isolated pieces are removed, and the face indices are updated accordingly.
+If no face is left, will return the largest connected component.
+
+Args:
+    vertices (torch.Tensor): [N, 3] 3-dimensional vertices
+    faces (torch.Tensor): [T, 3] triangular face indices
+    connected_components (List[torch.Tensor], optional): connected components of the mesh. If None, it will be computed. Defaults to None.
+    thresh_num_faces (int, optional): threshold of number of faces for isolated pieces. Defaults to None.
+    thresh_radius (float, optional): threshold of radius for isolated pieces. Defaults to None.
+    remove_unreferenced (bool, optional): remove unreferenced vertices after removing isolated pieces. Defaults to True.
+
+Returns:
+    vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
+    faces (torch.Tensor): [T, 3] triangular face indices"""
+    utils3d.torch.mesh.remove_isolated_pieces
 
 @overload
 def merge_duplicate_vertices(vertices: torch_.Tensor, faces: torch_.Tensor, tol: float = 1e-06) -> Tuple[torch_.Tensor, torch_.Tensor]:
@@ -2356,16 +2460,18 @@ def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiff
     utils3d.torch.rasterization.RastContext
 
 @overload
-def rasterize_triangle_faces(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, attr: torch_.Tensor, width: int, height: int, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+def rasterize_triangle_faces(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
     """Rasterize a mesh with vertex attributes.
 
 Args:
     ctx (GLContext): rasterizer context
     vertices (np.ndarray): (B, N, 2 or 3 or 4)
     faces (torch.Tensor): (T, 3)
-    attr (torch.Tensor): (B, N, C)
     width (int): width of the output image
     height (int): height of the output image
+    attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
+    uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
+    texture (torch.Tensor, optional): (B, H, W, C) texture. Defaults to None.
     model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
     view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
     projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
@@ -2373,9 +2479,16 @@ Args:
     diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
 Returns:
-    image: (torch.Tensor): (B, C, H, W)
-    depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
-        NOTE: Empty pixels will have depth 1., i.e. far plane."""
+    Dictionary containing:
+      - image: (torch.Tensor): (B, C, H, W)
+      - depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
+               NOTE: Empty pixels will have depth 1., i.e. far plane.
+      - mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
+      - image_dr: (torch.Tensor): (B, 4, H, W) screen space derivatives of the attributes
+      - face_id: (torch.Tensor): (B, H, W) face ids
+      - uv: (torch.Tensor): (B, N, 2) uv coordinates (if uv is not None)
+      - uv_dr: (torch.Tensor): (B, N, 4) uv derivatives (if uv is not None)
+      - texture: (torch.Tensor): (B, H, W, C) texture (if uv and texture are not None)"""
     utils3d.torch.rasterization.rasterize_triangle_faces
 
 @overload
