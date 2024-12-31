@@ -51,8 +51,9 @@ __modules_all__ = {
         'depth_edge',
         'depth_aliasing',
         'image_mesh_from_depth',
-        'point_to_normal',
-        'depth_to_normal',
+        'points_to_normals',
+        'depth_to_points',
+        'depth_to_normals',
         'masked_min',
         'masked_max',
         'bounding_rect'

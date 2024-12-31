@@ -123,8 +123,6 @@ __all__ = ["triangulate",
 "nerf_render_view", 
 "mipnerf_render_view", 
 "InstantNGP", 
-"point_to_normal", 
-"depth_to_normal", 
 "masked_min", 
 "masked_max", 
 "bounding_rect", 
@@ -1772,7 +1770,7 @@ Args:
     height (int): image height
 
 Returns:
-    np.ndarray: shape (height, width, 2)"""
+    torch.Tensor: shape (height, width, 2)"""
     utils3d.torch.utils.image_uv
 
 @overload
@@ -1791,7 +1789,7 @@ Args:
     height (int): image height
 
 Returns:
-    np.ndarray: shape (height, width, 2)"""
+    torch.Tensor: shape (height, width, 2)"""
     utils3d.torch.utils.image_pixel_center
 
 @overload
@@ -1801,12 +1799,12 @@ def image_mesh(height: int, width: int, mask: torch_.Tensor = None, device: torc
 Args:
     width (int): image width
     height (int): image height
-    mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+    mask (torch.Tensor, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
 Returns:
-    uv (np.ndarray): uv corresponding to pixels as described in image_uv()
-    faces (np.ndarray): quad faces connecting neighboring pixels
-    indices (np.ndarray, optional): indices of vertices in the original mesh"""
+    uv (torch.Tensor): uv corresponding to pixels as described in image_uv()
+    faces (torch.Tensor): quad faces connecting neighboring pixels
+    indices (torch.Tensor, optional): indices of vertices in the original mesh"""
     utils3d.torch.utils.image_mesh
 
 @overload
@@ -1854,17 +1852,21 @@ def image_mesh_from_depth(depth: torch_.Tensor, extrinsics: torch_.Tensor = None
     utils3d.torch.utils.image_mesh_from_depth
 
 @overload
-def point_to_normal(point: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
+def points_to_normals(point: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
     """Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
 Args:
     point (torch.Tensor): shape (..., height, width, 3), point map
 Returns:
     normal (torch.Tensor): shape (..., height, width, 3), normal map. """
-    utils3d.torch.utils.point_to_normal
+    utils3d.torch.utils.points_to_normals
 
 @overload
-def depth_to_normal(depth: torch_.Tensor, intrinsics: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
+def depth_to_points(depth: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: torch_.Tensor = None):
+    utils3d.torch.utils.depth_to_points
+
+@overload
+def depth_to_normals(depth: torch_.Tensor, intrinsics: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
     """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
 Args:
@@ -1872,7 +1874,7 @@ Args:
     intrinsics (torch.Tensor): shape (..., 3, 3), intrinsics matrix
 Returns:
     normal (torch.Tensor): shape (..., 3, height, width), normal map. """
-    utils3d.torch.utils.depth_to_normal
+    utils3d.torch.utils.depth_to_normals
 
 @overload
 def masked_min(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor]]:
