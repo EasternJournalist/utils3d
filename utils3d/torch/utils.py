@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from . import transforms
 from . import mesh
 from ._helpers import batched
+from .._helpers import no_warnings
 
 
 __all__ = [
@@ -19,8 +20,9 @@ __all__ = [
     'depth_edge',
     'depth_aliasing',
     'image_mesh_from_depth',
-    'point_to_normal',
-    'depth_to_normal',
+    'points_to_normals',
+    'depth_to_points',
+    'depth_to_normals',
     'masked_min',
     'masked_max',
     'bounding_rect'
@@ -66,7 +68,7 @@ def image_uv(height: int, width: int, left: int = None, top: int = None, right: 
         height (int): image height
 
     Returns:
-        np.ndarray: shape (height, width, 2)
+        torch.Tensor: shape (height, width, 2)
     """
     if left is None: left = 0
     if top is None: top = 0
@@ -104,7 +106,7 @@ def image_pixel_center(
         height (int): image height
 
     Returns:
-        np.ndarray: shape (height, width, 2)
+        torch.Tensor: shape (height, width, 2)
     """
     if left is None: left = 0
     if top is None: top = 0
@@ -123,12 +125,12 @@ def image_mesh(height: int, width: int, mask: torch.Tensor = None, device: torch
     Args:
         width (int): image width
         height (int): image height
-        mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+        mask (torch.Tensor, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
     Returns:
-        uv (np.ndarray): uv corresponding to pixels as described in image_uv()
-        faces (np.ndarray): quad faces connecting neighboring pixels
-        indices (np.ndarray, optional): indices of vertices in the original mesh
+        uv (torch.Tensor): uv corresponding to pixels as described in image_uv()
+        faces (torch.Tensor): quad faces connecting neighboring pixels
+        indices (torch.Tensor, optional): indices of vertices in the original mesh
     """
     if device is None and mask is not None:
         device = mask.device
@@ -230,7 +232,7 @@ def image_mesh_from_depth(
 
 
 @batched(3, 2, 2)
-def point_to_normal(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def points_to_normals(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
     Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
@@ -272,8 +274,7 @@ def point_to_normal(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Ten
         return normal
 
 
-@batched(2, 2, 2)
-def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def depth_to_normals(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
     Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
@@ -283,17 +284,15 @@ def depth_to_normal(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.T
     Returns:
         normal (torch.Tensor): shape (..., 3, height, width), normal map. 
     """
-    has_mask = mask is not None
+    pts = depth_to_points(depth, intrinsics)
+    return points_to_normals(pts, mask)
 
+
+def depth_to_points(depth: torch.Tensor, intrinsics: torch.Tensor, extrinsics: torch.Tensor = None):
     height, width = depth.shape[-2:]
-    if mask is None:
-        mask = torch.ones_like(depth, dtype=torch.bool)
-    mask = F.pad(mask, (1, 1, 1, 1), mode='constant', value=0)
-
-    uv = image_uv(*depth.shape[-2:]).unsqueeze(0).to(depth)
-    pts = transforms.unproject_cv(uv.reshape(-1, 2), depth.flatten(-2), intrinsics=intrinsics, extrinsics=None).unflatten(-2, (height, width))
-    
-    return point_to_normal(pts, mask)
+    uv = image_uv(width=width, height=height, dtype=depth.dtype, device=depth.device)
+    pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics[..., None, :, :], extrinsics=extrinsics[..., None, :, :] if extrinsics is not None else None)
+    return pts
 
 
 def masked_min(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:

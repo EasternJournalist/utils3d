@@ -120,8 +120,6 @@ __all__ = ["triangulate",
 "nerf_render_view", 
 "mipnerf_render_view", 
 "InstantNGP", 
-"point_to_normal", 
-"depth_to_normal", 
 "masked_min", 
 "masked_max", 
 "bounding_rect", 
@@ -372,19 +370,19 @@ def image_mesh_from_depth(*args, **kwargs):
 @suppress_traceback
 def depth_to_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_to_normals, None
+        utils3d.numpy.depth_to_normals, utils3d.torch.depth_to_normals
     return _call_based_on_args('depth_to_normals', args, kwargs)
 
 @suppress_traceback
 def points_to_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.points_to_normals, None
+        utils3d.numpy.points_to_normals, utils3d.torch.points_to_normals
     return _call_based_on_args('points_to_normals', args, kwargs)
 
 @suppress_traceback
 def depth_to_points(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_to_points, None
+        utils3d.numpy.depth_to_points, utils3d.torch.depth_to_points
     return _call_based_on_args('depth_to_points', args, kwargs)
 
 @suppress_traceback
@@ -860,18 +858,6 @@ def InstantNGP(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.InstantNGP
     return _call_based_on_args('InstantNGP', args, kwargs)
-
-@suppress_traceback
-def point_to_normal(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.point_to_normal
-    return _call_based_on_args('point_to_normal', args, kwargs)
-
-@suppress_traceback
-def depth_to_normal(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.depth_to_normal
-    return _call_based_on_args('depth_to_normal', args, kwargs)
 
 @suppress_traceback
 def masked_min(*args, **kwargs):

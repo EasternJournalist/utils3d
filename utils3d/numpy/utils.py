@@ -29,6 +29,7 @@ __all__ = [
     'points_to_normals',
     'points_to_normals',
     'depth_to_points',
+    'depth_to_normals',
     'chessboard',
     'cube',
     'icosahedron',
@@ -253,11 +254,7 @@ def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray
     Returns:
         normal (np.ndarray): shape (height, width, 3), normal map. 
     """
-    has_mask = mask is not None
-
     height, width = depth.shape[-2:]
-    if mask is None:
-        mask = np.ones_like(depth, dtype=bool)
 
     uv = image_uv(width=width, height=height, dtype=np.float32)
     pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=None)
