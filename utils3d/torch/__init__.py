@@ -110,6 +110,9 @@ __modules_all__ = {
     'rasterization': [
         'RastContext',
         'rasterize_triangle_faces', 
+        'rasterize_triangle_faces_depth_peeling',
+        'texture',
+        'texture_composite',
         'warp_image_by_depth',
         'warp_image_by_forward_flow',
     ],
