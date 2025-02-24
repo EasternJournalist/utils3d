@@ -448,19 +448,19 @@ def intrinsics_from_fov(*args, **kwargs):
 @suppress_traceback
 def fov_to_focal(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.fov_to_focal, None
+        utils3d.numpy.fov_to_focal, utils3d.torch.fov_to_focal
     return _call_based_on_args('fov_to_focal', args, kwargs)
 
 @suppress_traceback
 def focal_to_fov(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.focal_to_fov, None
+        utils3d.numpy.focal_to_fov, utils3d.torch.focal_to_fov
     return _call_based_on_args('focal_to_fov', args, kwargs)
 
 @suppress_traceback
 def intrinsics_to_fov(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.intrinsics_to_fov, None
+        utils3d.numpy.intrinsics_to_fov, utils3d.torch.intrinsics_to_fov
     return _call_based_on_args('intrinsics_to_fov', args, kwargs)
 
 @suppress_traceback

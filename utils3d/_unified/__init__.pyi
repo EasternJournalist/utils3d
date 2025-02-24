@@ -1986,6 +1986,19 @@ Returns:
     utils3d.torch.transforms.intrinsics_from_fov_xy
 
 @overload
+def focal_to_fov(focal: torch_.Tensor):
+    utils3d.torch.transforms.focal_to_fov
+
+@overload
+def fov_to_focal(fov: torch_.Tensor):
+    utils3d.torch.transforms.fov_to_focal
+
+@overload
+def intrinsics_to_fov(intrinsics: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """NOTE: approximate FOV by assuming centered principal point"""
+    utils3d.torch.transforms.intrinsics_to_fov
+
+@overload
 def view_look_at(eye: torch_.Tensor, look_at: torch_.Tensor, up: torch_.Tensor) -> torch_.Tensor:
     """Get OpenGL view matrix looking at something
 

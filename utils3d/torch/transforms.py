@@ -14,6 +14,9 @@ __all__ = [
     'intrinsics_from_focal_center',
     'intrinsics_from_fov',
     'intrinsics_from_fov_xy',
+    'focal_to_fov',
+    'fov_to_focal',
+    'intrinsics_to_fov',
     'view_look_at',
     'extrinsics_look_at',
     'perspective_to_intrinsics',
@@ -204,9 +207,9 @@ def intrinsics_from_fov(
 
 
 def intrinsics_from_fov_xy(
-        fov_x: Union[float, torch.Tensor],
-        fov_y: Union[float, torch.Tensor]
-    ) -> torch.Tensor:
+    fov_x: Union[float, torch.Tensor],
+    fov_y: Union[float, torch.Tensor]
+) -> torch.Tensor:
     """
     Get OpenCV intrinsics matrix from field of view in x and y axis
 
@@ -223,12 +226,27 @@ def intrinsics_from_fov_xy(
     return intrinsics_from_focal_center(focal_x, focal_y, cx, cy)
 
 
+def focal_to_fov(focal: torch.Tensor):
+    return 2 * torch.atan(0.5 / focal)
+
+
+def fov_to_focal(fov: torch.Tensor):
+    return 0.5 / torch.tan(fov / 2)
+
+
+def intrinsics_to_fov(intrinsics: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    "NOTE: approximate FOV by assuming centered principal point"
+    fov_x = focal_to_fov(intrinsics[..., 0, 0])
+    fov_y = focal_to_fov(intrinsics[..., 1, 1])
+    return fov_x, fov_y
+
+
 @batched(1,1,1)
 def view_look_at(
-        eye: torch.Tensor,
-        look_at: torch.Tensor,
-        up: torch.Tensor
-    ) -> torch.Tensor:
+    eye: torch.Tensor,
+    look_at: torch.Tensor,
+    up: torch.Tensor
+) -> torch.Tensor:
     """
     Get OpenGL view matrix looking at something
 
@@ -313,10 +331,10 @@ def perspective_to_intrinsics(
 
 @batched(2,0,0)
 def intrinsics_to_perspective(
-        intrinsics: torch.Tensor,
-        near: Union[float, torch.Tensor],
-        far: Union[float, torch.Tensor],
-    ) -> torch.Tensor:
+    intrinsics: torch.Tensor,
+    near: Union[float, torch.Tensor],
+    far: Union[float, torch.Tensor],
+) -> torch.Tensor:
     """
     OpenCV intrinsics to OpenGL perspective matrix
 
