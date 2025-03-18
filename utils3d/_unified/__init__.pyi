@@ -908,7 +908,7 @@ Returns:
     utils3d.numpy.transforms.depth_buffer_to_linear
 
 @overload
-def unproject_cv(uv_coord: numpy_.ndarray, depth: numpy_.ndarray, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
+def unproject_cv(uv_coord: numpy_.ndarray, depth: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
 Args:
@@ -2207,7 +2207,7 @@ Returns:
     utils3d.torch.transforms.unproject_gl
 
 @overload
-def unproject_cv(uv_coord: torch_.Tensor, depth: torch_.Tensor, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None) -> torch_.Tensor:
+def unproject_cv(uv_coord: torch_.Tensor, depth: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None) -> torch_.Tensor:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
 Args:

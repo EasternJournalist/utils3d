@@ -662,7 +662,7 @@ def unproject_gl(
 @batched(2, 1, 2, 2)
 def unproject_cv(
     uv_coord: torch.Tensor,
-    depth: torch.Tensor,
+    depth: torch.Tensor = None,
     extrinsics: torch.Tensor = None,
     intrinsics: torch.Tensor = None
 ) -> torch.Tensor:
@@ -682,7 +682,8 @@ def unproject_cv(
     assert intrinsics is not None, "intrinsics matrix is required"
     points = torch.cat([uv_coord, torch.ones_like(uv_coord[..., :1])], dim=-1)
     points = points @ torch.inverse(intrinsics).transpose(-2, -1)
-    points = points * depth[..., None]
+    if depth is not None:
+        points = points * depth[..., None]
     if extrinsics is not None:
         points = torch.cat([points, torch.ones_like(points[..., :1])], dim=-1)
         points = (points @ torch.inverse(extrinsics).transpose(-2, -1))[..., :3]
