@@ -48,7 +48,8 @@ __all__ = [
     'lerp_se3_matrix',
     'piecewise_lerp',
     'piecewise_lerp_se3_matrix',
-    'apply_transform'
+    'apply_transform',
+    'angle_diff_vec3'
 ]
 
 
@@ -1102,3 +1103,7 @@ def apply_transform(T: np.ndarray, x: np.ndarray) -> np.ndarray:
     assert T.shape[-2:] == (4, 4)
     x_transformed = (T[..., :3, :3] @ x[..., :, None]) + T[..., :3, 3][..., None]
     return x_transformed[..., 0]
+
+
+def angle_diff_vec3(v1: np.ndarray, v2: np.ndarray, eps: float = 1e-12):
+    return np.atan2(np.linalg.norm(np.cross(v1, v2, axis=-1), axis=-1) + eps, (v1 * v2).sum(axis=-1))

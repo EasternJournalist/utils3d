@@ -89,6 +89,7 @@ __all__ = ["triangulate",
 "piecewise_lerp", 
 "piecewise_lerp_se3_matrix", 
 "apply_transform", 
+"angle_diff_vec3", 
 "linear_spline_interpolate", 
 "RastContext", 
 "rasterize_triangle_faces", 
@@ -137,6 +138,8 @@ __all__ = ["triangulate",
 "translate_2d", 
 "scale_2d", 
 "apply_2d", 
+"rasterize_triangle_faces_depth_peeling", 
+"texture_composite", 
 "warp_image_by_forward_flow"]
 
 def _contains_tensor(obj):
@@ -674,6 +677,12 @@ def apply_transform(*args, **kwargs):
     return _call_based_on_args('apply_transform', args, kwargs)
 
 @suppress_traceback
+def angle_diff_vec3(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.angle_diff_vec3, None
+    return _call_based_on_args('angle_diff_vec3', args, kwargs)
+
+@suppress_traceback
 def linear_spline_interpolate(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.linear_spline_interpolate, None
@@ -700,7 +709,7 @@ def rasterize_edges(*args, **kwargs):
 @suppress_traceback
 def texture(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.texture, None
+        utils3d.numpy.texture, utils3d.torch.texture
     return _call_based_on_args('texture', args, kwargs)
 
 @suppress_traceback
@@ -960,6 +969,18 @@ def apply_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.apply_2d
     return _call_based_on_args('apply_2d', args, kwargs)
+
+@suppress_traceback
+def rasterize_triangle_faces_depth_peeling(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.rasterize_triangle_faces_depth_peeling
+    return _call_based_on_args('rasterize_triangle_faces_depth_peeling', args, kwargs)
+
+@suppress_traceback
+def texture_composite(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.texture_composite
+    return _call_based_on_args('texture_composite', args, kwargs)
 
 @suppress_traceback
 def warp_image_by_forward_flow(*args, **kwargs):

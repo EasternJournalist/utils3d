@@ -92,6 +92,7 @@ __all__ = ["triangulate",
 "piecewise_lerp", 
 "piecewise_lerp_se3_matrix", 
 "apply_transform", 
+"angle_diff_vec3", 
 "linear_spline_interpolate", 
 "RastContext", 
 "rasterize_triangle_faces", 
@@ -140,6 +141,8 @@ __all__ = ["triangulate",
 "translate_2d", 
 "scale_2d", 
 "apply_2d", 
+"rasterize_triangle_faces_depth_peeling", 
+"texture_composite", 
 "warp_image_by_forward_flow"]
 
 @overload
@@ -486,7 +489,7 @@ Returns:
     utils3d.numpy.utils.image_scrcoord
 
 @overload
-def image_uv(height: int, width: int, left: int = None, top: int = None, right: int = None, bottom: int = None, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def image_uv(height: int = None, width: int = None, mask: numpy_.ndarray = None, left: int = None, top: int = None, right: int = None, bottom: int = None, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get image space UV grid, ranging in [0, 1]. 
 
 >>> image_uv(10, 10):
@@ -495,12 +498,17 @@ def image_uv(height: int, width: int, left: int = None, top: int = None, right: 
   ...             ...                  ...
  [[0.05, 0.95], [0.15, 0.95], ..., [0.95, 0.95]]]
 
-Args:
-    width (int): image width
-    height (int): image height
+### Parameters
+    * `width (int)`: image width
+    * `height (int)`: image height
+    * `mask (np.ndarray, optional)`: binary mask of shape (height, width), dtype=bool. Defaults to None.
+        If provided, the UV grid will be computed only for the masked pixels. 
+        For 2-D mask, results is identical to image_ image_uv(height, width)[mask]
+        Extra dimensions other than the last two will be treated as batch dimensions
 
-Returns:
-    np.ndarray: shape (height, width, 2)"""
+### Returns
+    * `*batch_indices (np.ndarray, optional)`: only available when mask is provided and has more than 2 dimensions.
+    * `uv (np.ndarray)`: shape (height, width, 2) if mask is None, otherwise (N, 2)"""
     utils3d.numpy.utils.image_uv
 
 @overload
@@ -580,22 +588,28 @@ Returns:
     utils3d.numpy.utils.image_mesh_from_depth
 
 @overload
-def depth_to_normals(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+def depth_to_normals(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
     """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
 Args:
     depth (np.ndarray): shape (height, width), linear depth map
     intrinsics (np.ndarray): shape (3, 3), intrinsics matrix
+    mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
+
 Returns:
     normal (np.ndarray): shape (height, width, 3), normal map. """
     utils3d.numpy.utils.depth_to_normals
 
 @overload
-def points_to_normals(point: numpy_.ndarray, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+def points_to_normals(point: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
     """Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
 Args:
     point (np.ndarray): shape (height, width, 3), point map
+    mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
+
 Returns:
     normal (np.ndarray): shape (height, width, 3), normal map. """
     utils3d.numpy.utils.points_to_normals
@@ -1167,6 +1181,10 @@ def apply_transform(T: numpy_.ndarray, x: numpy_.ndarray) -> numpy_.ndarray:
 ### Returns:
 - `x_transformed`: np.ndarray, shape (..., 3): the transformed point or a set of points."""
     utils3d.numpy.transforms.apply_transform
+
+@overload
+def angle_diff_vec3(v1: numpy_.ndarray, v2: numpy_.ndarray, eps: float = 1e-12):
+    utils3d.numpy.transforms.angle_diff_vec3
 
 @overload
 def linear_spline_interpolate(x: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> numpy_.ndarray:
@@ -2486,7 +2504,7 @@ Args:
     height (int): height of the output image
     attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
     uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
-    texture (torch.Tensor, optional): (B, H, W, C) texture. Defaults to None.
+    texture (torch.Tensor, optional): (B, C, H, W) texture. Defaults to None.
     model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
     view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
     projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
@@ -2499,12 +2517,75 @@ Returns:
       - depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
                NOTE: Empty pixels will have depth 1., i.e. far plane.
       - mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
-      - image_dr: (torch.Tensor): (B, 4, H, W) screen space derivatives of the attributes
+      - image_dr: (torch.Tensor): (B, *, H, W) screen space derivatives of the attributes
       - face_id: (torch.Tensor): (B, H, W) face ids
-      - uv: (torch.Tensor): (B, N, 2) uv coordinates (if uv is not None)
-      - uv_dr: (torch.Tensor): (B, N, 4) uv derivatives (if uv is not None)
-      - texture: (torch.Tensor): (B, H, W, C) texture (if uv and texture are not None)"""
+      - uv: (torch.Tensor): (B, H, W, 2) uv coordinates (if uv is not None)
+      - uv_dr: (torch.Tensor): (B, H, W, 4) uv derivatives (if uv is not None)
+      - texture: (torch.Tensor): (B, C, H, W) texture (if uv and texture are not None)"""
     utils3d.torch.rasterization.rasterize_triangle_faces
+
+@overload
+def rasterize_triangle_faces_depth_peeling(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+    """Rasterize a mesh with vertex attributes using depth peeling.
+
+Args:
+    ctx (GLContext): rasterizer context
+    vertices (np.ndarray): (B, N, 2 or 3 or 4)
+    faces (torch.Tensor): (T, 3)
+    width (int): width of the output image
+    height (int): height of the output image
+    max_layers (int): maximum number of layers
+        NOTE: if the number of layers is less than max_layers, the output will contain less than max_layers images.
+    attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
+    uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
+    texture (torch.Tensor, optional): (B, C, H, W) texture. Defaults to None.
+    model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
+    view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
+    projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
+    antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
+    diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
+
+Returns:
+    Dictionary containing:
+      - image: (List[torch.Tensor]): list of (B, C, H, W) rendered images
+      - depth: (List[torch.Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
+                 NOTE: Empty pixels will have depth 1., i.e. far plane.
+      - mask: (List[torch.BoolTensor]): list of (B, H, W) mask of valid pixels
+      - image_dr: (List[torch.Tensor]): list of (B, *, H, W) screen space derivatives of the attributes
+      - face_id: (List[torch.Tensor]): list of (B, H, W) face ids
+      - uv: (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates (if uv is not None)
+      - uv_dr: (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives (if uv is not None)
+      - texture: (List[torch.Tensor]): list of (B, C, H, W) texture (if uv and texture are not None)"""
+    utils3d.torch.rasterization.rasterize_triangle_faces_depth_peeling
+
+@overload
+def texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> torch_.Tensor:
+    """Interpolate texture using uv coordinates.
+
+Args:
+    texture (torch.Tensor): (B, C, H, W) texture
+    uv (torch.Tensor): (B, H, W, 2) uv coordinates
+    uv_da (torch.Tensor): (B, H, W, 4) uv derivatives
+    
+Returns:
+    torch.Tensor: (B, C, H, W) interpolated texture"""
+    utils3d.torch.rasterization.texture
+
+@overload
+def texture_composite(texture: torch_.Tensor, uv: List[torch_.Tensor], uv_da: List[torch_.Tensor], background: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Composite textures with depth peeling output.
+
+Args:
+    texture (torch.Tensor): (B, C+1, H, W) texture
+        NOTE: the last channel is alpha channel
+    uv (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates
+    uv_da (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives
+    background (Optional[torch.Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
+    
+Returns:
+    image: (torch.Tensor): (B, C, H, W) rendered image
+    alpha: (torch.Tensor): (B, H, W) alpha channel"""
+    utils3d.torch.rasterization.texture_composite
 
 @overload
 def warp_image_by_depth(ctx: utils3d.torch.rasterization.RastContext, depth: torch_.FloatTensor, image: torch_.FloatTensor = None, mask: torch_.BoolTensor = None, width: int = None, height: int = None, *, extrinsics_src: torch_.FloatTensor = None, extrinsics_tgt: torch_.FloatTensor = None, intrinsics_src: torch_.FloatTensor = None, intrinsics_tgt: torch_.FloatTensor = None, near: float = 0.1, far: float = 100.0, antialiasing: bool = True, backslash: bool = False, padding: int = 0, return_uv: bool = False, return_dr: bool = False) -> Tuple[torch_.FloatTensor, torch_.FloatTensor, torch_.BoolTensor, Optional[torch_.FloatTensor], Optional[torch_.FloatTensor]]:

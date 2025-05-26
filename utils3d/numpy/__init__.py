@@ -99,7 +99,8 @@ __modules_all__ = {
         'lerp_se3_matrix',
         'piecewise_lerp',
         'piecewise_lerp_se3_matrix',
-        'apply_transform'
+        'apply_transform',
+        'angle_diff_vec3'
     ],
     'spline': [
         'linear_spline_interpolate',

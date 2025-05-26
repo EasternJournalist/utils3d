@@ -196,12 +196,15 @@ def normals_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask: np
 
 
 @no_warnings(category=RuntimeWarning)
-def points_to_normals(point: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
+def points_to_normals(point: np.ndarray, mask: np.ndarray = None, edge_threshold: float = None) -> np.ndarray:
     """
     Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
     Args:
         point (np.ndarray): shape (height, width, 3), point map
+        mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
+        edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
+
     Returns:
         normal (np.ndarray): shape (height, width, 3), normal map. 
     """
@@ -227,12 +230,18 @@ def points_to_normals(point: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
         np.cross(right, up, axis=-1),
     ])
     normal = normal / (np.linalg.norm(normal, axis=-1, keepdims=True) + 1e-12)
+    
     valid = np.stack([
         mask[:-2, 1:-1] & mask[1:-1, :-2],
         mask[1:-1, :-2] & mask[2:, 1:-1],
         mask[2:, 1:-1] & mask[1:-1, 2:],
         mask[1:-1, 2:] & mask[:-2, 1:-1],
     ]) & mask[None, 1:-1, 1:-1]
+    if edge_threshold is not None:
+        view_angle = transforms.angle_diff_vec3(pts[None, 1:-1, 1:-1, :], normal)
+        view_angle = np.minimum(view_angle, np.pi - view_angle)
+        valid = valid & (view_angle < np.deg2rad(edge_threshold))
+    
     normal = (normal * valid[..., None]).sum(axis=0)
     normal = normal / (np.linalg.norm(normal, axis=-1, keepdims=True) + 1e-12)
     
@@ -244,13 +253,16 @@ def points_to_normals(point: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
         return normal
 
 
-def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
+def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray = None, edge_threshold: float = None) -> np.ndarray:
     """
     Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
     Args:
         depth (np.ndarray): shape (height, width), linear depth map
         intrinsics (np.ndarray): shape (3, 3), intrinsics matrix
+        mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
+        edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
+
     Returns:
         normal (np.ndarray): shape (height, width, 3), normal map. 
     """
@@ -259,7 +271,7 @@ def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray
     uv = image_uv(width=width, height=height, dtype=np.float32)
     pts = transforms.unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=None)
     
-    return points_to_normals(pts, mask)
+    return points_to_normals(pts, mask, edge_threshold)
 
 
 def depth_to_points(
@@ -330,8 +342,9 @@ def image_scrcoord(
 
 
 def image_uv(
-    height: int,
-    width: int,
+    height: int = None,
+    width: int = None,
+    mask: np.ndarray = None,
     left: int = None,
     top: int = None,
     right: int = None,
@@ -347,21 +360,34 @@ def image_uv(
       ...             ...                  ...
      [[0.05, 0.95], [0.15, 0.95], ..., [0.95, 0.95]]]
 
-    Args:
-        width (int): image width
-        height (int): image height
-
-    Returns:
-        np.ndarray: shape (height, width, 2)
+    ### Parameters
+        * `width (int)`: image width
+        * `height (int)`: image height
+        * `mask (np.ndarray, optional)`: binary mask of shape (height, width), dtype=bool. Defaults to None.
+            If provided, the UV grid will be computed only for the masked pixels. 
+            For 2-D mask, results is identical to image_ image_uv(height, width)[mask]
+            Extra dimensions other than the last two will be treated as batch dimensions
+    
+    ### Returns
+        * `*batch_indices (np.ndarray, optional)`: only available when mask is provided and has more than 2 dimensions.
+        * `uv (np.ndarray)`: shape (height, width, 2) if mask is None, otherwise (N, 2)
     """
     if left is None: left = 0
     if top is None: top = 0
     if right is None: right = width
     if bottom is None: bottom = height
-    u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=dtype)
-    v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=dtype)
-    u, v = np.meshgrid(u, v, indexing='xy')
-    return np.stack([u, v], axis=2)
+    if mask is None:
+        assert width is not None and height is not None, "either mask or width and height should be provided"
+        u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=dtype)
+        v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=dtype)
+        u, v = np.meshgrid(u, v, indexing='xy')
+        return np.stack([u, v], axis=2)
+    else:
+        assert (width is None or width == mask.shape[-1]) and (height is None or height == mask.shape[-2]), "width and height should be consistent with mask"
+        height, width = mask.shape[-2:]
+        *batch, i, j = np.where(mask)
+        u, v = (j.astype(dtype) + 0.5) / width, (i.astype(dtype) + 0.5) / height
+        return *batch, np.stack([u, v], axis=-1)
 
 
 def image_pixel_center(
