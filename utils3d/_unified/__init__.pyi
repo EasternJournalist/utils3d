@@ -49,6 +49,7 @@ __all__ = ["triangulate",
 "icosahedron", 
 "square", 
 "camera_frustum", 
+"lookup", 
 "perspective", 
 "perspective_from_fov", 
 "perspective_from_fov_xy", 
@@ -671,6 +672,18 @@ def square(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
 def camera_frustum(extrinsics: numpy_.ndarray, intrinsics: numpy_.ndarray, depth: float = 1.0) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Get x triangle mesh of camera frustum."""
     utils3d.numpy.utils.camera_frustum
+
+@overload
+def lookup(key: numpy_.ndarray, query: numpy_.ndarray) -> numpy_.ndarray:
+    """Find the indices of `query` in `key`.
+
+### Parameters
+    key (np.ndarray): shape (K, ...), the array to search in
+    query (np.ndarray): shape (Q, ...), the array to search for
+    
+### Returns
+    np.ndarray: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1."""
+    utils3d.numpy.utils.lookup
 
 @overload
 def perspective(fov_y: Union[float, numpy_.ndarray], aspect: Union[float, numpy_.ndarray], near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
@@ -1916,6 +1929,18 @@ Args:
 Returns:
     rect (torch.Tensor): shape (..., 4), bounding rectangle (left, top, right, bottom)"""
     utils3d.torch.utils.bounding_rect
+
+@overload
+def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
+    """Find the indices of `query` in `key`.
+
+### Parameters
+    key (torch.Tensor): shape (K, ...), the array to search in
+    query (torch.Tensor): shape (Q, ...), the array to search for
+
+### Returns
+    torch.Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1."""
+    utils3d.torch.utils.lookup
 
 @overload
 def perspective(fov_y: Union[float, torch_.Tensor], aspect: Union[float, torch_.Tensor], near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:

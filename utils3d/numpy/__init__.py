@@ -55,6 +55,7 @@ __modules_all__ = {
         'icosahedron',
         'square',
         'camera_frustum',
+        'lookup',
     ],
     'transforms': [
         'perspective',

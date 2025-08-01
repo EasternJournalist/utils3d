@@ -56,7 +56,8 @@ __modules_all__ = {
         'depth_to_normals',
         'masked_min',
         'masked_max',
-        'bounding_rect'
+        'bounding_rect',
+        'lookup',
     ],
     'transforms': [
         'perspective',

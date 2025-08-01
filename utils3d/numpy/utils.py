@@ -35,7 +35,8 @@ __all__ = [
     'icosahedron',
     'square',
     'camera_frustum',
-    'to4x4'
+    'to4x4',
+    'lookup',
 ]
 
 
@@ -676,3 +677,24 @@ def icosahedron():
         [2, 4, 9], [9, 8, 6], [6, 1, 7], [7, 10, 11], [11, 5, 2]
     ], dtype=np.int32)
     return vertices, faces
+
+
+def lookup(key: np.ndarray, query: np.ndarray) -> np.ndarray:
+    """
+    Find the indices of `query` in `key`.
+
+    ### Parameters
+        key (np.ndarray): shape (K, ...), the array to search in
+        query (np.ndarray): shape (Q, ...), the array to search for
+        
+    ### Returns
+        np.ndarray: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+    """
+    _, index, inverse = np.unique(
+        np.concatenate([key, query], axis=0),
+        axis=0,
+        return_index=True,
+        return_inverse=True
+    )
+    result = index[inverse[key.shape[0]:]]
+    return np.where(result < key.shape[0], result, -1)

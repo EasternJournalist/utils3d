@@ -46,6 +46,7 @@ __all__ = ["triangulate",
 "icosahedron", 
 "square", 
 "camera_frustum", 
+"lookup", 
 "perspective", 
 "perspective_from_fov", 
 "perspective_from_fov_xy", 
@@ -417,6 +418,12 @@ def camera_frustum(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.camera_frustum, None
     return _call_based_on_args('camera_frustum', args, kwargs)
+
+@suppress_traceback
+def lookup(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.lookup, utils3d.torch.lookup
+    return _call_based_on_args('lookup', args, kwargs)
 
 @suppress_traceback
 def perspective(*args, **kwargs):

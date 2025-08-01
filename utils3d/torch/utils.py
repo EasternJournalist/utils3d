@@ -25,7 +25,8 @@ __all__ = [
     'depth_to_normals',
     'masked_min',
     'masked_max',
-    'bounding_rect'
+    'bounding_rect',
+    'lookup',
 ]
 
 
@@ -312,6 +313,27 @@ def masked_max(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, kee
     else:
         return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max(dim=dim, keepdim=keepdim)
     
+
+def lookup(key: torch.Tensor, query: torch.Tensor) -> torch.LongTensor:
+    """
+    Find the indices of `query` in `key`.
+
+    ### Parameters
+        key (torch.Tensor): shape (K, ...), the array to search in
+        query (torch.Tensor): shape (Q, ...), the array to search for
+
+    ### Returns
+        torch.Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+    """
+    unique, inverse = torch.unique(
+        torch.cat([key, query], dim=0),
+        dim=0,
+        return_inverse=True
+    )
+    index = torch.full((unique.shape[0],), -1, dtype=torch.long, device=key.device)
+    index.scatter_(0, inverse[:key.shape[0]], torch.arange(key.shape[0], device=key.device))
+    return index[inverse[key.shape[0]:]]
+
 
 def bounding_rect(mask: torch.BoolTensor):
     """get bounding rectangle of a mask
