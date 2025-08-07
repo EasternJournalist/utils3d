@@ -277,16 +277,16 @@ def depth_to_normals(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray
 
 def depth_to_points(
     depth: np.ndarray,
+    intrinsics: np.ndarray,
     extrinsics: np.ndarray = None,
-    intrinsics: np.ndarray = None
 ) -> np.ndarray:
     """
     Unproject depth map to 3D points.
 
     Args:
         depth (np.ndarray): [..., H, W] depth value
-        extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
         intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
+        extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
 
     Returns:
         points (np.ndarray): [..., N, 3] 3d points
