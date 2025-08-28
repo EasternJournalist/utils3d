@@ -4,48 +4,13 @@ from typing import TYPE_CHECKING
 import utils3d
 from .._helpers import suppress_traceback
 
-__all__ = ["triangulate", 
-"compute_face_normal", 
-"compute_face_angle", 
-"compute_vertex_normal", 
-"compute_vertex_normal_weighted", 
-"remove_corrupted_faces", 
-"merge_duplicate_vertices", 
-"remove_unreferenced_vertices", 
-"subdivide_mesh_simple", 
-"mesh_relations", 
-"flatten_mesh_indices", 
-"calc_quad_candidates", 
-"calc_quad_distortion", 
-"calc_quad_direction", 
-"calc_quad_smoothness", 
-"sovle_quad", 
-"sovle_quad_qp", 
-"tri_to_quad", 
-"sliding_window_1d", 
+__all__ = ["sliding_window_1d", 
 "sliding_window_nd", 
 "sliding_window_2d", 
 "max_pool_1d", 
 "max_pool_2d", 
 "max_pool_nd", 
-"depth_edge", 
-"normals_edge", 
-"depth_aliasing", 
 "interpolate", 
-"image_scrcoord", 
-"image_uv", 
-"image_pixel_center", 
-"image_pixel", 
-"image_mesh", 
-"image_mesh_from_depth", 
-"depth_to_normals", 
-"points_to_normals", 
-"depth_to_points", 
-"chessboard", 
-"cube", 
-"icosahedron", 
-"square", 
-"camera_frustum", 
 "lookup", 
 "perspective", 
 "perspective_from_fov", 
@@ -91,13 +56,62 @@ __all__ = ["triangulate",
 "piecewise_lerp_se3_matrix", 
 "apply_transform", 
 "angle_diff_vec3", 
-"linear_spline_interpolate", 
+"triangulate", 
+"compute_face_normal", 
+"compute_face_angle", 
+"compute_vertex_normal", 
+"compute_vertex_normal_weighted", 
+"remove_corrupted_faces", 
+"merge_duplicate_vertices", 
+"remove_unused_vertices", 
+"subdivide_mesh_simple", 
+"mesh_relations", 
+"flatten_mesh_indices", 
+"cube", 
+"icosahedron", 
+"square", 
+"camera_frustum", 
+"calc_quad_candidates", 
+"calc_quad_distortion", 
+"calc_quad_direction", 
+"calc_quad_smoothness", 
+"sovle_quad", 
+"sovle_quad_qp", 
+"tri_to_quad", 
+"depth_map_edge", 
+"normal_map_edge", 
+"depth_map_aliasing", 
+"screen_coord_map", 
+"uv_map", 
+"pixel_center_coord_map", 
+"pixel_coord_map", 
+"build_mesh_from_map", 
+"build_mesh_from_depth_map", 
+"point_map_to_normal_map", 
+"depth_map_to_point_map", 
+"depth_map_to_normal_map", 
+"chessboard", 
 "RastContext", 
-"rasterize_triangle_faces", 
-"rasterize_edges", 
+"rasterize_triangles", 
+"rasterize_lines", 
 "texture", 
 "warp_image_by_depth", 
 "test_rasterization", 
+"masked_min", 
+"masked_max", 
+"intrinsics_from_fov_xy", 
+"matrix_to_euler_angles", 
+"matrix_to_axis_angle", 
+"axis_angle_to_quaternion", 
+"quaternion_to_axis_angle", 
+"slerp", 
+"interpolate_extrinsics", 
+"interpolate_view", 
+"rotation_matrix_2d", 
+"rotate_2d", 
+"translate_2d", 
+"scale_2d", 
+"apply_2d", 
 "compute_face_angles", 
 "compute_edges", 
 "compute_connected_components", 
@@ -111,35 +125,8 @@ __all__ = ["triangulate",
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
-"get_rays", 
-"get_image_rays", 
-"get_mipnerf_cones", 
-"volume_rendering", 
-"bin_sample", 
-"importance_sample", 
-"nerf_render_rays", 
-"mipnerf_render_rays", 
-"nerf_render_view", 
-"mipnerf_render_view", 
-"InstantNGP", 
-"masked_min", 
-"masked_max", 
-"bounding_rect", 
-"intrinsics_from_fov_xy", 
-"matrix_to_euler_angles", 
-"matrix_to_axis_angle", 
-"axis_angle_to_quaternion", 
-"quaternion_to_axis_angle", 
-"slerp", 
-"interpolate_extrinsics", 
-"interpolate_view", 
-"to4x4", 
-"rotation_matrix_2d", 
-"rotate_2d", 
-"translate_2d", 
-"scale_2d", 
-"apply_2d", 
-"rasterize_triangle_faces_depth_peeling", 
+"bounding_rect_from_mask", 
+"rasterize_triangles_depth_peeling", 
 "texture_composite", 
 "warp_image_by_forward_flow"]
 
@@ -166,114 +153,6 @@ def _call_based_on_args(fname, args, kwargs):
         raise NotImplementedError(f"Function {fname} has no numpy implementation.") 
     return fn(*args, **kwargs)
 
-
-@suppress_traceback
-def triangulate(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.triangulate, utils3d.torch.triangulate
-    return _call_based_on_args('triangulate', args, kwargs)
-
-@suppress_traceback
-def compute_face_normal(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_face_normal, utils3d.torch.compute_face_normal
-    return _call_based_on_args('compute_face_normal', args, kwargs)
-
-@suppress_traceback
-def compute_face_angle(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_face_angle, None
-    return _call_based_on_args('compute_face_angle', args, kwargs)
-
-@suppress_traceback
-def compute_vertex_normal(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_vertex_normal, utils3d.torch.compute_vertex_normal
-    return _call_based_on_args('compute_vertex_normal', args, kwargs)
-
-@suppress_traceback
-def compute_vertex_normal_weighted(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_vertex_normal_weighted, utils3d.torch.compute_vertex_normal_weighted
-    return _call_based_on_args('compute_vertex_normal_weighted', args, kwargs)
-
-@suppress_traceback
-def remove_corrupted_faces(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.remove_corrupted_faces, utils3d.torch.remove_corrupted_faces
-    return _call_based_on_args('remove_corrupted_faces', args, kwargs)
-
-@suppress_traceback
-def merge_duplicate_vertices(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.merge_duplicate_vertices, utils3d.torch.merge_duplicate_vertices
-    return _call_based_on_args('merge_duplicate_vertices', args, kwargs)
-
-@suppress_traceback
-def remove_unreferenced_vertices(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.remove_unreferenced_vertices, utils3d.torch.remove_unreferenced_vertices
-    return _call_based_on_args('remove_unreferenced_vertices', args, kwargs)
-
-@suppress_traceback
-def subdivide_mesh_simple(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.subdivide_mesh_simple, utils3d.torch.subdivide_mesh_simple
-    return _call_based_on_args('subdivide_mesh_simple', args, kwargs)
-
-@suppress_traceback
-def mesh_relations(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.mesh_relations, None
-    return _call_based_on_args('mesh_relations', args, kwargs)
-
-@suppress_traceback
-def flatten_mesh_indices(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.flatten_mesh_indices, None
-    return _call_based_on_args('flatten_mesh_indices', args, kwargs)
-
-@suppress_traceback
-def calc_quad_candidates(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_candidates, None
-    return _call_based_on_args('calc_quad_candidates', args, kwargs)
-
-@suppress_traceback
-def calc_quad_distortion(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_distortion, None
-    return _call_based_on_args('calc_quad_distortion', args, kwargs)
-
-@suppress_traceback
-def calc_quad_direction(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_direction, None
-    return _call_based_on_args('calc_quad_direction', args, kwargs)
-
-@suppress_traceback
-def calc_quad_smoothness(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_smoothness, None
-    return _call_based_on_args('calc_quad_smoothness', args, kwargs)
-
-@suppress_traceback
-def sovle_quad(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sovle_quad, None
-    return _call_based_on_args('sovle_quad', args, kwargs)
-
-@suppress_traceback
-def sovle_quad_qp(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sovle_quad_qp, None
-    return _call_based_on_args('sovle_quad_qp', args, kwargs)
-
-@suppress_traceback
-def tri_to_quad(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.tri_to_quad, None
-    return _call_based_on_args('tri_to_quad', args, kwargs)
 
 @suppress_traceback
 def sliding_window_1d(*args, **kwargs):
@@ -312,112 +191,10 @@ def max_pool_nd(*args, **kwargs):
     return _call_based_on_args('max_pool_nd', args, kwargs)
 
 @suppress_traceback
-def depth_edge(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_edge, utils3d.torch.depth_edge
-    return _call_based_on_args('depth_edge', args, kwargs)
-
-@suppress_traceback
-def normals_edge(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.normals_edge, None
-    return _call_based_on_args('normals_edge', args, kwargs)
-
-@suppress_traceback
-def depth_aliasing(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_aliasing, utils3d.torch.depth_aliasing
-    return _call_based_on_args('depth_aliasing', args, kwargs)
-
-@suppress_traceback
 def interpolate(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.interpolate, None
     return _call_based_on_args('interpolate', args, kwargs)
-
-@suppress_traceback
-def image_scrcoord(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.image_scrcoord, None
-    return _call_based_on_args('image_scrcoord', args, kwargs)
-
-@suppress_traceback
-def image_uv(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.image_uv, utils3d.torch.image_uv
-    return _call_based_on_args('image_uv', args, kwargs)
-
-@suppress_traceback
-def image_pixel_center(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.image_pixel_center, utils3d.torch.image_pixel_center
-    return _call_based_on_args('image_pixel_center', args, kwargs)
-
-@suppress_traceback
-def image_pixel(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.image_pixel, None
-    return _call_based_on_args('image_pixel', args, kwargs)
-
-@suppress_traceback
-def image_mesh(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.image_mesh, utils3d.torch.image_mesh
-    return _call_based_on_args('image_mesh', args, kwargs)
-
-@suppress_traceback
-def image_mesh_from_depth(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.image_mesh_from_depth, utils3d.torch.image_mesh_from_depth
-    return _call_based_on_args('image_mesh_from_depth', args, kwargs)
-
-@suppress_traceback
-def depth_to_normals(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_to_normals, utils3d.torch.depth_to_normals
-    return _call_based_on_args('depth_to_normals', args, kwargs)
-
-@suppress_traceback
-def points_to_normals(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.points_to_normals, utils3d.torch.points_to_normals
-    return _call_based_on_args('points_to_normals', args, kwargs)
-
-@suppress_traceback
-def depth_to_points(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_to_points, utils3d.torch.depth_to_points
-    return _call_based_on_args('depth_to_points', args, kwargs)
-
-@suppress_traceback
-def chessboard(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.chessboard, utils3d.torch.chessboard
-    return _call_based_on_args('chessboard', args, kwargs)
-
-@suppress_traceback
-def cube(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.cube, None
-    return _call_based_on_args('cube', args, kwargs)
-
-@suppress_traceback
-def icosahedron(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.icosahedron, None
-    return _call_based_on_args('icosahedron', args, kwargs)
-
-@suppress_traceback
-def square(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.square, None
-    return _call_based_on_args('square', args, kwargs)
-
-@suppress_traceback
-def camera_frustum(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.camera_frustum, None
-    return _call_based_on_args('camera_frustum', args, kwargs)
 
 @suppress_traceback
 def lookup(*args, **kwargs):
@@ -638,7 +415,7 @@ def ray_intersection(*args, **kwargs):
 @suppress_traceback
 def se3_matrix(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.se3_matrix, None
+        utils3d.numpy.se3_matrix, utils3d.torch.se3_matrix
     return _call_based_on_args('se3_matrix', args, kwargs)
 
 @suppress_traceback
@@ -690,10 +467,214 @@ def angle_diff_vec3(*args, **kwargs):
     return _call_based_on_args('angle_diff_vec3', args, kwargs)
 
 @suppress_traceback
-def linear_spline_interpolate(*args, **kwargs):
+def triangulate(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.linear_spline_interpolate, None
-    return _call_based_on_args('linear_spline_interpolate', args, kwargs)
+        utils3d.numpy.triangulate, utils3d.torch.triangulate
+    return _call_based_on_args('triangulate', args, kwargs)
+
+@suppress_traceback
+def compute_face_normal(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_face_normal, utils3d.torch.compute_face_normal
+    return _call_based_on_args('compute_face_normal', args, kwargs)
+
+@suppress_traceback
+def compute_face_angle(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_face_angle, None
+    return _call_based_on_args('compute_face_angle', args, kwargs)
+
+@suppress_traceback
+def compute_vertex_normal(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_vertex_normal, utils3d.torch.compute_vertex_normal
+    return _call_based_on_args('compute_vertex_normal', args, kwargs)
+
+@suppress_traceback
+def compute_vertex_normal_weighted(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_vertex_normal_weighted, utils3d.torch.compute_vertex_normal_weighted
+    return _call_based_on_args('compute_vertex_normal_weighted', args, kwargs)
+
+@suppress_traceback
+def remove_corrupted_faces(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.remove_corrupted_faces, utils3d.torch.remove_corrupted_faces
+    return _call_based_on_args('remove_corrupted_faces', args, kwargs)
+
+@suppress_traceback
+def merge_duplicate_vertices(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.merge_duplicate_vertices, utils3d.torch.merge_duplicate_vertices
+    return _call_based_on_args('merge_duplicate_vertices', args, kwargs)
+
+@suppress_traceback
+def remove_unused_vertices(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.remove_unused_vertices, utils3d.torch.remove_unused_vertices
+    return _call_based_on_args('remove_unused_vertices', args, kwargs)
+
+@suppress_traceback
+def subdivide_mesh_simple(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.subdivide_mesh_simple, utils3d.torch.subdivide_mesh_simple
+    return _call_based_on_args('subdivide_mesh_simple', args, kwargs)
+
+@suppress_traceback
+def mesh_relations(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.mesh_relations, None
+    return _call_based_on_args('mesh_relations', args, kwargs)
+
+@suppress_traceback
+def flatten_mesh_indices(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.flatten_mesh_indices, None
+    return _call_based_on_args('flatten_mesh_indices', args, kwargs)
+
+@suppress_traceback
+def cube(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.cube, None
+    return _call_based_on_args('cube', args, kwargs)
+
+@suppress_traceback
+def icosahedron(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.icosahedron, None
+    return _call_based_on_args('icosahedron', args, kwargs)
+
+@suppress_traceback
+def square(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.square, None
+    return _call_based_on_args('square', args, kwargs)
+
+@suppress_traceback
+def camera_frustum(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.camera_frustum, None
+    return _call_based_on_args('camera_frustum', args, kwargs)
+
+@suppress_traceback
+def calc_quad_candidates(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.calc_quad_candidates, None
+    return _call_based_on_args('calc_quad_candidates', args, kwargs)
+
+@suppress_traceback
+def calc_quad_distortion(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.calc_quad_distortion, None
+    return _call_based_on_args('calc_quad_distortion', args, kwargs)
+
+@suppress_traceback
+def calc_quad_direction(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.calc_quad_direction, None
+    return _call_based_on_args('calc_quad_direction', args, kwargs)
+
+@suppress_traceback
+def calc_quad_smoothness(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.calc_quad_smoothness, None
+    return _call_based_on_args('calc_quad_smoothness', args, kwargs)
+
+@suppress_traceback
+def sovle_quad(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.sovle_quad, None
+    return _call_based_on_args('sovle_quad', args, kwargs)
+
+@suppress_traceback
+def sovle_quad_qp(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.sovle_quad_qp, None
+    return _call_based_on_args('sovle_quad_qp', args, kwargs)
+
+@suppress_traceback
+def tri_to_quad(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.tri_to_quad, None
+    return _call_based_on_args('tri_to_quad', args, kwargs)
+
+@suppress_traceback
+def depth_map_edge(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_map_edge, utils3d.torch.depth_map_edge
+    return _call_based_on_args('depth_map_edge', args, kwargs)
+
+@suppress_traceback
+def normal_map_edge(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.normal_map_edge, None
+    return _call_based_on_args('normal_map_edge', args, kwargs)
+
+@suppress_traceback
+def depth_map_aliasing(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_map_aliasing, utils3d.torch.depth_map_aliasing
+    return _call_based_on_args('depth_map_aliasing', args, kwargs)
+
+@suppress_traceback
+def screen_coord_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.screen_coord_map, None
+    return _call_based_on_args('screen_coord_map', args, kwargs)
+
+@suppress_traceback
+def uv_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.uv_map, utils3d.torch.uv_map
+    return _call_based_on_args('uv_map', args, kwargs)
+
+@suppress_traceback
+def pixel_center_coord_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.pixel_center_coord_map, utils3d.torch.pixel_center_coord_map
+    return _call_based_on_args('pixel_center_coord_map', args, kwargs)
+
+@suppress_traceback
+def pixel_coord_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.pixel_coord_map, None
+    return _call_based_on_args('pixel_coord_map', args, kwargs)
+
+@suppress_traceback
+def build_mesh_from_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.build_mesh_from_map, utils3d.torch.build_mesh_from_map
+    return _call_based_on_args('build_mesh_from_map', args, kwargs)
+
+@suppress_traceback
+def build_mesh_from_depth_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.build_mesh_from_depth_map, utils3d.torch.build_mesh_from_depth_map
+    return _call_based_on_args('build_mesh_from_depth_map', args, kwargs)
+
+@suppress_traceback
+def point_map_to_normal_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.point_map_to_normal_map, utils3d.torch.point_map_to_normal_map
+    return _call_based_on_args('point_map_to_normal_map', args, kwargs)
+
+@suppress_traceback
+def depth_map_to_point_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_map_to_point_map, utils3d.torch.depth_map_to_point_map
+    return _call_based_on_args('depth_map_to_point_map', args, kwargs)
+
+@suppress_traceback
+def depth_map_to_normal_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_map_to_normal_map, utils3d.torch.depth_map_to_normal_map
+    return _call_based_on_args('depth_map_to_normal_map', args, kwargs)
+
+@suppress_traceback
+def chessboard(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.chessboard, utils3d.torch.chessboard
+    return _call_based_on_args('chessboard', args, kwargs)
 
 @suppress_traceback
 def RastContext(*args, **kwargs):
@@ -702,16 +683,16 @@ def RastContext(*args, **kwargs):
     return _call_based_on_args('RastContext', args, kwargs)
 
 @suppress_traceback
-def rasterize_triangle_faces(*args, **kwargs):
+def rasterize_triangles(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.rasterize_triangle_faces, utils3d.torch.rasterize_triangle_faces
-    return _call_based_on_args('rasterize_triangle_faces', args, kwargs)
+        utils3d.numpy.rasterize_triangles, utils3d.torch.rasterize_triangles
+    return _call_based_on_args('rasterize_triangles', args, kwargs)
 
 @suppress_traceback
-def rasterize_edges(*args, **kwargs):
+def rasterize_lines(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.rasterize_edges, None
-    return _call_based_on_args('rasterize_edges', args, kwargs)
+        utils3d.numpy.rasterize_lines, None
+    return _call_based_on_args('rasterize_lines', args, kwargs)
 
 @suppress_traceback
 def texture(*args, **kwargs):
@@ -730,6 +711,96 @@ def test_rasterization(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.test_rasterization, None
     return _call_based_on_args('test_rasterization', args, kwargs)
+
+@suppress_traceback
+def masked_min(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.masked_min
+    return _call_based_on_args('masked_min', args, kwargs)
+
+@suppress_traceback
+def masked_max(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.masked_max
+    return _call_based_on_args('masked_max', args, kwargs)
+
+@suppress_traceback
+def intrinsics_from_fov_xy(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.intrinsics_from_fov_xy
+    return _call_based_on_args('intrinsics_from_fov_xy', args, kwargs)
+
+@suppress_traceback
+def matrix_to_euler_angles(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.matrix_to_euler_angles
+    return _call_based_on_args('matrix_to_euler_angles', args, kwargs)
+
+@suppress_traceback
+def matrix_to_axis_angle(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.matrix_to_axis_angle
+    return _call_based_on_args('matrix_to_axis_angle', args, kwargs)
+
+@suppress_traceback
+def axis_angle_to_quaternion(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.axis_angle_to_quaternion
+    return _call_based_on_args('axis_angle_to_quaternion', args, kwargs)
+
+@suppress_traceback
+def quaternion_to_axis_angle(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.quaternion_to_axis_angle
+    return _call_based_on_args('quaternion_to_axis_angle', args, kwargs)
+
+@suppress_traceback
+def slerp(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.slerp
+    return _call_based_on_args('slerp', args, kwargs)
+
+@suppress_traceback
+def interpolate_extrinsics(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.interpolate_extrinsics
+    return _call_based_on_args('interpolate_extrinsics', args, kwargs)
+
+@suppress_traceback
+def interpolate_view(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.interpolate_view
+    return _call_based_on_args('interpolate_view', args, kwargs)
+
+@suppress_traceback
+def rotation_matrix_2d(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.rotation_matrix_2d
+    return _call_based_on_args('rotation_matrix_2d', args, kwargs)
+
+@suppress_traceback
+def rotate_2d(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.rotate_2d
+    return _call_based_on_args('rotate_2d', args, kwargs)
+
+@suppress_traceback
+def translate_2d(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.translate_2d
+    return _call_based_on_args('translate_2d', args, kwargs)
+
+@suppress_traceback
+def scale_2d(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.scale_2d
+    return _call_based_on_args('scale_2d', args, kwargs)
+
+@suppress_traceback
+def apply_2d(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.apply_2d
+    return _call_based_on_args('apply_2d', args, kwargs)
 
 @suppress_traceback
 def compute_face_angles(*args, **kwargs):
@@ -810,178 +881,16 @@ def laplacian_hc_smooth_mesh(*args, **kwargs):
     return _call_based_on_args('laplacian_hc_smooth_mesh', args, kwargs)
 
 @suppress_traceback
-def get_rays(*args, **kwargs):
+def bounding_rect_from_mask(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.get_rays
-    return _call_based_on_args('get_rays', args, kwargs)
+        None, utils3d.torch.bounding_rect_from_mask
+    return _call_based_on_args('bounding_rect_from_mask', args, kwargs)
 
 @suppress_traceback
-def get_image_rays(*args, **kwargs):
+def rasterize_triangles_depth_peeling(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.get_image_rays
-    return _call_based_on_args('get_image_rays', args, kwargs)
-
-@suppress_traceback
-def get_mipnerf_cones(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.get_mipnerf_cones
-    return _call_based_on_args('get_mipnerf_cones', args, kwargs)
-
-@suppress_traceback
-def volume_rendering(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.volume_rendering
-    return _call_based_on_args('volume_rendering', args, kwargs)
-
-@suppress_traceback
-def bin_sample(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.bin_sample
-    return _call_based_on_args('bin_sample', args, kwargs)
-
-@suppress_traceback
-def importance_sample(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.importance_sample
-    return _call_based_on_args('importance_sample', args, kwargs)
-
-@suppress_traceback
-def nerf_render_rays(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.nerf_render_rays
-    return _call_based_on_args('nerf_render_rays', args, kwargs)
-
-@suppress_traceback
-def mipnerf_render_rays(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.mipnerf_render_rays
-    return _call_based_on_args('mipnerf_render_rays', args, kwargs)
-
-@suppress_traceback
-def nerf_render_view(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.nerf_render_view
-    return _call_based_on_args('nerf_render_view', args, kwargs)
-
-@suppress_traceback
-def mipnerf_render_view(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.mipnerf_render_view
-    return _call_based_on_args('mipnerf_render_view', args, kwargs)
-
-@suppress_traceback
-def InstantNGP(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.InstantNGP
-    return _call_based_on_args('InstantNGP', args, kwargs)
-
-@suppress_traceback
-def masked_min(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.masked_min
-    return _call_based_on_args('masked_min', args, kwargs)
-
-@suppress_traceback
-def masked_max(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.masked_max
-    return _call_based_on_args('masked_max', args, kwargs)
-
-@suppress_traceback
-def bounding_rect(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.bounding_rect
-    return _call_based_on_args('bounding_rect', args, kwargs)
-
-@suppress_traceback
-def intrinsics_from_fov_xy(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.intrinsics_from_fov_xy
-    return _call_based_on_args('intrinsics_from_fov_xy', args, kwargs)
-
-@suppress_traceback
-def matrix_to_euler_angles(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.matrix_to_euler_angles
-    return _call_based_on_args('matrix_to_euler_angles', args, kwargs)
-
-@suppress_traceback
-def matrix_to_axis_angle(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.matrix_to_axis_angle
-    return _call_based_on_args('matrix_to_axis_angle', args, kwargs)
-
-@suppress_traceback
-def axis_angle_to_quaternion(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.axis_angle_to_quaternion
-    return _call_based_on_args('axis_angle_to_quaternion', args, kwargs)
-
-@suppress_traceback
-def quaternion_to_axis_angle(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.quaternion_to_axis_angle
-    return _call_based_on_args('quaternion_to_axis_angle', args, kwargs)
-
-@suppress_traceback
-def slerp(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.slerp
-    return _call_based_on_args('slerp', args, kwargs)
-
-@suppress_traceback
-def interpolate_extrinsics(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.interpolate_extrinsics
-    return _call_based_on_args('interpolate_extrinsics', args, kwargs)
-
-@suppress_traceback
-def interpolate_view(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.interpolate_view
-    return _call_based_on_args('interpolate_view', args, kwargs)
-
-@suppress_traceback
-def to4x4(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.to4x4
-    return _call_based_on_args('to4x4', args, kwargs)
-
-@suppress_traceback
-def rotation_matrix_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.rotation_matrix_2d
-    return _call_based_on_args('rotation_matrix_2d', args, kwargs)
-
-@suppress_traceback
-def rotate_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.rotate_2d
-    return _call_based_on_args('rotate_2d', args, kwargs)
-
-@suppress_traceback
-def translate_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.translate_2d
-    return _call_based_on_args('translate_2d', args, kwargs)
-
-@suppress_traceback
-def scale_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.scale_2d
-    return _call_based_on_args('scale_2d', args, kwargs)
-
-@suppress_traceback
-def apply_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.apply_2d
-    return _call_based_on_args('apply_2d', args, kwargs)
-
-@suppress_traceback
-def rasterize_triangle_faces_depth_peeling(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.rasterize_triangle_faces_depth_peeling
-    return _call_based_on_args('rasterize_triangle_faces_depth_peeling', args, kwargs)
+        None, utils3d.torch.rasterize_triangles_depth_peeling
+    return _call_based_on_args('rasterize_triangles_depth_peeling', args, kwargs)
 
 @suppress_traceback
 def texture_composite(*args, **kwargs):

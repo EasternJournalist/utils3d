@@ -9,8 +9,8 @@ from ._helpers import batched
 
 __all__ = [
     'RastContext',
-    'rasterize_triangle_faces', 
-    'rasterize_triangle_faces_depth_peeling',
+    'rasterize_triangles', 
+    'rasterize_triangles_peeling',
     'texture',
     'texture_composite',
     'warp_image_by_depth',
@@ -35,12 +35,13 @@ class RastContext:
             raise ValueError(f'Unknown backend: {backend}')
 
 
-def rasterize_triangle_faces(
+def rasterize_triangles(
     ctx: RastContext,
-    vertices: torch.Tensor,
-    faces: torch.Tensor,
     width: int,
     height: int,
+    *,
+    vertices: torch.Tensor,
+    faces: torch.Tensor,
     attr: torch.Tensor = None,
     uv: torch.Tensor = None,
     texture: torch.Tensor = None,
@@ -141,7 +142,7 @@ def rasterize_triangle_faces(
     return ret
 
 
-def rasterize_triangle_faces_depth_peeling(
+def rasterize_triangles_peeling(
     ctx: RastContext,
     vertices: torch.Tensor,
     faces: torch.Tensor,
@@ -537,7 +538,7 @@ def warp_image_by_forward_flow(
     view = transforms.extrinsics_to_view(extrinsics)
     perspective = transforms.intrinsics_to_perspective(intrinsics, near=0.1, far=100)
 
-    uv, faces = utils.image_mesh(width=width, height=height)
+    uv, faces = build_mesh_from_map(uv_map(width=width, height=height))
     uv, faces = uv.to(image.device), faces.to(image.device)
     uv = uv + flow.permute(0, 2, 3, 1).flatten(1, 2)
     pts = transforms.unproject_cv(
@@ -555,13 +556,13 @@ def warp_image_by_forward_flow(
 
     # rasterize attributes
     attr = image.permute(0, 2, 3, 1).flatten(1, 2)
-    rast = rasterize_triangle_faces(
+    rast = rasterize_triangles(
         ctx,
-        pts,
-        faces,
         width,
         height,
+        vertices=pts,
         attr=attr,
+        faces=faces,
         view=view,
         perspective=perspective,
         antialiasing=antialiasing,

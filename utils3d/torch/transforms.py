@@ -49,7 +49,7 @@ __all__ = [
     'interpolate_extrinsics',
     'interpolate_view',
     'extrinsics_to_essential',
-    'to4x4',
+    'se3_matrix',
     'rotation_matrix_2d',
     'rotate_2d',
     'translate_2d',
@@ -1068,7 +1068,7 @@ def extrinsics_to_essential(extrinsics: torch.Tensor):
     return R @ t_x
 
 
-def to4x4(R: torch.Tensor, t: torch.Tensor):
+def se3_matrix(R: torch.Tensor, t: torch.Tensor):
     """
     Compose rotation matrix and translation vector to 4x4 transformation matrix
 

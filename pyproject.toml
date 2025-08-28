@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "utils3d"
-version = "0.0.2"
+version = "0.0.3"
 description = "A small package for 3D graphics"
 readme = "README.md"
 authors = [
@@ -30,6 +30,3 @@ Homepage = "https://github.com/EasternJournalist/utils3d"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["utils3d*"]
-
-[tool.setuptools.package-data]
-"utils3d.numpy.shaders" = ["*"]

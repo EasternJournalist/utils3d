@@ -52,31 +52,31 @@ def _solve_tridiagonal(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarra
     return x
 
 
-def cubic_spline_interpolate(x: np.ndarray, t: np.ndarray, s: np.ndarray, v0: np.ndarray = None, vn: np.ndarray = None) -> np.ndarray:
-    """
-    Cubic spline interpolation.
+# def cubic_spline_interpolate(x: np.ndarray, t: np.ndarray, s: np.ndarray, v0: np.ndarray = None, vn: np.ndarray = None) -> np.ndarray:
+#     """
+#     Cubic spline interpolation.
 
-    ### Parameters:
-    - `x`: np.ndarray, shape (..., n,): the x-coordinates of the data points.
-    - `t`: np.ndarray, shape (n,): the knot vector. NOTE: t must be sorted in ascending order.
-    - `s`: np.ndarray, shape (..., m,): the y-coordinates of the data points.
-    - `v0`: np.ndarray, shape (...,): the value of the derivative at the first knot, as the boundary condition. If None, it is set to zero.
-    - `vn`: np.ndarray, shape (...,): the value of the derivative at the last knot, as the boundary condition. If None, it is set to zero.
+#     ### Parameters:
+#     - `x`: np.ndarray, shape (..., n,): the x-coordinates of the data points.
+#     - `t`: np.ndarray, shape (n,): the knot vector. NOTE: t must be sorted in ascending order.
+#     - `s`: np.ndarray, shape (..., m,): the y-coordinates of the data points.
+#     - `v0`: np.ndarray, shape (...,): the value of the derivative at the first knot, as the boundary condition. If None, it is set to zero.
+#     - `vn`: np.ndarray, shape (...,): the value of the derivative at the last knot, as the boundary condition. If None, it is set to zero.
     
-    ### Returns:
-    - `y`: np.ndarray, shape (..., m): the interpolated values.
-    """
-    h = t[..., 1:] - t[..., :-1]
-    mu = h[..., :-1] / (h[..., :-1] + h[..., 1:])
-    la = 1 - mu
-    d = (x[..., 1:] - x[..., :-1]) / h
-    d = 6 * (d[..., 1:] - d[..., :-1]) / (t[..., 2:] - t[..., :-2])
+#     ### Returns:
+#     - `y`: np.ndarray, shape (..., m): the interpolated values.
+#     """
+#     h = t[..., 1:] - t[..., :-1]
+#     mu = h[..., :-1] / (h[..., :-1] + h[..., 1:])
+#     la = 1 - mu
+#     d = (x[..., 1:] - x[..., :-1]) / h
+#     d = 6 * (d[..., 1:] - d[..., :-1]) / (t[..., 2:] - t[..., :-2])
 
-    mu = np.concatenate([mu, np.ones_like(mu[..., :1])], axis=-1)
-    la = np.concatenate([np.ones_like(la[..., :1]), la], axis=-1)
-    d = np.concatenate([(((x[..., 1] - x[..., 0]) / h[0] - v0) / h[0])[..., None], d, ((vn - (x[..., -1] - x[..., -2]) / h[-1]) / h[-1])[..., None]], axis=-1)
+#     mu = np.concatenate([mu, np.ones_like(mu[..., :1])], axis=-1)
+#     la = np.concatenate([np.ones_like(la[..., :1]), la], axis=-1)
+#     d = np.concatenate([(((x[..., 1] - x[..., 0]) / h[0] - v0) / h[0])[..., None], d, ((vn - (x[..., -1] - x[..., -2]) / h[-1]) / h[-1])[..., None]], axis=-1)
 
-    M = _solve_tridiagonal(mu, np.full_like(d, fill_value=2), la, d)
+#     M = _solve_tridiagonal(mu, np.full_like(d, fill_value=2), la, d)
 
-    i = np.searchsorted(t, s, side='left')
-
+#     i = np.searchsorted(t, s, side='left')
+#     raise NotImplementedError()

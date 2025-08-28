@@ -2,6 +2,7 @@ import numpy as np
 from typing import *
 from ._helpers import batched
 
+from .transforms import unproject_cv
 
 __all__ = [
     'triangulate',
@@ -11,10 +12,15 @@ __all__ = [
     'compute_vertex_normal_weighted',
     'remove_corrupted_faces',
     'merge_duplicate_vertices',
-    'remove_unreferenced_vertices',
+    'remove_unused_vertices',
     'subdivide_mesh_simple',
     'mesh_relations',
-    'flatten_mesh_indices'
+    'flatten_mesh_indices',
+    'cube',
+    'icosahedron',
+    'square',
+    'camera_frustum',
+    'merge_meshes'
 ]
 
 
@@ -183,8 +189,8 @@ def compute_vertex_normal_weighted(
     
 
 def remove_corrupted_faces(
-        faces: np.ndarray
-    ) -> np.ndarray:
+    faces: np.ndarray
+) -> np.ndarray:
     """
     Remove corrupted faces (faces with duplicated vertices)
 
@@ -199,10 +205,10 @@ def remove_corrupted_faces(
 
 
 def merge_duplicate_vertices(
-        vertices: np.ndarray, 
-        faces: np.ndarray,
-        tol: float = 1e-6
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    vertices: np.ndarray, 
+    faces: np.ndarray,
+    tol: float = 1e-6
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Merge duplicate vertices of a triangular mesh. 
     Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
@@ -223,7 +229,7 @@ def merge_duplicate_vertices(
     return vertices, faces
 
 
-def remove_unreferenced_vertices(
+def remove_unused_vertices(
     faces: np.ndarray,
     *vertice_attrs,
     return_indices: bool = False
@@ -353,3 +359,119 @@ def flatten_mesh_indices(*args: np.ndarray) -> Tuple[np.ndarray, ...]:
         attr_flat.append(attr_flat_)
     faces_flat = np.arange(T * P, dtype=np.int32).reshape(T, P)
     return faces_flat, *attr_flat
+
+
+
+def square(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]: 
+    """
+    Get a square mesh of area 1 centered at origin in the xy-plane.
+
+    ### Returns
+        vertices (np.ndarray): shape (4, 3)
+        faces (np.ndarray): shape (1, 4)
+    """
+    vertices = np.array([
+        [-0.5, 0.5, 0],   [0.5, 0.5, 0],   [0.5, -0.5, 0],   [-0.5, -0.5, 0] # v0-v1-v2-v3
+    ], dtype=np.float32)
+    if tri:
+        faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
+    else:
+        faces = np.array([[0, 1, 2, 3]], dtype=np.int32)
+    return vertices, faces  
+
+
+def cube(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get x cube mesh of size 1 centered at origin.
+
+    ### Parameters
+        tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
+
+    ### Returns
+        vertices (np.ndarray): shape (8, 3) 
+        faces (np.ndarray): shape (12, 3)
+    """
+    vertices = np.array([
+        [-0.5, 0.5, 0.5],   [0.5, 0.5, 0.5],   [0.5, -0.5, 0.5],   [-0.5, -0.5, 0.5], # v0-v1-v2-v3
+        [-0.5, 0.5, -0.5],  [0.5, 0.5, -0.5],  [0.5, -0.5, -0.5],  [-0.5, -0.5, -0.5] # v4-v5-v6-v7
+    ], dtype=np.float32).reshape((-1, 3))
+
+    faces = np.array([
+        [0, 1, 2, 3], # v0-v1-v2-v3 (front)
+        [4, 5, 1, 0], # v4-v5-v1-v0 (top)
+        [3, 2, 6, 7], # v3-v2-v6-v7 (bottom)
+        [5, 4, 7, 6], # v5-v4-v7-v6 (back)
+        [1, 5, 6, 2], # v1-v5-v6-v2 (right)
+        [4, 0, 3, 7]  # v4-v0-v3-v7 (left)
+    ], dtype=np.int32)
+
+    if tri:
+        faces = triangulate(faces, vertices=vertices)
+
+    return vertices, faces
+
+
+def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float = 1.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Get x triangle mesh of camera frustum.
+    """
+    assert extrinsics.shape == (4, 4) and intrinsics.shape == (3, 3)
+    vertices = unproject_cv(
+        np.array([[0, 0], [0, 0], [0, 1], [1, 1], [1, 0]], dtype=np.float32), 
+        np.array([0] + [depth] * 4, dtype=np.float32), 
+        extrinsics, 
+        intrinsics
+    ).astype(np.float32)
+    edges = np.array([
+        [0, 1], [0, 2], [0, 3], [0, 4], 
+        [1, 2], [2, 3], [3, 4], [4, 1]
+    ], dtype=np.int32)
+    faces = np.array([
+        [0, 1, 2],
+        [0, 2, 3],
+        [0, 3, 4],
+        [0, 4, 1],
+        [1, 2, 3],
+        [1, 3, 4]
+    ], dtype=np.int32)
+    return vertices, edges, faces
+
+
+def icosahedron():
+    A = (1 + 5 ** 0.5) / 2
+    vertices = np.array([
+        [0, 1, A], [0, -1, A], [0, 1, -A], [0, -1, -A],
+        [1, A, 0], [-1, A, 0], [1, -A, 0], [-1, -A, 0],
+        [A, 0, 1], [A, 0, -1], [-A, 0, 1], [-A, 0, -1]
+    ], dtype=np.float32)
+    faces = np.array([
+        [0, 1, 8], [0, 8, 4], [0, 4, 5], [0, 5, 10], [0, 10, 1],
+        [3, 2, 9], [3, 9, 6], [3, 6, 7], [3, 7, 11], [3, 11, 2],
+        [1, 6, 8], [8, 9, 4], [4, 2, 5], [5, 11, 10], [10, 7, 1],
+        [2, 4, 9], [9, 8, 6], [6, 1, 7], [7, 10, 11], [11, 5, 2]
+    ], dtype=np.int32)
+    return vertices, faces
+
+
+def merge_meshes(meshes: List[Tuple[np.ndarray, ...]]) -> Tuple[np.ndarray, ...]:
+    """
+    Merge multiple meshes into one mesh. Vertices will be no longer shared.
+
+    ### Parameters:
+        `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
+
+    ### Returns:
+        `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
+        `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face
+    """
+    faces_merged = []
+    attrs_merged = [[] for _ in meshes[0][1:]]
+    vertex_offset = 0
+    for f, *attrs in meshes:
+        faces_merged.append(f + vertex_offset)
+        vertex_offset += len(attrs[0])
+        for attr_merged, attr in zip(attrs_merged, attrs):
+            attr_merged.append(attr)
+    faces_merged = np.concatenate(faces_merged, axis=0)
+    attrs_merged = [np.concatenate(attr_list, axis=0) for attr_list in attrs_merged]
+    return (faces_merged, *attrs_merged)

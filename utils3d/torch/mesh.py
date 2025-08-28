@@ -15,7 +15,7 @@ __all__ = [
     'compute_edge_connected_components',
     'compute_boundarys',
     'compute_dual_graph',
-    'remove_unreferenced_vertices',
+    'remove_unused_vertices',
     'remove_corrupted_faces',
     'remove_isolated_pieces',
     'merge_duplicate_vertices',
@@ -404,7 +404,7 @@ def compute_dual_graph(
     return dual_edges, dual_edge2edge
 
 
-def remove_unreferenced_vertices(
+def remove_unused_vertices(
     faces: torch.Tensor,
     *vertice_attrs,
     return_indices: bool = False
@@ -536,7 +536,7 @@ def remove_isolated_pieces(
     # post-process
     faces = torch.cat([faces[connected_components[i]] for i in range(len(connected_components))], dim=0)
     if remove_unreferenced:
-        faces, vertices = remove_unreferenced_vertices(faces, vertices)
+        faces, vertices = remove_unused_vertices(faces, vertices)
     return vertices, faces
 
 

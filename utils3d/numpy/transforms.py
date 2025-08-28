@@ -579,12 +579,12 @@ def project_gl(
     return scr_coord, linear_depth
 
 
-@batched(2,2,2)
+@batched(2, 2, 2)
 def project_cv(
-        points: np.ndarray,
-        extrinsics: np.ndarray = None,
-        intrinsics: np.ndarray = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    points: np.ndarray,
+    intrinsics: np.ndarray,
+    extrinsics: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Project 3D points to 2D following the OpenCV convention
 
@@ -611,13 +611,13 @@ def project_cv(
     return uv_coord, linear_depth
 
 
-@batched(2,2,2,2)
+@batched(2, 2, 2, 2)
 def unproject_gl(
-        screen_coord: np.ndarray,
-        model: np.ndarray = None,
-        view: np.ndarray = None,
-        perspective: np.ndarray = None
-    ) -> np.ndarray:
+    screen_coord: np.ndarray,
+    model: np.ndarray = None,
+    view: np.ndarray = None,
+    perspective: np.ndarray = None
+) -> np.ndarray:
     """
     Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
 
@@ -645,12 +645,12 @@ def unproject_gl(
     return points
     
 
-@batched(2,1,2,2)
+@batched(2, 1, 2, 2)
 def unproject_cv(
     uv_coord: np.ndarray,
-    depth: np.ndarray = None,
-    extrinsics: np.ndarray = None,
-    intrinsics: np.ndarray = None
+    depth: Optional[np.ndarray] = None,
+    intrinsics: np.ndarray = None,
+    extrinsics: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention

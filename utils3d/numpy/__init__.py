@@ -8,28 +8,6 @@ from typing import TYPE_CHECKING
 
 
 __modules_all__ = {
-    'mesh':[
-        'triangulate',
-        'compute_face_normal',
-        'compute_face_angle',
-        'compute_vertex_normal',
-        'compute_vertex_normal_weighted',
-        'remove_corrupted_faces',
-        'merge_duplicate_vertices',
-        'remove_unreferenced_vertices',
-        'subdivide_mesh_simple',
-        'mesh_relations',
-        'flatten_mesh_indices'
-    ],
-    'quadmesh': [
-        'calc_quad_candidates',
-        'calc_quad_distortion',
-        'calc_quad_direction',
-        'calc_quad_smoothness',
-        'sovle_quad',
-        'sovle_quad_qp',
-        'tri_to_quad'
-    ],
     'utils': [
         'sliding_window_1d',
         'sliding_window_nd',
@@ -37,24 +15,7 @@ __modules_all__ = {
         'max_pool_1d',
         'max_pool_2d',
         'max_pool_nd',
-        'depth_edge',
-        'normals_edge',
-        'depth_aliasing',
         'interpolate',
-        'image_scrcoord',
-        'image_uv',
-        'image_pixel_center',
-        'image_pixel',
-        'image_mesh',
-        'image_mesh_from_depth',
-        'depth_to_normals',
-        'points_to_normals',
-        'depth_to_points',
-        'chessboard',
-        'cube',
-        'icosahedron',
-        'square',
-        'camera_frustum',
         'lookup',
     ],
     'transforms': [
@@ -103,16 +64,55 @@ __modules_all__ = {
         'apply_transform',
         'angle_diff_vec3'
     ],
-    'spline': [
-        'linear_spline_interpolate',
+    'mesh':[
+        'triangulate',
+        'merge_meshes',
+        'compute_face_normal',
+        'compute_face_angle',
+        'compute_vertex_normal',
+        'compute_vertex_normal_weighted',
+        'remove_corrupted_faces',
+        'merge_duplicate_vertices',
+        'remove_unused_vertices',
+        'subdivide_mesh_simple',
+        'mesh_relations',
+        'flatten_mesh_indices',
+        'cube',
+        'icosahedron',
+        'square',
+        'camera_frustum',
+    ],
+    'quadmesh': [
+        'calc_quad_candidates',
+        'calc_quad_distortion',
+        'calc_quad_direction',
+        'calc_quad_smoothness',
+        'sovle_quad',
+        'sovle_quad_qp',
+        'tri_to_quad'
+    ],
+    'maps': [
+        'depth_map_edge',
+        'normal_map_edge',
+        'depth_map_aliasing',
+        'screen_coord_map',
+        'uv_map',
+        'pixel_center_coord_map',
+        'pixel_coord_map',
+        'build_mesh_from_map',
+        'build_mesh_from_depth_map',
+        'point_map_to_normal_map',
+        'depth_map_to_point_map',
+        'depth_map_to_normal_map',
+        'chessboard',
     ],
     'rasterization': [
         'RastContext',
-        'rasterize_triangle_faces',
-        'rasterize_edges',
+        'rasterize_triangles',
+        'rasterize_triangles_peeling',
+        'rasterize_lines',
         'texture',
-        'warp_image_by_depth',
-        'test_rasterization'
+        'test_rasterization',
     ],
 }
 
@@ -137,9 +137,9 @@ def __getattr__(name):
 
 
 if TYPE_CHECKING:
-    from .quadmesh import *
+    from .utils import *
     from .transforms import *
     from .mesh import *
-    from .utils import *
+    from .maps import *
+    from .quadmesh import *
     from .rasterization import *
-    from .spline import *

@@ -24,7 +24,7 @@ def run():
         intrinsics_src=intrinsics
     )
     uv = (np.concatenate([uv, np.zeros((128, 128, 1), dtype=np.float32)], axis=-1) * 255).astype(np.uint8)
-    imageio.imwrite(os.path.join(os.path.dirname(__file__), '..', '..', 'results_to_check', 'warp_image_uv.png'), uv)
+    imageio.imwrite(os.path.join(os.path.dirname(__file__), '..', '..', 'results_to_check', 'warp_uv_map.png'), uv)
 
 if __name__ == '__main__':
     run()
