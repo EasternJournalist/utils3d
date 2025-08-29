@@ -49,7 +49,7 @@ __all__ = [
     'piecewise_lerp',
     'piecewise_lerp_se3_matrix',
     'apply_transform',
-    'angle_diff_vec3'
+    'angle_between'
 ]
 
 
@@ -1105,5 +1105,14 @@ def apply_transform(T: np.ndarray, x: np.ndarray) -> np.ndarray:
     return x_transformed[..., 0]
 
 
-def angle_diff_vec3(v1: np.ndarray, v2: np.ndarray, eps: float = 1e-12):
-    return np.atan2(np.linalg.norm(np.cross(v1, v2, axis=-1), axis=-1) + eps, (v1 * v2).sum(axis=-1))
+def angle_between(v1: np.ndarray, v2: np.ndarray):
+    """
+    Calculate the angle between two vectors.
+    """
+    n1 = np.linalg.norm(v1, axis=-1, keepdims=True)
+    n2 = np.linalg.norm(v2, axis=-1, keepdims=True)
+    v1 = v1 / np.where(n1 == 0, 1, n1)
+    v2 = v2 / np.where(n2 == 0, 1, n2)
+    cos = (v1 * v2).sum(axis=-1)
+    sin = np.minimum(np.linalg.norm(v2 - v1 * cos[..., None], axis=-1), np.linalg.norm(v1 - v2 * cos[..., None], axis=-1))
+    return np.atan2(sin, cos)

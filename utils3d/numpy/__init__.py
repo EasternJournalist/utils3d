@@ -62,7 +62,7 @@ __modules_all__ = {
         'piecewise_lerp',
         'piecewise_lerp_se3_matrix',
         'apply_transform',
-        'angle_diff_vec3'
+        'angle_between'
     ],
     'mesh':[
         'triangulate',

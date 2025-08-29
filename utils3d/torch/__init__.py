@@ -60,6 +60,7 @@ __modules_all__ = {
         'translate_2d',
         'scale_2d',
         'apply_2d',
+        'angle_between'
     ],
     'mesh': [
         'triangulate',

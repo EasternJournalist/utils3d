@@ -55,6 +55,7 @@ __all__ = [
     'translate_2d',
     'scale_2d',
     'apply_2d',
+    'angle_between'
 ]
 
 
@@ -1206,3 +1207,16 @@ def apply_2d(transform: torch.Tensor, points: torch.Tensor):
     assert transform.shape[-2:] == (3, 3) or transform.shape[-2:] == (2, 3), "transform must be 3x3 or 2x3"
     assert points.shape[-1] == 2, "points must be 2D"
     return points @ transform[..., :2, :2].mT + transform[..., :2, None, 2] 
+
+
+def angle_between(v1: torch.Tensor, v2: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Calculate the angle between two vectors.
+
+    NOTE: `eps` prevents zero angle difference which is indifferentiable.
+    """
+    v1 = F.normalize(v1, dim=-1, eps=eps)
+    v2 = F.normalize(v2, dim=-1, eps=eps)
+    cos = (v1 * v2).sum(dim=-1)
+    sin = torch.minimum((v2 - v1 * cos[..., None]).norm(dim=-1), (v1 - v2 * cos[..., None]).norm(dim=-1))
+    return torch.atan2(sin + eps, cos)
