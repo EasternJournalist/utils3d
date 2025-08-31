@@ -111,7 +111,7 @@ __modules_all__ = {
         'rasterize_triangles',
         'rasterize_triangles_peeling',
         'rasterize_lines',
-        'texture',
+        'sample_texture',
         'test_rasterization',
     ],
 }

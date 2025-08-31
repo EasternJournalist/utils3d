@@ -4,7 +4,7 @@ import numpy as np
 
 from .._helpers import no_warnings
 from .utils import max_pool_2d, sliding_window_2d
-from .transforms import angle_diff_vec3, unproject_cv
+from .transforms import unproject_cv
 from .mesh import triangulate, remove_unused_vertices
 
 __all__ = [

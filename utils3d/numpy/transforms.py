@@ -214,10 +214,10 @@ def intrinsics_to_fov(intrinsics: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 @batched(1,1,1)
 def view_look_at(
-        eye: np.ndarray,
-        look_at: np.ndarray,
-        up: np.ndarray
-    ) -> np.ndarray:
+    eye: np.ndarray,
+    look_at: np.ndarray,
+    up: np.ndarray
+) -> np.ndarray:
     """
     Get OpenGL view matrix looking at something
 

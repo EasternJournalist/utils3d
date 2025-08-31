@@ -55,8 +55,9 @@ __all__ = ["sliding_window_1d",
 "piecewise_lerp", 
 "piecewise_lerp_se3_matrix", 
 "apply_transform", 
-"angle_diff_vec3", 
+"angle_between", 
 "triangulate", 
+"merge_meshes", 
 "compute_face_normal", 
 "compute_face_angle", 
 "compute_vertex_normal", 
@@ -93,9 +94,9 @@ __all__ = ["sliding_window_1d",
 "chessboard", 
 "RastContext", 
 "rasterize_triangles", 
+"rasterize_triangles_peeling", 
 "rasterize_lines", 
-"texture", 
-"warp_image_by_depth", 
+"sample_texture", 
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
@@ -126,8 +127,9 @@ __all__ = ["sliding_window_1d",
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
 "bounding_rect_from_mask", 
-"rasterize_triangles_depth_peeling", 
+"texture", 
 "texture_composite", 
+"warp_image_by_depth", 
 "warp_image_by_forward_flow"]
 
 def _contains_tensor(obj):
@@ -461,16 +463,22 @@ def apply_transform(*args, **kwargs):
     return _call_based_on_args('apply_transform', args, kwargs)
 
 @suppress_traceback
-def angle_diff_vec3(*args, **kwargs):
+def angle_between(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.angle_diff_vec3, None
-    return _call_based_on_args('angle_diff_vec3', args, kwargs)
+        utils3d.numpy.angle_between, utils3d.torch.angle_between
+    return _call_based_on_args('angle_between', args, kwargs)
 
 @suppress_traceback
 def triangulate(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.triangulate, utils3d.torch.triangulate
     return _call_based_on_args('triangulate', args, kwargs)
+
+@suppress_traceback
+def merge_meshes(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.merge_meshes, None
+    return _call_based_on_args('merge_meshes', args, kwargs)
 
 @suppress_traceback
 def compute_face_normal(*args, **kwargs):
@@ -689,22 +697,22 @@ def rasterize_triangles(*args, **kwargs):
     return _call_based_on_args('rasterize_triangles', args, kwargs)
 
 @suppress_traceback
+def rasterize_triangles_peeling(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.rasterize_triangles_peeling, utils3d.torch.rasterize_triangles_peeling
+    return _call_based_on_args('rasterize_triangles_peeling', args, kwargs)
+
+@suppress_traceback
 def rasterize_lines(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.rasterize_lines, None
     return _call_based_on_args('rasterize_lines', args, kwargs)
 
 @suppress_traceback
-def texture(*args, **kwargs):
+def sample_texture(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.texture, utils3d.torch.texture
-    return _call_based_on_args('texture', args, kwargs)
-
-@suppress_traceback
-def warp_image_by_depth(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.warp_image_by_depth, utils3d.torch.warp_image_by_depth
-    return _call_based_on_args('warp_image_by_depth', args, kwargs)
+        utils3d.numpy.sample_texture, None
+    return _call_based_on_args('sample_texture', args, kwargs)
 
 @suppress_traceback
 def test_rasterization(*args, **kwargs):
@@ -887,16 +895,22 @@ def bounding_rect_from_mask(*args, **kwargs):
     return _call_based_on_args('bounding_rect_from_mask', args, kwargs)
 
 @suppress_traceback
-def rasterize_triangles_depth_peeling(*args, **kwargs):
+def texture(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.rasterize_triangles_depth_peeling
-    return _call_based_on_args('rasterize_triangles_depth_peeling', args, kwargs)
+        None, utils3d.torch.texture
+    return _call_based_on_args('texture', args, kwargs)
 
 @suppress_traceback
 def texture_composite(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.texture_composite
     return _call_based_on_args('texture_composite', args, kwargs)
+
+@suppress_traceback
+def warp_image_by_depth(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.warp_image_by_depth
+    return _call_based_on_args('warp_image_by_depth', args, kwargs)
 
 @suppress_traceback
 def warp_image_by_forward_flow(*args, **kwargs):

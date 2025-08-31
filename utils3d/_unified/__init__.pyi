@@ -58,8 +58,9 @@ __all__ = ["sliding_window_1d",
 "piecewise_lerp", 
 "piecewise_lerp_se3_matrix", 
 "apply_transform", 
-"angle_diff_vec3", 
+"angle_between", 
 "triangulate", 
+"merge_meshes", 
 "compute_face_normal", 
 "compute_face_angle", 
 "compute_vertex_normal", 
@@ -96,9 +97,9 @@ __all__ = ["sliding_window_1d",
 "chessboard", 
 "RastContext", 
 "rasterize_triangles", 
+"rasterize_triangles_peeling", 
 "rasterize_lines", 
-"texture", 
-"warp_image_by_depth", 
+"sample_texture", 
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
@@ -129,8 +130,9 @@ __all__ = ["sliding_window_1d",
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
 "bounding_rect_from_mask", 
-"rasterize_triangles_depth_peeling", 
+"texture", 
 "texture_composite", 
+"warp_image_by_depth", 
 "warp_image_by_forward_flow"]
 
 @overload
@@ -183,15 +185,18 @@ Returns:
     utils3d.numpy.utils.interpolate
 
 @overload
-def lookup(key: numpy_.ndarray, query: numpy_.ndarray) -> numpy_.ndarray:
-    """Find the indices of `query` in `key`.
+def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+    """Look up `query` in `key` like a dictionary.
 
 ### Parameters
-    key (np.ndarray): shape (K, ...), the array to search in
-    query (np.ndarray): shape (Q, ...), the array to search for
-    
+    `key` (np.ndarray): shape (num_keys, *query_key_shape), the array to search in
+    `query` (np.ndarray): shape (num_queries, *query_key_shape), the array to search for
+    `value` (Optional[np.ndarray]): shape (K, *value_shape), the array to get values from
+    `default_value` (Optional[np.ndarray]): shape (*value_shape), default values to return if query is not found
+
 ### Returns
-    np.ndarray: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1."""
+    If `value` is None, return the indices (num_queries,) of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+    If `value` is provided, return the corresponding values (num_queries, *value_shape), or default_value if not found."""
     utils3d.numpy.utils.lookup
 
 @overload
@@ -444,7 +449,7 @@ Returns:
     utils3d.numpy.transforms.depth_buffer_to_linear
 
 @overload
-def unproject_cv(uv_coord: numpy_.ndarray, depth: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
+def unproject_cv(uv_coord: numpy_.ndarray, depth: Optional[numpy_.ndarray] = None, intrinsics: numpy_.ndarray = None, extrinsics: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
 Args:
@@ -474,7 +479,7 @@ Returns:
     utils3d.numpy.transforms.unproject_gl
 
 @overload
-def project_cv(points: numpy_.ndarray, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def project_cv(points: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Project 3D points to 2D following the OpenCV convention
 
 Args:
@@ -705,8 +710,9 @@ def apply_transform(T: numpy_.ndarray, x: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.apply_transform
 
 @overload
-def angle_diff_vec3(v1: numpy_.ndarray, v2: numpy_.ndarray, eps: float = 1e-12):
-    utils3d.numpy.transforms.angle_diff_vec3
+def angle_between(v1: numpy_.ndarray, v2: numpy_.ndarray):
+    """Calculate the angle between two vectors."""
+    utils3d.numpy.transforms.angle_between
 
 @overload
 def triangulate(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, backslash: numpy_.ndarray = None) -> numpy_.ndarray:
@@ -723,6 +729,18 @@ Args:
 Returns:
     (np.ndarray): [L * (P - 2), 3] triangular faces"""
     utils3d.numpy.mesh.triangulate
+
+@overload
+def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarray, ...]:
+    """Merge multiple meshes into one mesh. Vertices will be no longer shared.
+
+### Parameters:
+    `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
+
+### Returns:
+    `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
+    `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face"""
+    utils3d.numpy.mesh.merge_meshes
 
 @overload
 def compute_face_normal(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
@@ -1190,70 +1208,117 @@ def RastContext(*args, **kwargs):
     utils3d.numpy.rasterization.RastContext
 
 @overload
-def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attr: numpy_.ndarray, faces: numpy_.ndarray = None, transform: numpy_.ndarray = None, cull_backface: bool = True, return_depth: bool = False, image: numpy_.ndarray = None, depth: numpy_.ndarray = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Rasterize vertex attribute.
-
-Args:
+def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
+    """Args:
+    ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
-    vertices (np.ndarray): [N, 3] or [T, 3, 3]
-    attr (np.ndarray): [N, C] or [T, 3, 3]
-    faces (np.ndarray): [T, 3] or None
-    transform (np.ndarray): [4, 4] OpenGL Model-View-Projection transformation matrix. 
+    vertices (np.ndarray): (N, 3) or (T, 3, 3)
+    faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    attributes_domain (Literal['vertex', 'face']): domain of the attributes
+    view (np.ndarray): (4, 4) View matrix (world to camera).
+    projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
     cull_backface (bool): whether to cull backface
-    image: (np.ndarray): [H, W, C] background image
-    depth: (np.ndarray): [H, W] background depth
+    background_image (np.ndarray): (H, W, C) background image
+    background_depth (np.ndarray): (H, W) background depth
+    background_interpolation_id (np.ndarray): (H, W) background triangle ID map
+    background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
 Returns:
-    image (np.ndarray): [H, W, C] rendered image
-    depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None."""
+    A dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_interpolation is True
+    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
     utils3d.numpy.rasterization.rasterize_triangles
 
 @overload
-def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attr: numpy_.ndarray, transform: numpy_.ndarray = None, line_width: float = 1.0, return_depth: bool = False, image: numpy_.ndarray = None, depth: numpy_.ndarray = None) -> Tuple[numpy_.ndarray, ...]:
-    """Rasterize vertex attribute.
-
-Args:
+def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
+    """Args:
+    ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
-    vertices (np.ndarray): [N, 3]
-    faces (np.ndarray): [T, 3]
-    attr (np.ndarray): [N, C]
-    transform (np.ndarray): [4, 4] model-view-projection matrix
-    line_width (float): width of line. Defaults to 1.0. NOTE: Values other than 1.0 may not work across all platforms.
+    vertices (np.ndarray): (N, 3) or (T, 3, 3)
+    faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    attributes_domain (Literal['vertex', 'face']): domain of the attributes
+    view (np.ndarray): (4, 4) View matrix (world to camera).
+    projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
     cull_backface (bool): whether to cull backface
+Returns:
+    A context manager of generator of dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_interpolation is True
+    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+
+## Example Usage
+```
+with rasterize_triangles_peeling(
+    ctx, 
+    512, 512, 
+    vertices=vertices, 
+    faces=faces, 
+    attributes=attributes,
+    view=view,
+    projection=projection
+) as peeler:
+    for i, layer_output in zip(range(3, peeler)):
+        print(f"Layer {i}:")
+        for key, value in layer_output.items():
+            print(f"  {key}: {value.shape}")
+```"""
+    utils3d.numpy.rasterization.rasterize_triangles_peeling
+
+@overload
+def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, ...]:
+    """Args:
+    ctx (RastContext): rasterization context
+    width (int): width of rendered image
+    height (int): height of rendered image
+    vertices (np.ndarray): (N, 3) or (T, 3, 3)
+    faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    attributes_domain (Literal['vertex', 'face']): domain of the attributes
+    view (np.ndarray): (4, 4) View matrix (world to camera).
+    projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    cull_backface (bool): whether to cull backface
+    background_image (np.ndarray): (H, W, C) background image
+    background_depth (np.ndarray): (H, W) background depth
+    background_interpolation_id (np.ndarray): (H, W) background triangle ID map
+    background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
 Returns:
-    image (np.ndarray): [H, W, C] rendered image
-    depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None."""
+    A dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_interpolation is True
+    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
     utils3d.numpy.rasterization.rasterize_lines
 
 @overload
-def texture(ctx: utils3d.numpy.rasterization.RastContext, uv: numpy_.ndarray, texture: numpy_.ndarray, interpolation: str = 'linear', wrap: str = 'clamp') -> numpy_.ndarray:
-    """Given an UV image, texturing from the texture map"""
-    utils3d.numpy.rasterization.texture
-
-@overload
-def warp_image_by_depth(ctx: utils3d.numpy.rasterization.RastContext, src_depth: numpy_.ndarray, src_image: numpy_.ndarray = None, width: int = None, height: int = None, *, extrinsics_src: numpy_.ndarray = None, extrinsics_tgt: numpy_.ndarray = None, intrinsics_src: numpy_.ndarray = None, intrinsics_tgt: numpy_.ndarray = None, near: float = 0.1, far: float = 100.0, cull_backface: bool = True, ssaa: int = 1, return_depth: bool = False) -> Tuple[numpy_.ndarray, ...]:
-    """Warp image by depth map.
-
-Args:
-    ctx (RastContext): rasterizer context
-    src_depth (np.ndarray): [H, W]
-    src_image (np.ndarray, optional): [H, W, C]. The image to warp. Defaults to None (use uv coordinates).
-    width (int, optional): width of the output image. None to use depth map width. Defaults to None.
-    height (int, optional): height of the output image. None to use depth map height. Defaults to None.
-    extrinsics_src (np.ndarray, optional): extrinsics matrix of the source camera. Defaults to None (identity).
-    extrinsics_tgt (np.ndarray, optional): extrinsics matrix of the target camera. Defaults to None (identity).
-    intrinsics_src (np.ndarray, optional): intrinsics matrix of the source camera. Defaults to None (use the same as intrinsics_tgt).
-    intrinsics_tgt (np.ndarray, optional): intrinsics matrix of the target camera. Defaults to None (use the same as intrinsics_src).
-    cull_backface (bool, optional): whether to cull backface. Defaults to True.
-    ssaa (int, optional): super sampling anti-aliasing. Defaults to 1.
-
-Returns:
-    tgt_image (np.ndarray): [H, W, C] warped image (or uv coordinates if image is None).
-    tgt_depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None."""
-    utils3d.numpy.rasterization.warp_image_by_depth
+def sample_texture(ctx: utils3d.numpy.rasterization.RastContext, uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: Union[int, Tuple[int, int]] = 0, repeat: Union[bool, Tuple[bool, bool]] = False, anisotropic: float = 1.0) -> numpy_.ndarray:
+    """Given an UV map, texturing from the texture map"""
+    utils3d.numpy.rasterization.sample_texture
 
 @overload
 def test_rasterization(ctx: utils3d.numpy.rasterization.RastContext):
@@ -1869,6 +1934,13 @@ Returns:
     utils3d.torch.transforms.apply_2d
 
 @overload
+def angle_between(v1: torch_.Tensor, v2: torch_.Tensor, eps: float = 1e-08) -> torch_.Tensor:
+    """Calculate the angle between two vectors.
+
+NOTE: `eps` prevents zero angle difference which is indifferentiable."""
+    utils3d.torch.transforms.angle_between
+
+@overload
 def triangulate(faces: torch_.Tensor, vertices: torch_.Tensor = None, backslash: bool = None) -> torch_.Tensor:
     """Triangulate a polygonal mesh.
 
@@ -2317,7 +2389,7 @@ Returns:
     utils3d.torch.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_depth_peeling(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+def rasterize_triangles_peeling(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
     """Rasterize a mesh with vertex attributes using depth peeling.
 
 Args:
@@ -2348,7 +2420,7 @@ Returns:
       - uv: (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates (if uv is not None)
       - uv_dr: (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives (if uv is not None)
       - texture: (List[torch.Tensor]): list of (B, C, H, W) texture (if uv and texture are not None)"""
-    utils3d.torch.rasterization.rasterize_triangles_depth_peeling
+    utils3d.torch.rasterization.rasterize_triangles_peeling
 
 @overload
 def texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> torch_.Tensor:
