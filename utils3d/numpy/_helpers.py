@@ -4,90 +4,98 @@ from numbers import Number
 import inspect
 from functools import wraps
 from typing import *
+from types import EllipsisType
 from .._helpers import suppress_traceback
 
+__all__ = [
+    'toarray',
+    'batched',
+]
 
-def get_args_order(func, args, kwargs):
+P = ParamSpec("P")  
+R = TypeVar("R")
+
+
+def toarray(*args_dtypes: Union[np.dtype, str, None], _others: Union[np.dtype, str] = None, **kwargs_dtypes: Union[np.dtype, str]) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
-    Get the order of the arguments of a function.
+    Decorator generator that converts non-array arguments to array of specified default dtype.
     """
-    names = inspect.getfullargspec(func).args
-    names_idx = {name: i for i, name in enumerate(names)}
-    args_order = []
-    kwargs_order = {}
-    for name, arg in kwargs.items():
-        if name in names:
-            kwargs_order[name] = names_idx[name]
-            names.remove(name)
-    for i, arg in enumerate(args):
-        if i < len(names):
-            args_order.append(names_idx[names[i]])
-    return args_order, kwargs_order
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        argnames = list(inspect.signature(func).parameters.keys())
+        dtypes_dict = {
+            **dict(zip(argnames, args_dtypes)),
+            **kwargs_dtypes
+        }
+        @wraps(func)
+        @suppress_traceback
+        def wrapper(*args, **kwargs):
+            inputs = {
+                **{argnames[i]: x for i, x in enumerate(args)},
+                **kwargs
+            }
+            args = tuple(
+                np.array(x, inputs[dtype].dtype if isinstance(dtype, str) else dtype) 
+                if not isinstance(x, np.ndarray) \
+                    and (dtype := dtypes_dict.get(argnames[i], _others)) is not None \
+                else x
+                for i, x in enumerate(args)
+            )
+            kwargs = {
+                k: np.array(x, inputs[dtype].dtype if isinstance(dtype, str) else dtype) 
+                if not isinstance(x, np.ndarray) \
+                    and (dtype := dtypes_dict.get(k, _others)) is not None \
+                else x
+                for k, x in kwargs.items()
+            }
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
-def broadcast_args(args, kwargs, args_dim, kwargs_dim):
-    spatial = []
-    for arg, arg_dim in zip(args + list(kwargs.values()), args_dim + list(kwargs_dim.values())):
-        if isinstance(arg, np.ndarray) and arg_dim is not None:
-            arg_spatial = arg.shape[:arg.ndim-arg_dim]
-            if len(arg_spatial) > len(spatial):
-                spatial = [1] * (len(arg_spatial) - len(spatial)) + spatial
-            for j in range(len(arg_spatial)):
-                if spatial[-j] < arg_spatial[-j]:
-                    if spatial[-j] == 1:
-                        spatial[-j] = arg_spatial[-j]
-                    else:
-                        raise ValueError("Cannot broadcast arguments.")
-    for i, arg in enumerate(args):
-        if isinstance(arg, np.ndarray) and args_dim[i] is not None:
-            args[i] = np.broadcast_to(arg, [*spatial, *arg.shape[arg.ndim-args_dim[i]:]])
-    for key, arg in kwargs.items():
-        if isinstance(arg, np.ndarray) and kwargs_dim[key] is not None:
-            kwargs[key] = np.broadcast_to(arg, [*spatial, *arg.shape[arg.ndim-kwargs_dim[key]:]])
-    return args, kwargs, spatial
-
-
-def batched(*dims):
+def batched(*args_dims: Union[int, None], _others: Union[int, None] = None, **kwargs_dims: Union[int, None]) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
-    Decorator that allows a function to be called with batched arguments.
+    Decorator generator that extends a function's input and out batch dimensions.
     """
-    def decorator(func):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        argnames = list(inspect.signature(func).parameters.keys())
+        dims_dict = {
+            **dict(zip(argnames, args_dims)),
+            **kwargs_dims
+        }
         @wraps(func)
         @suppress_traceback
         def wrapper(*args, **kwargs):
             args = list(args)
-            # get arguments dimensions
-            args_order, kwargs_order = get_args_order(func, args, kwargs)
-            args_dim = [dims[i] for i in args_order]
-            kwargs_dim = {key: dims[i] for key, i in kwargs_order.items()}
-            # convert to numpy array
-            for i, arg in enumerate(args):
-                if isinstance(arg, (Number, list, tuple)) and args_dim[i] is not None:
-                    args[i] = np.array(arg)
-            for key, arg in kwargs.items():
-                if isinstance(arg, (Number, list, tuple)) and kwargs_dim[key] is not None:
-                    kwargs[key] = np.array(arg)
-            # broadcast arguments
-            args, kwargs, spatial = broadcast_args(args, kwargs, args_dim, kwargs_dim)
-            for i, (arg, arg_dim) in enumerate(zip(args, args_dim)):
-                if isinstance(arg, np.ndarray) and arg_dim is not None:
-                    args[i] = arg.reshape([-1, *arg.shape[arg.ndim-arg_dim:]])
-            for key, arg in kwargs.items():
-                if isinstance(arg, np.ndarray) and kwargs_dim[key] is not None:
-                    kwargs[key] = arg.reshape([-1, *arg.shape[arg.ndim-kwargs_dim[key]:]])
-            # call function
-            results = func(*args, **kwargs)
-            type_results = type(results)
-            results = list(results) if isinstance(results, (tuple, list)) else [results]
-            # restore spatial dimensions
-            for i, result in enumerate(results):
-                results[i] = result.reshape([*spatial, *result.shape[1:]])
-            if type_results == tuple:
-                results = tuple(results)
-            elif type_results == list:
-                results = list(results)
-            else:
-                results = results[0]
-            return results
+            # Get arguments non-batch dimensions
+            args_dim = tuple(dims_dict.get(argname, _others) for argname in argnames[:len(args)])
+            kwargs_dim = {k: dims_dict.get(k, _others) for k in kwargs}
+            # Find the common batch shape
+            batch_shape = np.broadcast_shapes(*(
+                x.shape[:x.ndim - dim] 
+                for x, dim in zip((*args, *kwargs.values()), (*args_dim, *kwargs_dim.values())) 
+                if isinstance(x, np.ndarray) and dim is not None
+            ))
+            # Broadcast and flatten batch dimensions
+            args = tuple(
+                np.broadcast_to(x, (*batch_shape, *x.shape[x.ndim - dim:])).reshape((-1, *x.shape[x.ndim - dim:]))
+                if isinstance(x, np.ndarray) and dim is not None else x
+                for x, dim in zip(args, args_dim)
+            )
+            kwargs = {
+                k: np.broadcast_to(x, (*batch_shape, *x.shape[x.ndim - dim:])).reshape((-1, *x.shape[x.ndim - dim:]))
+                if isinstance(x, np.ndarray) and (dim := kwargs_dim[k]) is not None else x
+                for k, x in kwargs.items()
+            }
+            # Call function
+            result = func(*args, **kwargs)
+            # Restore batch shape
+            if isinstance(result, tuple):
+                result = tuple(
+                    x.reshape((*batch_shape, *x.shape[1:])) if isinstance(x, np.ndarray) else x
+                    for x in result
+                )
+            elif isinstance(result, np.ndarray):
+                result = result.reshape((*batch_shape, *result.shape[1:]))
+            return result
         return wrapper
     return decorator

@@ -37,12 +37,12 @@ def _group(
     """
     Group values into groups with identical values.
     
-    Args:
+    ## Parameters
         values (torch.Tensor): [N] values to group
         required_group_size (int, optional): required group size. Defaults to None.
         return_values (bool, optional): return values of groups. Defaults to False.
         
-    Returns:
+    ## Returns
         group (Union[List[torch.Tensor], torch.Tensor]): list of groups or group indices. It will be a list of groups if required_group_size is None, otherwise a tensor of group indices.
         group_values (Optional[torch.Tensor]): values of groups. Only returned if return_values is True.
     """
@@ -74,7 +74,7 @@ def triangulate(
     """
     Triangulate a polygonal mesh.
 
-    Args:
+    ## Parameters
         faces (torch.Tensor): [..., L, P] polygonal faces
         vertices (torch.Tensor, optional): [..., N, 3] 3-dimensional vertices.
             If given, the triangulation is performed according to the distance
@@ -83,7 +83,7 @@ def triangulate(
             how to triangulate the quad faces. Defaults to None.
 
 
-    Returns:
+    ## Returns
         (torch.Tensor): [L * (P - 2), 3] triangular faces
     """
     if faces.shape[-1] == 3:
@@ -126,11 +126,11 @@ def compute_face_normal(
     """
     Compute face normals of a triangular mesh
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
         faces (torch.Tensor): [..., T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         normals (torch.Tensor): [..., T, 3] face normals
     """
     N = vertices.shape[0]
@@ -151,11 +151,11 @@ def compute_face_angles(
     """
     Compute face angles of a triangular mesh
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         angles (torch.Tensor): [..., T, 3] face angles
     """
     face_angles = []
@@ -177,13 +177,13 @@ def compute_vertex_normal(
     """
     Compute vertex normals of a triangular mesh by averaging neightboring face normals
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
         face_normal (torch.Tensor, optional): [..., T, 3] face normals.
             None to compute face normals from vertices and faces. Defaults to None.
 
-    Returns:
+    ## Returns
         normals (torch.Tensor): [..., N, 3] vertex normals
     """
     N = vertices.shape[0]
@@ -207,13 +207,13 @@ def compute_vertex_normal_weighted(
     Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
     according to the angles
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
         face_normal (torch.Tensor, optional): [..., T, 3] face normals.
             None to compute face normals from vertices and faces. Defaults to None.
 
-    Returns:
+    ## Returns
         normals (torch.Tensor): [..., N, 3] vertex normals
     """
     N = vertices.shape[0]
@@ -232,10 +232,10 @@ def compute_edges(
     """
     Compute edges of a mesh.
     
-    Args:
+    ## Parameters
         faces (torch.Tensor): [T, 3] triangular face indices
         
-    Returns:
+    ## Returns
         edges (torch.Tensor): [E, 2] edge indices
         face2edge (torch.Tensor): [T, 3] mapping from face to edge
         counts (torch.Tensor): [E] degree of each edge
@@ -256,13 +256,13 @@ def compute_connected_components(
     """
     Compute connected faces of a mesh.
 
-    Args:
+    ## Parameters
         faces (torch.Tensor): [T, 3] triangular face indices
         edges (torch.Tensor, optional): [E, 2] edge indices. Defaults to None.
         face2edge (torch.Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
             NOTE: If edges and face2edge are not provided, they will be computed.
 
-    Returns:
+    ## Returns
         components (List[torch.Tensor]): list of connected faces
     """
     T = faces.shape[0]
@@ -296,10 +296,10 @@ def compute_edge_connected_components(
     """
     Compute connected edges of a mesh.
 
-    Args:
+    ## Parameters
         edges (torch.Tensor): [E, 2] edge indices
 
-    Returns:
+    ## Returns
         components (List[torch.Tensor]): list of connected edges
     """
     E = edges.shape[0]
@@ -338,13 +338,13 @@ def compute_boundarys(
     """
     Compute boundary edges of a mesh.
 
-    Args:
+    ## Parameters
         faces (torch.Tensor): [T, 3] triangular face indices
         edges (torch.Tensor): [E, 2] edge indices.
         face2edge (torch.Tensor): [T, 3] mapping from face to edge.
         edge_degrees (torch.Tensor): [E] degree of each edge.
 
-    Returns:
+    ## Returns
         boundary_edge_indices (List[torch.Tensor]): list of boundary edge indices
         boundary_face_indices (List[torch.Tensor]): list of boundary face indices
     """    
@@ -391,10 +391,10 @@ def compute_dual_graph(
     """
     Compute dual graph of a mesh.
     
-    Args:
+    ## Parameters
         face2edge (torch.Tensor): [T, 3] mapping from face to edge.
             
-    Returns:
+    ## Returns
         dual_edges (torch.Tensor): [DE, 2] face indices of dual edges
         dual_edge2edge (torch.Tensor): [DE] mapping from dual edge to edge
     """
@@ -413,11 +413,11 @@ def remove_unused_vertices(
     Remove unreferenced vertices of a mesh. 
     Unreferenced vertices are removed, and the face indices are updated accordingly.
 
-    Args:
+    ## Parameters
         faces (torch.Tensor): [T, P] face indices
         *vertice_attrs: vertex attributes
 
-    Returns:
+    ## Returns
         faces (torch.Tensor): [T, P] face indices
         *vertice_attrs: vertex attributes
         indices (torch.Tensor, optional): [N] indices of vertices that are kept. Defaults to None.
@@ -439,10 +439,10 @@ def remove_corrupted_faces(
     """
     Remove corrupted faces (faces with duplicated vertices)
 
-    Args:
+    ## Parameters
         faces (torch.Tensor): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         torch.Tensor: [T_, 3] triangular face indices
     """
     corrupted = (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
@@ -458,12 +458,12 @@ def merge_duplicate_vertices(
     Merge duplicate vertices of a triangular mesh. 
     Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [N, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
         tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
-    Returns:
+    ## Returns
         vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
     """
@@ -488,7 +488,7 @@ def remove_isolated_pieces(
     Isolated pieces are removed, and the face indices are updated accordingly.
     If no face is left, will return the largest connected component.
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [N, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
         connected_components (List[torch.Tensor], optional): connected components of the mesh. If None, it will be computed. Defaults to None.
@@ -496,7 +496,7 @@ def remove_isolated_pieces(
         thresh_radius (float, optional): threshold of radius for isolated pieces. Defaults to None.
         remove_unreferenced (bool, optional): remove unreferenced vertices after removing isolated pieces. Defaults to True.
 
-    Returns:
+    ## Returns
         vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
     """
@@ -545,12 +545,12 @@ def subdivide_mesh_simple(vertices: torch.Tensor, faces: torch.Tensor, n: int = 
     Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
     NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
     
-    Args:
+    ## Parameters
         vertices (torch.Tensor): [N, 3] 3-dimensional vertices
         faces (torch.Tensor): [T, 3] triangular face indices
         n (int, optional): number of subdivisions. Defaults to 1.
 
-    Returns:
+    ## Returns
         vertices (torch.Tensor): [N_, 3] subdivided 3-dimensional vertices
         faces (torch.Tensor): [4 * T, 3] subdivided triangular face indices
     """
@@ -574,13 +574,13 @@ def subdivide_mesh_simple(vertices: torch.Tensor, faces: torch.Tensor, n: int = 
 def compute_face_tbn(pos: torch.Tensor, faces_pos: torch.Tensor, uv: torch.Tensor, faces_uv: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
     """compute TBN matrix for each face
 
-    Args:
+    ## Parameters
         pos (torch.Tensor): shape (..., N_pos, 3), positions
         faces_pos (torch.Tensor): shape(T, 3) 
         uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
         faces_uv (torch.Tensor): shape(T, 3) 
         
-    Returns:
+    ## Returns
         torch.Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal
     """
     e01 = torch.index_select(pos, dim=-2, index=faces_pos[:, 1]) - torch.index_select(pos, dim=-2, index=faces_pos[:, 0])
@@ -597,14 +597,14 @@ def compute_face_tbn(pos: torch.Tensor, faces_pos: torch.Tensor, uv: torch.Tenso
 def compute_vertex_tbn(faces_topo: torch.Tensor, pos: torch.Tensor, faces_pos: torch.Tensor, uv: torch.Tensor, faces_uv: torch.Tensor) -> torch.Tensor:
     """compute TBN matrix for each face
 
-    Args:
+    ## Parameters
         faces_topo (torch.Tensor): (T, 3), face indice of topology
         pos (torch.Tensor): shape (..., N_pos, 3), positions
         faces_pos (torch.Tensor): shape(T, 3) 
         uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
         faces_uv (torch.Tensor): shape(T, 3) 
         
-    Returns:
+    ## Returns
         torch.Tensor: (..., V, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal
     """
     n_vertices = faces_topo.max().item() + 1
@@ -620,7 +620,7 @@ def compute_vertex_tbn(faces_topo: torch.Tensor, pos: torch.Tensor, faces_pos: t
 def laplacian(vertices: torch.Tensor, faces: torch.Tensor, weight: str = 'uniform') -> torch.Tensor:
     """Laplacian smooth with cotangent weights
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): shape (..., N, 3)
         faces (torch.Tensor): shape (T, 3)
         weight (str): 'uniform' or 'cotangent'
@@ -649,7 +649,7 @@ def laplacian(vertices: torch.Tensor, faces: torch.Tensor, weight: str = 'unifor
 def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, weight: str = 'uniform', times: int = 5) -> torch.Tensor:
     """Laplacian smooth with cotangent weights
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): shape (..., N, 3)
         faces (torch.Tensor): shape (T, 3)
         weight (str): 'uniform' or 'cotangent'
@@ -662,13 +662,13 @@ def laplacian_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, weight: s
 def taubin_smooth_mesh(vertices: torch.Tensor, faces: torch.Tensor, lambda_: float = 0.5, mu_: float = -0.51) -> torch.Tensor:
     """Taubin smooth mesh
 
-    Args:
+    ## Parameters
         vertices (torch.Tensor): _description_
         faces (torch.Tensor): _description_
         lambda_ (float, optional): _description_. Defaults to 0.5.
         mu_ (float, optional): _description_. Defaults to -0.51.
 
-    Returns:
+    ## Returns
         torch.Tensor: _description_
     """
     pt = vertices + lambda_ * laplacian_smooth_mesh(vertices, faces)

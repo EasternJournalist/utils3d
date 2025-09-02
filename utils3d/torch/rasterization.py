@@ -54,7 +54,7 @@ def rasterize_triangles(
     """
     Rasterize a mesh with vertex attributes.
 
-    Args:
+    ## Parameters
         ctx (GLContext): rasterizer context
         vertices (np.ndarray): (B, N, 2 or 3 or 4)
         faces (torch.Tensor): (T, 3)
@@ -69,7 +69,7 @@ def rasterize_triangles(
         antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
         diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
-    Returns:
+    ## Returns
         Dictionary containing:
           - image: (torch.Tensor): (B, C, H, W)
           - depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
@@ -161,7 +161,7 @@ def rasterize_triangles_peeling(
     """
     Rasterize a mesh with vertex attributes using depth peeling.
 
-    Args:
+    ## Parameters
         ctx (GLContext): rasterizer context
         vertices (np.ndarray): (B, N, 2 or 3 or 4)
         faces (torch.Tensor): (T, 3)
@@ -178,7 +178,7 @@ def rasterize_triangles_peeling(
         antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
         diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
-    Returns:
+    ## Returns
         Dictionary containing:
           - image: (List[torch.Tensor]): list of (B, C, H, W) rendered images
           - depth: (List[torch.Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
@@ -276,12 +276,12 @@ def texture(
     """
     Interpolate texture using uv coordinates.
     
-    Args:
+    ## Parameters
         texture (torch.Tensor): (B, C, H, W) texture
         uv (torch.Tensor): (B, H, W, 2) uv coordinates
         uv_da (torch.Tensor): (B, H, W, 4) uv derivatives
         
-    Returns:
+    ## Returns
         torch.Tensor: (B, C, H, W) interpolated texture
     """
     texture = texture.flip(2).permute(0, 2, 3, 1).contiguous()
@@ -297,14 +297,14 @@ def texture_composite(
     """
     Composite textures with depth peeling output.
     
-    Args:
+    ## Parameters
         texture (torch.Tensor): (B, C+1, H, W) texture
             NOTE: the last channel is alpha channel
         uv (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates
         uv_da (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives
         background (Optional[torch.Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
         
-    Returns:
+    ## Returns
         image: (torch.Tensor): (B, C, H, W) rendered image
         alpha: (torch.Tensor): (B, H, W) alpha channel
     """
@@ -354,7 +354,7 @@ def warp_image_by_depth(
     NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
     Otherwise, image mesh will be triangulated simply for batch rendering.
 
-    Args:
+    ## Parameters
         ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
         depth (torch.Tensor): (B, H, W) linear depth
         image (torch.Tensor): (B, C, H, W). None to use image space uv. Defaults to None.
@@ -372,7 +372,7 @@ def warp_image_by_depth(
         return_uv (bool, optional): whether to return the uv. Defaults to False.
         return_dr (bool, optional): whether to return the image-space derivatives of uv. Defaults to False.
     
-    Returns:
+    ## Returns
         image: (torch.FloatTensor): (B, C, H, W) rendered image
         depth: (torch.FloatTensor): (B, H, W) linear depth, ranging from 0 to inf
         mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
@@ -513,7 +513,7 @@ def warp_image_by_forward_flow(
     NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
     Otherwise, image mesh will be triangulated simply for batch rendering.
 
-    Args:
+    ## Parameters
         ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
         image (torch.Tensor): (B, C, H, W) image
         flow (torch.Tensor): (B, 2, H, W) forward flow
@@ -521,7 +521,7 @@ def warp_image_by_forward_flow(
         antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
         backslash (bool, optional): whether to use backslash triangulation. Defaults to False.
     
-    Returns:
+    ## Returns
         image: (torch.FloatTensor): (B, C, H, W) rendered image
         mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
     """

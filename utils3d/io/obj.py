@@ -133,7 +133,7 @@ def simple_write_obj(
     """
     Write wavefront .obj file, without preprocessing.
     
-    Args:
+    ## Parameters
         vertices (np.ndarray): [N, 3]
         faces (np.ndarray): [T, 3]
         file (Any): filepath

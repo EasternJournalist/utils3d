@@ -13,11 +13,9 @@ __all__ = ["sliding_window_1d",
 "max_pool_1d", 
 "max_pool_2d", 
 "max_pool_nd", 
-"interpolate", 
 "lookup", 
-"perspective", 
 "perspective_from_fov", 
-"perspective_from_fov_xy", 
+"perspective_from_window", 
 "intrinsics_from_focal_center", 
 "intrinsics_from_fov", 
 "fov_to_focal", 
@@ -35,12 +33,15 @@ __all__ = ["sliding_window_1d",
 "pixel_to_uv", 
 "pixel_to_ndc", 
 "uv_to_pixel", 
-"project_depth", 
+"depth_linear_to_buffer", 
 "depth_buffer_to_linear", 
 "unproject_cv", 
 "unproject_gl", 
 "project_cv", 
 "project_gl", 
+"project", 
+"unproject", 
+"screen_coord_to_view_coord", 
 "quaternion_to_matrix", 
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
@@ -50,14 +51,14 @@ __all__ = ["sliding_window_1d",
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
-"se3_matrix", 
+"make_se3_matrix", 
 "slerp_quaternion", 
 "slerp_vector", 
 "lerp", 
 "lerp_se3_matrix", 
 "piecewise_lerp", 
 "piecewise_lerp_se3_matrix", 
-"apply_transform", 
+"transform", 
 "angle_between", 
 "triangulate", 
 "merge_meshes", 
@@ -99,11 +100,11 @@ __all__ = ["sliding_window_1d",
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
 "rasterize_lines", 
+"rasterize_point_cloud", 
 "sample_texture", 
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
-"intrinsics_from_fov_xy", 
 "matrix_to_euler_angles", 
 "matrix_to_axis_angle", 
 "axis_angle_to_quaternion", 
@@ -115,7 +116,6 @@ __all__ = ["sliding_window_1d",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"apply_2d", 
 "compute_face_angles", 
 "compute_edges", 
 "compute_connected_components", 
@@ -140,13 +140,13 @@ def sliding_window_1d(x: numpy_.ndarray, window_size: int, stride: int, axis: in
     """Return x view of the input array with x sliding window of the given kernel size and stride.
 The sliding window is performed over the given axis, and the window dimension is append to the end of the output array's shape.
 
-Args:
+## Parameters
     x (np.ndarray): input array with shape (..., axis_size, ...)
     kernel_size (int): size of the sliding window
     stride (int): stride of the sliding window
     axis (int): axis to perform sliding window over
 
-Returns:
+## Returns
     a_sliding (np.ndarray): view of the input array with shape (..., n_windows, ..., kernel_size), where n_windows = (axis_size - kernel_size + 1) // stride"""
     utils3d.numpy.utils.sliding_window_1d
 
@@ -171,20 +171,6 @@ def max_pool_nd(x: numpy_.ndarray, kernel_size: Tuple[int, ...], stride: Tuple[i
     utils3d.numpy.utils.max_pool_nd
 
 @overload
-def interpolate(bary: numpy_.ndarray, tri_id: numpy_.ndarray, attr: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
-    """Interpolate with given barycentric coordinates and triangle indices
-
-Args:
-    bary (np.ndarray): shape (..., 3), barycentric coordinates
-    tri_id (np.ndarray): int array of shape (...), triangle indices
-    attr (np.ndarray): shape (N, M), vertices attributes
-    faces (np.ndarray): int array of shape (T, 3), face vertex indices
-
-Returns:
-    np.ndarray: shape (..., M) interpolated result"""
-    utils3d.numpy.utils.interpolate
-
-@overload
 def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
     """Look up `query` in `key` like a dictionary.
 
@@ -200,71 +186,43 @@ def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.nd
     utils3d.numpy.utils.lookup
 
 @overload
-def perspective(fov_y: Union[float, numpy_.ndarray], aspect: Union[float, numpy_.ndarray], near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
-    """Get OpenGL perspective matrix
+def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
+    """Get OpenGL perspective matrix from field of view 
 
-Args:
-    fov_y (float | np.ndarray): field of view in y axis
-    aspect (float | np.ndarray): aspect ratio
-    near (float | np.ndarray): near plane to clip
-    far (float | np.ndarray): far plane to clip
-
-Returns:
-    (np.ndarray): [..., 4, 4] perspective matrix"""
-    utils3d.numpy.transforms.perspective
-
-@overload
-def perspective_from_fov(fov: Union[float, numpy_.ndarray], width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray], near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
-    """Get OpenGL perspective matrix from field of view in largest dimension
-
-Args:
-    fov (float | np.ndarray): field of view in largest dimension
-    width (int | np.ndarray): image width
-    height (int | np.ndarray): image height
-    near (float | np.ndarray): near plane to clip
-    far (float | np.ndarray): far plane to clip
-
-Returns:
-    (np.ndarray): [..., 4, 4] perspective matrix"""
+## Returns
+    (ndarray): [..., 4, 4] perspective matrix"""
     utils3d.numpy.transforms.perspective_from_fov
 
 @overload
-def perspective_from_fov_xy(fov_x: Union[float, numpy_.ndarray], fov_y: Union[float, numpy_.ndarray], near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
-    """Get OpenGL perspective matrix from field of view in x and y axis
+def perspective_from_window(left: Union[float, numpy_.ndarray], right: Union[float, numpy_.ndarray], bottom: Union[float, numpy_.ndarray], top: Union[float, numpy_.ndarray], near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+    """Get OpenGL perspective matrix from the window of z=-1 projection plane
 
-Args:
-    fov_x (float | np.ndarray): field of view in x axis
-    fov_y (float | np.ndarray): field of view in y axis
-    near (float | np.ndarray): near plane to clip
-    far (float | np.ndarray): far plane to clip
-
-Returns:
-    (np.ndarray): [..., 4, 4] perspective matrix"""
-    utils3d.numpy.transforms.perspective_from_fov_xy
+## Returns
+    (ndarray): [..., 4, 4] perspective matrix"""
+    utils3d.numpy.transforms.perspective_from_window
 
 @overload
-def intrinsics_from_focal_center(fx: Union[float, numpy_.ndarray], fy: Union[float, numpy_.ndarray], cx: Union[float, numpy_.ndarray], cy: Union[float, numpy_.ndarray], dtype: Optional[numpy_.dtype] = numpy_.float32) -> numpy_.ndarray:
+def intrinsics_from_focal_center(fx: Union[float, numpy_.ndarray], fy: Union[float, numpy_.ndarray], cx: Union[float, numpy_.ndarray], cy: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
     """Get OpenCV intrinsics matrix
 
-Returns:
-    (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
+## Returns
+    (ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
     utils3d.numpy.transforms.intrinsics_from_focal_center
 
 @overload
-def intrinsics_from_fov(fov_max: Union[float, numpy_.ndarray] = None, fov_min: Union[float, numpy_.ndarray] = None, fov_x: Union[float, numpy_.ndarray] = None, fov_y: Union[float, numpy_.ndarray] = None, width: Union[int, numpy_.ndarray] = None, height: Union[int, numpy_.ndarray] = None) -> numpy_.ndarray:
+def intrinsics_from_fov(fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None) -> numpy_.ndarray:
     """Get normalized OpenCV intrinsics matrix from given field of view.
-You can provide either fov_max, fov_min, fov_x or fov_y
+You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
-Args:
-    width (int | np.ndarray): image width
-    height (int | np.ndarray): image height
-    fov_max (float | np.ndarray): field of view in largest dimension
-    fov_min (float | np.ndarray): field of view in smallest dimension
-    fov_x (float | np.ndarray): field of view in x axis
-    fov_y (float | np.ndarray): field of view in y axis
+## Parameters
+    fov_x (float | ndarray): field of view in x axis
+    fov_y (float | ndarray): field of view in y axis
+    fov_max (float | ndarray): field of view in largest dimension
+    fov_min (float | ndarray): field of view in smallest dimension
+    aspect_ratio (float | ndarray): aspect ratio of the image
 
-Returns:
-    (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
+## Returns
+    (ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
     utils3d.numpy.transforms.intrinsics_from_fov
 
 @overload
@@ -283,44 +241,44 @@ def intrinsics_to_fov(intrinsics: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy
 def view_look_at(eye: numpy_.ndarray, look_at: numpy_.ndarray, up: numpy_.ndarray) -> numpy_.ndarray:
     """Get OpenGL view matrix looking at something
 
-Args:
-    eye (np.ndarray): [..., 3] the eye position
-    look_at (np.ndarray): [..., 3] the position to look at
-    up (np.ndarray): [..., 3] head up direction (y axis in screen space). Not necessarily othogonal to view direction
+## Parameters
+    eye (ndarray): [..., 3] the eye position
+    look_at (ndarray): [..., 3] the position to look at
+    up (ndarray): [..., 3] head up direction (y axis in screen space). Not necessarily othogonal to view direction
 
-Returns:
-    (np.ndarray): [..., 4, 4], view matrix"""
+## Returns
+    (ndarray): [..., 4, 4], view matrix"""
     utils3d.numpy.transforms.view_look_at
 
 @overload
 def extrinsics_look_at(eye: numpy_.ndarray, look_at: numpy_.ndarray, up: numpy_.ndarray) -> numpy_.ndarray:
     """Get OpenCV extrinsics matrix looking at something
 
-Args:
-    eye (np.ndarray): [..., 3] the eye position
-    look_at (np.ndarray): [..., 3] the position to look at
-    up (np.ndarray): [..., 3] head up direction (-y axis in screen space). Not necessarily othogonal to view direction
+## Parameters
+    eye (ndarray): [..., 3] the eye position
+    look_at (ndarray): [..., 3] the position to look at
+    up (ndarray): [..., 3] head up direction (-y axis in screen space). Not necessarily othogonal to view direction
 
-Returns:
-    (np.ndarray): [..., 4, 4], extrinsics matrix"""
+## Returns
+    (ndarray): [..., 4, 4], extrinsics matrix"""
     utils3d.numpy.transforms.extrinsics_look_at
 
 @overload
 def perspective_to_intrinsics(perspective: numpy_.ndarray) -> numpy_.ndarray:
     """OpenGL perspective matrix to OpenCV intrinsics
 
-Args:
-    perspective (np.ndarray): [..., 4, 4] OpenGL perspective matrix
+## Parameters
+    perspective (ndarray): [..., 4, 4] OpenGL perspective matrix
 
-Returns:
-    (np.ndarray): shape [..., 3, 3] OpenCV intrinsics"""
+## Returns
+    (ndarray): shape [..., 3, 3] OpenCV intrinsics"""
     utils3d.numpy.transforms.perspective_to_intrinsics
 
 @overload
 def perspective_to_near_far(perspective: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Get near and far planes from OpenGL perspective matrix
 
-Args:"""
+## Parameters"""
     utils3d.numpy.transforms.perspective_to_near_far
 
 @overload
@@ -328,230 +286,289 @@ def intrinsics_to_perspective(intrinsics: numpy_.ndarray, near: Union[float, num
     """OpenCV intrinsics to OpenGL perspective matrix
 NOTE: not work for tile-shifting intrinsics currently
 
-Args:
-    intrinsics (np.ndarray): [..., 3, 3] OpenCV intrinsics matrix
-    near (float | np.ndarray): [...] near plane to clip
-    far (float | np.ndarray): [...] far plane to clip
-Returns:
-    (np.ndarray): [..., 4, 4] OpenGL perspective matrix"""
+## Parameters
+    intrinsics (ndarray): [..., 3, 3] OpenCV intrinsics matrix
+    near (float | ndarray): [...] near plane to clip
+    far (float | ndarray): [...] far plane to clip
+## Returns
+    (ndarray): [..., 4, 4] OpenGL perspective matrix"""
     utils3d.numpy.transforms.intrinsics_to_perspective
 
 @overload
 def extrinsics_to_view(extrinsics: numpy_.ndarray) -> numpy_.ndarray:
     """OpenCV camera extrinsics to OpenGL view matrix
 
-Args:
-    extrinsics (np.ndarray): [..., 4, 4] OpenCV camera extrinsics matrix
+## Parameters
+    extrinsics (ndarray): [..., 4, 4] OpenCV camera extrinsics matrix
 
-Returns:
-    (np.ndarray): [..., 4, 4] OpenGL view matrix"""
+## Returns
+    (ndarray): [..., 4, 4] OpenGL view matrix"""
     utils3d.numpy.transforms.extrinsics_to_view
 
 @overload
 def view_to_extrinsics(view: numpy_.ndarray) -> numpy_.ndarray:
     """OpenGL view matrix to OpenCV camera extrinsics
 
-Args:
-    view (np.ndarray): [..., 4, 4] OpenGL view matrix
+## Parameters
+    view (ndarray): [..., 4, 4] OpenGL view matrix
 
-Returns:
-    (np.ndarray): [..., 4, 4] OpenCV camera extrinsics matrix"""
+## Returns
+    (ndarray): [..., 4, 4] OpenCV camera extrinsics matrix"""
     utils3d.numpy.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray], integer_pixel_centers: bool = True) -> numpy_.ndarray:
+def normalize_intrinsics(intrinsics: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray], integer_pixel_centers: bool = True) -> numpy_.ndarray:
     """Normalize intrinsics from pixel cooridnates to uv coordinates
 
-Args:
-    intrinsics (np.ndarray): [..., 3, 3] camera intrinsics(s) to normalize
-    width (int | np.ndarray): [...] image width(s)
-    height (int | np.ndarray): [...] image height(s)
+## Parameters
+    intrinsics (ndarray): [..., 3, 3] camera intrinsics(s) to normalize
+    width (int | ndarray): [...] image width(s)
+    height (int | ndarray): [...] image height(s)
     integer_pixel_centers (bool): whether the integer pixel coordinates are at the center of the pixel. If False, the integer coordinates are at the left-top corner of the pixel.
 
-Returns:
-    (np.ndarray): [..., 3, 3] normalized camera intrinsics(s)"""
+## Returns
+    (ndarray): [..., 3, 3] normalized camera intrinsics(s)"""
     utils3d.numpy.transforms.normalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray], left: Union[int, numpy_.ndarray], top: Union[int, numpy_.ndarray], crop_width: Union[int, numpy_.ndarray], crop_height: Union[int, numpy_.ndarray]) -> numpy_.ndarray:
+def crop_intrinsics(intrinsics: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray], left: Union[numbers.Number, numpy_.ndarray], top: Union[numbers.Number, numpy_.ndarray], crop_width: Union[numbers.Number, numpy_.ndarray], crop_height: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
     """Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
-Args:
-    intrinsics (np.ndarray): [..., 3, 3] camera intrinsics(s) to crop
-    width (int | np.ndarray): [...] image width(s)
-    height (int | np.ndarray): [...] image height(s)
-    left (int | np.ndarray): [...] left crop boundary
-    top (int | np.ndarray): [...] top crop boundary
-    crop_width (int | np.ndarray): [...] crop width
-    crop_height (int | np.ndarray): [...] crop height
+## Parameters
+    intrinsics (ndarray): [..., 3, 3] camera intrinsics(s) to crop
+    width (int | ndarray): [...] image width(s)
+    height (int | ndarray): [...] image height(s)
+    left (int | ndarray): [...] left crop boundary
+    top (int | ndarray): [...] top crop boundary
+    crop_width (int | ndarray): [...] crop width
+    crop_height (int | ndarray): [...] crop height
 
-Returns:
-    (np.ndarray): [..., 3, 3] cropped camera intrinsics(s)"""
+## Returns
+    (ndarray): [..., 3, 3] cropped camera intrinsics(s)"""
     utils3d.numpy.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray]) -> numpy_.ndarray:
-    """Args:
-    pixel (np.ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-    width (int | np.ndarray): [...] image width(s)
-    height (int | np.ndarray): [...] image height(s)
+def pixel_to_uv(pixel: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
+    """## Parameters
+    pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
+    width (Number | ndarray): [...] image width(s)
+    height (Number | ndarray): [...] image height(s)
 
-Returns:
-    (np.ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+## Returns
+    (ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
     utils3d.numpy.transforms.pixel_to_uv
 
 @overload
 def pixel_to_ndc(pixel: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray]) -> numpy_.ndarray:
-    """Args:
-    pixel (np.ndarray): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
-    width (int | np.ndarray): [...] image width(s)
-    height (int | np.ndarray): [...] image height(s)
+    """## Parameters
+    pixel (ndarray): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
+    width (int | ndarray): [...] image width(s)
+    height (int | ndarray): [...] image height(s)
 
-Returns:
-    (np.ndarray): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)"""
+## Returns
+    (ndarray): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)"""
     utils3d.numpy.transforms.pixel_to_ndc
 
 @overload
 def uv_to_pixel(uv: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray]) -> numpy_.ndarray:
-    """Args:
-    pixel (np.ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-    width (int | np.ndarray): [...] image width(s)
-    height (int | np.ndarray): [...] image height(s)
+    """## Parameters
+    pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
+    width (int | ndarray): [...] image width(s)
+    height (int | ndarray): [...] image height(s)
 
-Returns:
-    (np.ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+## Returns
+    (ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
     utils3d.numpy.transforms.uv_to_pixel
 
 @overload
-def project_depth(depth: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+def depth_linear_to_buffer(depth: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
     """Project linear depth to depth value in screen space
 
-Args:
-    depth (np.ndarray): [...] depth value
-    near (float | np.ndarray): [...] near plane to clip
-    far (float | np.ndarray): [...] far plane to clip
+## Parameters
+    depth (ndarray): [...] depth value
+    near (float | ndarray): [...] near plane to clip
+    far (float | ndarray): [...] far plane to clip
 
-Returns:
-    (np.ndarray): [..., 1] depth value in screen space, value ranging in [0, 1]"""
-    utils3d.numpy.transforms.project_depth
+## Returns
+    (ndarray): [..., 1] depth value in screen space, value ranging in [0, 1]"""
+    utils3d.numpy.transforms.depth_linear_to_buffer
 
 @overload
 def depth_buffer_to_linear(depth_buffer: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
     """OpenGL depth buffer to linear depth
 
-Args:
-    depth_buffer (np.ndarray): [...] depth value
-    near (float | np.ndarray): [...] near plane to clip
-    far (float | np.ndarray): [...] far plane to clip
+## Parameters
+    depth_buffer (ndarray): [...] depth value
+    near (float | ndarray): [...] near plane to clip
+    far (float | ndarray): [...] far plane to clip
 
-Returns:
-    (np.ndarray): [..., 1] linear depth"""
+## Returns
+    (ndarray): [..., 1] linear depth"""
     utils3d.numpy.transforms.depth_buffer_to_linear
 
 @overload
-def unproject_cv(uv_coord: numpy_.ndarray, depth: Optional[numpy_.ndarray] = None, intrinsics: numpy_.ndarray = None, extrinsics: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def unproject_cv(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
-Args:
-    uv_coord (np.ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
+## Parameters
+    uv_coord (ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
         The origin (0., 0.) is corresponding to the left & top
-    depth (np.ndarray): [..., N] depth value
-    extrinsics (np.ndarray): [..., 4, 4] extrinsics matrix
-    intrinsics (np.ndarray): [..., 3, 3] intrinsics matrix
+    depth (ndarray): [..., N] depth value
+    extrinsics (ndarray): [..., 4, 4] extrinsics matrix
+    intrinsics (ndarray): [..., 3, 3] intrinsics matrix
 
-Returns:
-    points (np.ndarray): [..., N, 3] 3d points"""
+## Returns
+    points (ndarray): [..., N, 3] 3d points"""
     utils3d.numpy.transforms.unproject_cv
 
 @overload
-def unproject_gl(screen_coord: numpy_.ndarray, model: numpy_.ndarray = None, view: numpy_.ndarray = None, perspective: numpy_.ndarray = None) -> numpy_.ndarray:
+def unproject_gl(uv: numpy_.ndarray, depth: numpy_.ndarray, projection: numpy_.ndarray, view: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
     """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
 
-Args:
-    screen_coord (np.ndarray): [..., N, 3] screen space coordinates, value ranging in [0, 1].
-        The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
-    model (np.ndarray): [..., 4, 4] model matrix
-    view (np.ndarray): [..., 4, 4] view matrix
-    perspective (np.ndarray): [..., 4, 4] perspective matrix
-
-Returns:
-    points (np.ndarray): [..., N, 3] 3d points"""
+## Parameters
+    uv (ndarray): (..., N, 2) screen space XY coordinates, value ranging in [0, 1].
+        The origin (0., 0.) is corresponding to the left & bottom
+    depth (ndarray): (..., N) linear depth values
+    projection (ndarray): (..., 4, 4) projection  matrix
+    view (ndarray): (..., 4, 4) view matrix
+    
+## Returns
+    points (ndarray): (..., N, 3) 3d points"""
     utils3d.numpy.transforms.unproject_gl
 
 @overload
 def project_cv(points: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Project 3D points to 2D following the OpenCV convention
 
-Args:
-    points (np.ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last
-        dimension is 4, the points are assumed to be in homogeneous coordinates
-    extrinsics (np.ndarray): [..., 4, 4] extrinsics matrix
-    intrinsics (np.ndarray): [..., 3, 3] intrinsics matrix
+## Parameters
+    points (ndarray): [..., N, 3]
+    extrinsics (ndarray): [..., 4, 4] extrinsics matrix
+    intrinsics (ndarray): [..., 3, 3] intrinsics matrix
 
-Returns:
-    uv_coord (np.ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
+## Returns
+    uv_coord (ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
         The origin (0., 0.) is corresponding to the left & top
-    linear_depth (np.ndarray): [..., N] linear depth"""
+    linear_depth (ndarray): [..., N] linear depth"""
     utils3d.numpy.transforms.project_cv
 
 @overload
-def project_gl(points: numpy_.ndarray, model: numpy_.ndarray = None, view: numpy_.ndarray = None, perspective: numpy_.ndarray = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def project_gl(points: numpy_.ndarray, projection: numpy_.ndarray, view: numpy_.ndarray = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
 
-Args:
-    points (np.ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
+## Parameters
+    points (ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
         dimension is 4, the points are assumed to be in homogeneous coordinates
-    model (np.ndarray): [..., 4, 4] model matrix
-    view (np.ndarray): [..., 4, 4] view matrix
-    perspective (np.ndarray): [..., 4, 4] perspective matrix
+    view (ndarray): [..., 4, 4] view matrix
+    projection (ndarray): [..., 4, 4] projection matrix
 
-Returns:
-    scr_coord (np.ndarray): [..., N, 3] screen space coordinates, value ranging in [0, 1].
-        The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
-    linear_depth (np.ndarray): [..., N] linear depth"""
+## Returns
+    scr_coord (ndarray): [..., N, 2] OpenGL screen space XY coordinates, value ranging in [0, 1].
+        The origin (0., 0.) is corresponding to the left & bottom
+    linear_depth (ndarray): [..., N] linear depth"""
     utils3d.numpy.transforms.project_gl
+
+@overload
+def project(points: numpy_.ndarray, *, intrinsics: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Calculate projection. 
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
+- For OpenGL convention, use `view` and `projection` matrice.
+
+## Parameters
+
+- `points`: (..., N, 3) 3D world-space points
+- `intrinsics`: (..., 3, 3) intrinsics matrix
+- `extrinsics`: (..., 4, 4) extrinsics matrix
+- `view`: (..., 4, 4) view matrix
+- `projection`: (..., 4, 4) projection matrix
+
+## Returns
+
+- `uv`: (..., N, 2) 2D coordinates. 
+    - For OpenCV convention, it is the normalized image coordinate where (0, 0) is the top left corner.
+    - For OpenGL convention, it is the screen space XY coordinate where (0, 0) is the bottom left corner.
+- `depth`: (..., N) linear depth values, where `depth > 0` is visible.
+    - For OpenCV convention, it is the Z coordinate in camera space.
+    - For OpenGL convention, it is the -Z coordinate in camera space."""
+    utils3d.numpy.transforms.project
+
+@overload
+def unproject(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], *, intrinsics: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, view: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+    """Calculate inverse projection. 
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
+- For OpenGL convention, use `view` and `projection` matrice.
+
+## Parameters
+
+- `uv`: (..., N, 2) 2D coordinates. 
+    - For OpenCV convention, it is the normalized image coordinate where (0, 0) is the top left corner.
+    - For OpenGL convention, it is the screen space XY coordinate where (0, 0) is the bottom left corner.
+- `depth`: (..., N) linear depth values, where `depth > 0` is visible.
+    - For OpenCV convention, it is the Z coordinate in camera space.
+    - For OpenGL convention, it is the -Z coordinate in camera space.
+- `intrinsics`: (..., 3, 3) intrinsics matrix
+- `extrinsics`: (..., 4, 4) extrinsics matrix
+- `view`: (..., 4, 4) view matrix
+- `projection`: (..., 4, 4) projection matrix
+
+## Returns
+
+- `points`: (..., N, 3) 3D world-space points"""
+    utils3d.numpy.transforms.unproject
+
+@overload
+def screen_coord_to_view_coord(screen_coord: numpy_.ndarray, projection: numpy_.ndarray) -> numpy_.ndarray:
+    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+
+## Parameters
+    screen_coord (ndarray): (..., N, 3) screen space XYZ coordinates, value ranging in [0, 1]
+        The origin (0., 0.) is corresponding to the left & bottom
+    projection (ndarray): (..., 4, 4) projection matrix
+
+## Returns
+    points (ndarray): [..., N, 3] 3d points"""
+    utils3d.numpy.transforms.screen_coord_to_view_coord
 
 @overload
 def quaternion_to_matrix(quaternion: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
     """Converts a batch of quaternions (w, x, y, z) to rotation matrices
 
-Args:
-    quaternion (np.ndarray): shape (..., 4), the quaternions to convert
+## Parameters
+    quaternion (ndarray): shape (..., 4), the quaternions to convert
 
-Returns:
-    np.ndarray: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions"""
+## Returns
+    ndarray: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions"""
     utils3d.numpy.transforms.quaternion_to_matrix
 
 @overload
 def axis_angle_to_matrix(axis_angle: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
     """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
 
-Args:
-    axis_angle (np.ndarray): shape (..., 3), axis-angle vcetors
+## Parameters
+    axis_angle (ndarray): shape (..., 3), axis-angle vcetors
 
-Returns:
-    np.ndarray: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters"""
+## Returns
+    ndarray: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters"""
     utils3d.numpy.transforms.axis_angle_to_matrix
 
 @overload
 def matrix_to_quaternion(rot_mat: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
     """Convert 3x3 rotation matrix to quaternion (w, x, y, z)
 
-Args:
-    rot_mat (np.ndarray): shape (..., 3, 3), the rotation matrices to convert
+## Parameters
+    rot_mat (ndarray): shape (..., 3, 3), the rotation matrices to convert
 
-Returns:
-    np.ndarray: shape (..., 4), the quaternions corresponding to the given rotation matrices"""
+## Returns
+    ndarray: shape (..., 4), the quaternions corresponding to the given rotation matrices"""
     utils3d.numpy.transforms.matrix_to_quaternion
 
 @overload
 def extrinsics_to_essential(extrinsics: numpy_.ndarray):
     """extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
 
-Args:
+## Parameters
     extrinsics (np.ndaray): [..., 4, 4] extrinsics matrix
 
-Returns:
+## Returns
     (np.ndaray): [..., 3, 3] essential matrix"""
     utils3d.numpy.transforms.extrinsics_to_essential
 
@@ -560,11 +577,11 @@ def euler_axis_angle_rotation(axis: str, angle: numpy_.ndarray) -> numpy_.ndarra
     """Return the rotation matrices for one of the rotations about an axis
 of which Euler angles describe, for each value of the angle given.
 
-Args:
+## Parameters
     axis: Axis label "X" or "Y or "Z".
     angle: any shape tensor of Euler angles in radians
 
-Returns:
+## Returns
     Rotation matrices as tensor of shape (..., 3, 3)."""
     utils3d.numpy.transforms.euler_axis_angle_rotation
 
@@ -572,11 +589,11 @@ Returns:
 def euler_angles_to_matrix(euler_angles: numpy_.ndarray, convention: str = 'XYZ') -> numpy_.ndarray:
     """Convert rotations given as Euler angles in radians to rotation matrices.
 
-Args:
+## Parameters
     euler_angles: Euler angles in radians as ndarray of shape (..., 3), XYZ
     convention: permutation of "X", "Y" or "Z", representing the order of Euler rotations to apply.
 
-Returns:
+## Returns
     Rotation matrices as ndarray of shape (..., 3, 3)."""
     utils3d.numpy.transforms.euler_angles_to_matrix
 
@@ -595,119 +612,124 @@ def ray_intersection(p1: numpy_.ndarray, d1: numpy_.ndarray, p2: numpy_.ndarray,
     """Compute the intersection/closest point of two D-dimensional rays
 If the rays are intersecting, the closest point is the intersection point.
 
-Args:
-    p1 (np.ndarray): (..., D) origin of ray 1
-    d1 (np.ndarray): (..., D) direction of ray 1
-    p2 (np.ndarray): (..., D) origin of ray 2
-    d2 (np.ndarray): (..., D) direction of ray 2
+## Parameters
+    p1 (ndarray): (..., D) origin of ray 1
+    d1 (ndarray): (..., D) direction of ray 1
+    p2 (ndarray): (..., D) origin of ray 2
+    d2 (ndarray): (..., D) direction of ray 2
 
-Returns:
-    (np.ndarray): (..., N) intersection point"""
+## Returns
+    (ndarray): (..., N) intersection point"""
     utils3d.numpy.transforms.ray_intersection
 
 @overload
-def se3_matrix(R: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
+def make_se3_matrix(R: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Convert rotation matrix and translation vector to 4x4 transformation matrix.
 
-Args:
-    R (np.ndarray): [..., 3, 3] rotation matrix
-    t (np.ndarray): [..., 3] translation vector
+## Parameters
+    R (ndarray): [..., 3, 3] rotation matrix
+    t (ndarray): [..., 3] translation vector
 
-Returns:
-    np.ndarray: [..., 4, 4] transformation matrix"""
-    utils3d.numpy.transforms.se3_matrix
+## Returns
+    ndarray: [..., 4, 4] transformation matrix"""
+    utils3d.numpy.transforms.make_se3_matrix
 
 @overload
 def slerp_quaternion(q1: numpy_.ndarray, q2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Spherical linear interpolation between two unit quaternions.
 
-Args:
-    q1 (np.ndarray): [..., d] unit vector 1
-    q2 (np.ndarray): [..., d] unit vector 2
-    t (np.ndarray): [...] interpolation parameter in [0, 1]
+## Parameters
+    q1 (ndarray): [..., d] unit vector 1
+    q2 (ndarray): [..., d] unit vector 2
+    t (ndarray): [...] interpolation parameter in [0, 1]
 
-Returns:
-    np.ndarray: [..., 3] interpolated unit vector"""
+## Returns
+    ndarray: [..., 3] interpolated unit vector"""
     utils3d.numpy.transforms.slerp_quaternion
 
 @overload
 def slerp_vector(v1: numpy_.ndarray, v2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
 
-Args:
-    v1 (np.ndarray): [..., d] unit vector 1
-    v2 (np.ndarray): [..., d] unit vector 2
-    t (np.ndarray): [...] interpolation parameter in [0, 1]
+## Parameters
+    v1 (ndarray): [..., d] unit vector 1
+    v2 (ndarray): [..., d] unit vector 2
+    t (ndarray): [...] interpolation parameter in [0, 1]
 
-Returns:
-    np.ndarray: [..., d] interpolated unit vector"""
+## Returns
+    ndarray: [..., d] interpolated unit vector"""
     utils3d.numpy.transforms.slerp_vector
 
 @overload
 def lerp(x1: numpy_.ndarray, x2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Linear interpolation between two vectors.
 
-Args:
-    x1 (np.ndarray): [..., d] vector 1
-    x2 (np.ndarray): [..., d] vector 2
-    t (np.ndarray): [...] interpolation parameter. [0, 1] for interpolation between x1 and x2, otherwise for extrapolation.
+## Parameters
+    x1 (ndarray): [..., d] vector 1
+    x2 (ndarray): [..., d] vector 2
+    t (ndarray): [...] interpolation parameter. [0, 1] for interpolation between x1 and x2, otherwise for extrapolation.
 
-Returns:
-    np.ndarray: [..., d] interpolated vector"""
+## Returns
+    ndarray: [..., d] interpolated vector"""
     utils3d.numpy.transforms.lerp
 
 @overload
 def lerp_se3_matrix(T1: numpy_.ndarray, T2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Linear interpolation between two SE(3) matrices.
 
-Args:
-    T1 (np.ndarray): [..., 4, 4] SE(3) matrix 1
-    T2 (np.ndarray): [..., 4, 4] SE(3) matrix 2
-    t (np.ndarray): [...] interpolation parameter in [0, 1]
+## Parameters
+    T1 (ndarray): [..., 4, 4] SE(3) matrix 1
+    T2 (ndarray): [..., 4, 4] SE(3) matrix 2
+    t (ndarray): [...] interpolation parameter in [0, 1]
 
-Returns:
-    np.ndarray: [..., 4, 4] interpolated SE(3) matrix"""
+## Returns
+    ndarray: [..., 4, 4] interpolated SE(3) matrix"""
     utils3d.numpy.transforms.lerp_se3_matrix
 
 @overload
 def piecewise_lerp(x: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> numpy_.ndarray:
     """Linear spline interpolation.
 
-### Parameters:
-- `x`: np.ndarray, shape (n, d): the values of data points.
-- `t`: np.ndarray, shape (n,): the times of the data points.
-- `s`: np.ndarray, shape (m,): the times to be interpolated.
+## Parameters
+- `x`: ndarray, shape (n, d): the values of data points.
+- `t`: ndarray, shape (n,): the times of the data points.
+- `s`: ndarray, shape (m,): the times to be interpolated.
 - `extrapolation_mode`: str, the mode of extrapolation. 'constant' means extrapolate the boundary values, 'linear' means extrapolate linearly.
 
-### Returns:
-- `y`: np.ndarray, shape (..., m, d): the interpolated values."""
+## Returns
+- `y`: ndarray, shape (..., m, d): the interpolated values."""
     utils3d.numpy.transforms.piecewise_lerp
 
 @overload
 def piecewise_lerp_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> numpy_.ndarray:
     """Linear spline interpolation for SE(3) matrices.
 
-### Parameters:
-- `T`: np.ndarray, shape (n, 4, 4): the SE(3) matrices.
-- `t`: np.ndarray, shape (n,): the times of the data points.
-- `s`: np.ndarray, shape (m,): the times to be interpolated.
+## Parameters
+- `T`: ndarray, shape (n, 4, 4): the SE(3) matrices.
+- `t`: ndarray, shape (n,): the times of the data points.
+- `s`: ndarray, shape (m,): the times to be interpolated.
 - `extrapolation_mode`: str, the mode of extrapolation. 'constant' means extrapolate the boundary values, 'linear' means extrapolate linearly.
 
-### Returns:
-- `T_interp`: np.ndarray, shape (..., m, 4, 4): the interpolated SE(3) matrices."""
+## Returns
+- `T_interp`: ndarray, shape (..., m, 4, 4): the interpolated SE(3) matrices."""
     utils3d.numpy.transforms.piecewise_lerp_se3_matrix
 
 @overload
-def apply_transform(T: numpy_.ndarray, x: numpy_.ndarray) -> numpy_.ndarray:
-    """Apply SE(3) transformation to a point or a set of points.
+def transform(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
+    """Apply affine transformation(s) to a point or a set of points.
 
-### Parameters:
-- `T`: np.ndarray, shape (..., 4, 4): the SE(3) matrix.
-- `x`: np.ndarray, shape (..., 3): the point or a set of points to be transformed.
+## Parameters
+- `x`: ndarray, shape (..., D): the point or a set of points to be transformed.
+- `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrice)
+    If more than one transformation is given, they will be applied in corresponding order.
+## Returns
+- `y`: ndarray, shape (..., D): the transformed point or a set of points.
 
-### Returns:
-- `x_transformed`: np.ndarray, shape (..., 3): the transformed point or a set of points."""
-    utils3d.numpy.transforms.apply_transform
+## Example Usage
+```
+y = transform(x, T1, T2, T3)
+```"""
+    utils3d.numpy.transforms.transform
 
 @overload
 def angle_between(v1: numpy_.ndarray, v2: numpy_.ndarray):
@@ -718,7 +740,7 @@ def angle_between(v1: numpy_.ndarray, v2: numpy_.ndarray):
 def triangulate(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, backslash: numpy_.ndarray = None) -> numpy_.ndarray:
     """Triangulate a polygonal mesh.
 
-Args:
+## Parameters
     faces (np.ndarray): [L, P] polygonal faces
     vertices (np.ndarray, optional): [N, 3] 3-dimensional vertices.
         If given, the triangulation is performed according to the distance
@@ -726,7 +748,7 @@ Args:
     backslash (np.ndarray, optional): [L] boolean array indicating
         how to triangulate the quad faces. Defaults to None.
 
-Returns:
+## Returns
     (np.ndarray): [L * (P - 2), 3] triangular faces"""
     utils3d.numpy.mesh.triangulate
 
@@ -737,7 +759,7 @@ def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarr
 ### Parameters:
     `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
 
-### Returns:
+### ## Returns
     `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
     `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face"""
     utils3d.numpy.mesh.merge_meshes
@@ -746,11 +768,11 @@ def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarr
 def compute_face_normal(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
     """Compute face normals of a triangular mesh
 
-Args:
+## Parameters
     vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices
 
-Returns:
+## Returns
     normals (np.ndarray): [..., T, 3] face normals"""
     utils3d.numpy.mesh.compute_face_normal
 
@@ -758,11 +780,11 @@ Returns:
 def compute_face_angle(vertices: numpy_.ndarray, faces: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
     """Compute face angles of a triangular mesh
 
-Args:
+## Parameters
     vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices
 
-Returns:
+## Returns
     angles (np.ndarray): [..., T, 3] face angles"""
     utils3d.numpy.mesh.compute_face_angle
 
@@ -771,13 +793,13 @@ def compute_vertex_normal(vertices: numpy_.ndarray, faces: numpy_.ndarray, face_
     """Compute vertex normals of a triangular mesh by averaging neightboring face normals
 TODO: can be improved.
 
-Args:
+## Parameters
     vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices
     face_normal (np.ndarray, optional): [..., T, 3] face normals.
         None to compute face normals from vertices and faces. Defaults to None.
 
-Returns:
+## Returns
     normals (np.ndarray): [..., N, 3] vertex normals"""
     utils3d.numpy.mesh.compute_vertex_normal
 
@@ -786,13 +808,13 @@ def compute_vertex_normal_weighted(vertices: numpy_.ndarray, faces: numpy_.ndarr
     """Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
 according to the angles
 
-Args:
+## Parameters
     vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
     faces (np.ndarray): [..., T, 3] triangular face indices
     face_normal (np.ndarray, optional): [..., T, 3] face normals.
         None to compute face normals from vertices and faces. Defaults to None.
 
-Returns:
+## Returns
     normals (np.ndarray): [..., N, 3] vertex normals"""
     utils3d.numpy.mesh.compute_vertex_normal_weighted
 
@@ -800,10 +822,10 @@ Returns:
 def remove_corrupted_faces(faces: numpy_.ndarray) -> numpy_.ndarray:
     """Remove corrupted faces (faces with duplicated vertices)
 
-Args:
+## Parameters
     faces (np.ndarray): [T, 3] triangular face indices
 
-Returns:
+## Returns
     np.ndarray: [T_, 3] triangular face indices"""
     utils3d.numpy.mesh.remove_corrupted_faces
 
@@ -812,12 +834,12 @@ def merge_duplicate_vertices(vertices: numpy_.ndarray, faces: numpy_.ndarray, to
     """Merge duplicate vertices of a triangular mesh. 
 Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
-Args:
+## Parameters
     vertices (np.ndarray): [N, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices
     tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
-Returns:
+## Returns
     vertices (np.ndarray): [N_, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices"""
     utils3d.numpy.mesh.merge_duplicate_vertices
@@ -827,11 +849,11 @@ def remove_unused_vertices(faces: numpy_.ndarray, *vertice_attrs, return_indices
     """Remove unreferenced vertices of a mesh. 
 Unreferenced vertices are removed, and the face indices are updated accordingly.
 
-Args:
+## Parameters
     faces (np.ndarray): [T, P] face indices
     *vertice_attrs: vertex attributes
 
-Returns:
+## Returns
     faces (np.ndarray): [T, P] face indices
     *vertice_attrs: vertex attributes
     indices (np.ndarray, optional): [N] indices of vertices that are kept. Defaults to None."""
@@ -842,12 +864,12 @@ def subdivide_mesh_simple(vertices: numpy_.ndarray, faces: numpy_.ndarray, n: in
     """Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
 NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
 
-Args:
+## Parameters
     vertices (np.ndarray): [N, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices
     n (int, optional): number of subdivisions. Defaults to 1.
 
-Returns:
+## Returns
     vertices (np.ndarray): [N_, 3] subdivided 3-dimensional vertices
     faces (np.ndarray): [4 * T, 3] subdivided triangular face indices"""
     utils3d.numpy.mesh.subdivide_mesh_simple
@@ -857,10 +879,10 @@ def mesh_relations(faces: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarra
     """Calculate the relation between vertices and faces.
 NOTE: The input mesh must be a manifold triangle mesh.
 
-Args:
+## Parameters
     faces (np.ndarray): [T, 3] triangular face indices
 
-Returns:
+## Returns
     edges (np.ndarray): [E, 2] edge indices
     edge2face (np.ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
     face2edge (np.ndarray): [T, 3] face to edge relation
@@ -905,12 +927,12 @@ def camera_frustum(extrinsics: numpy_.ndarray, intrinsics: numpy_.ndarray, depth
 def calc_quad_candidates(edges: numpy_.ndarray, face2edge: numpy_.ndarray, edge2face: numpy_.ndarray):
     """Calculate the candidate quad faces.
 
-Args:
+## Parameters
     edges (np.ndarray): [E, 2] edge indices
     face2edge (np.ndarray): [T, 3] face to edge relation
     edge2face (np.ndarray): [E, 2] edge to face relation
 
-Returns:
+## Returns
     quads (np.ndarray): [Q, 4] quad candidate indices
     quad2edge (np.ndarray): [Q, 4] edge to quad candidate relation
     quad2adj (np.ndarray): [Q, 8] adjacent quad candidates of each quad candidate
@@ -921,11 +943,11 @@ Returns:
 def calc_quad_distortion(vertices: numpy_.ndarray, quads: numpy_.ndarray):
     """Calculate the distortion of each candidate quad face.
 
-Args:
+## Parameters
     vertices (np.ndarray): [N, 3] 3-dimensional vertices
     quads (np.ndarray): [Q, 4] quad face indices
 
-Returns:
+## Returns
     distortion (np.ndarray): [Q] distortion of each quad face"""
     utils3d.numpy.quadmesh.calc_quad_distortion
 
@@ -933,11 +955,11 @@ Returns:
 def calc_quad_direction(vertices: numpy_.ndarray, quads: numpy_.ndarray):
     """Calculate the direction of each candidate quad face.
 
-Args:
+## Parameters
     vertices (np.ndarray): [N, 3] 3-dimensional vertices
     quads (np.ndarray): [Q, 4] quad face indices
 
-Returns:
+## Returns
     direction (np.ndarray): [Q, 4] direction of each quad face.
         Represented by the angle between the crossing and each edge."""
     utils3d.numpy.quadmesh.calc_quad_direction
@@ -946,11 +968,11 @@ Returns:
 def calc_quad_smoothness(quad2edge: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_direction: numpy_.ndarray):
     """Calculate the smoothness of each candidate quad face connection.
 
-Args:
+## Parameters
     quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
     quads_direction (np.ndarray): [Q, 4] direction of each quad face
 
-Returns:
+## Returns
     smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection"""
     utils3d.numpy.quadmesh.calc_quad_smoothness
 
@@ -958,7 +980,7 @@ Returns:
 def sovle_quad(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
     """Solve the quad mesh from the candidate quad faces.
 
-Args:
+## Parameters
     face2edge (np.ndarray): [T, 3] face to edge relation
     edge2face (np.ndarray): [E, 2] edge to face relation
     quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
@@ -966,7 +988,7 @@ Args:
     quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
     quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
 
-Returns:
+## Returns
     weights (np.ndarray): [Q] weight of each valid quad face"""
     utils3d.numpy.quadmesh.sovle_quad
 
@@ -974,7 +996,7 @@ Returns:
 def sovle_quad_qp(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
     """Solve the quad mesh from the candidate quad faces.
 
-Args:
+## Parameters
     face2edge (np.ndarray): [T, 3] face to edge relation
     edge2face (np.ndarray): [E, 2] edge to face relation
     quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
@@ -982,7 +1004,7 @@ Args:
     quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
     quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
 
-Returns:
+## Returns
     weights (np.ndarray): [Q] weight of each valid quad face"""
     utils3d.numpy.quadmesh.sovle_quad_qp
 
@@ -991,11 +1013,11 @@ def tri_to_quad(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> Tuple[numpy_
     """Convert a triangle mesh to a quad mesh.
 NOTE: The input mesh must be a manifold mesh.
 
-Args:
+## Parameters
     vertices (np.ndarray): [N, 3] 3-dimensional vertices
     faces (np.ndarray): [T, 3] triangular face indices
 
-Returns:
+## Returns
     vertices (np.ndarray): [N_, 3] 3-dimensional vertices
     faces (np.ndarray): [Q, 4] quad face indices"""
     utils3d.numpy.quadmesh.tri_to_quad
@@ -1004,12 +1026,12 @@ Returns:
 def depth_map_edge(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
     """Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
 
-Args:
+## Parameters
     depth (np.ndarray): shape (..., height, width), linear depth map
     atol (float): absolute tolerance
     rtol (float): relative tolerance
 
-Returns:
+## Returns
     edge (np.ndarray): shape (..., height, width) of dtype torch.bool"""
     utils3d.numpy.maps.depth_map_edge
 
@@ -1017,23 +1039,23 @@ Returns:
 def normal_map_edge(normals: numpy_.ndarray, tol: float, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
     """Compute the edge mask from normal map.
 
-Args:
+## Parameters
     normal (np.ndarray): shape (..., height, width, 3), normal map
     tol (float): tolerance in degrees
 
-Returns:
+## Returns
     edge (np.ndarray): shape (..., height, width) of dtype torch.bool"""
     utils3d.numpy.maps.normal_map_edge
 
 @overload
 def depth_map_aliasing(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
     """Compute the map that indicates the aliasing of x depth map, identifying pixels which neither close to the maximum nor the minimum of its neighbors.
-Args:
+## Parameters
     depth (np.ndarray): shape (..., height, width), linear depth map
     atol (float): absolute tolerance
     rtol (float): relative tolerance
 
-Returns:
+## Returns
     edge (np.ndarray): shape (..., height, width) of dtype torch.bool"""
     utils3d.numpy.maps.depth_map_aliasing
 
@@ -1042,11 +1064,11 @@ def screen_coord_map(height: int, width: int) -> numpy_.ndarray:
     """Get OpenGL's screen space coordinates, ranging in [0, 1].
 [0, 0] is the bottom-left corner of the image.
 
-Args:
+## Parameters
     width (int): image width
     height (int): image height
 
-Returns:
+## Returns
     (np.ndarray): shape (height, width, 2)"""
     utils3d.numpy.maps.screen_coord_map
 
@@ -1084,11 +1106,11 @@ def pixel_center_coord_map(height: int, width: int, left: int = None, top: int =
   ...             ...                  ...
 [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
 
-Args:
+## Parameters
     height (int): image height
     width (int): image width
 
-Returns:
+## Returns
     np.ndarray: shape (height, width, 2)"""
     utils3d.numpy.maps.pixel_center_coord_map
 
@@ -1102,11 +1124,11 @@ def pixel_coord_map(height: int, width: int, left: int = None, top: int = None, 
   ...             ...                  ...
 [[0, 9], [1, 9], ..., [9, 9]]]
 
-Args:
+## Parameters
     width (int): image width
     height (int): image height
 
-Returns:
+## Returns
     np.ndarray: shape (height, width, 2)"""
     utils3d.numpy.maps.pixel_coord_map
 
@@ -1114,11 +1136,11 @@ Returns:
 def build_mesh_from_map(*maps: numpy_.ndarray, mask: numpy_.ndarray = None, tri: bool = False, return_indices: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
-Args:
+## Parameters
     *maps (np.ndarray): attribute maps in shape (height, width, [channels])
     mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
-Returns:
+## Returns
     faces (np.ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
     *vertex_attrs (np.ndarray): vertex attributes in corresponding order with input image_attrs
     indices (np.ndarray, optional): indices of vertices in the original mesh"""
@@ -1128,7 +1150,7 @@ Returns:
 def build_mesh_from_depth_map(depth: numpy_.ndarray, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, *vertice_attrs: numpy_.ndarray, atol: float = None, rtol: float = None, remove_by_depth: bool = False, return_uv: bool = False, return_indices: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get x triangle mesh by lifting depth map to 3D.
 
-Args:
+## Parameters
     depth (np.ndarray): [H, W] depth map
     extrinsics (np.ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
     intrinsics (np.ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
@@ -1140,7 +1162,7 @@ Args:
     return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
     return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
 
-Returns:
+## Returns
     vertices (np.ndarray): [N, 3] vertices
     faces (np.ndarray): [T, 3] faces
     *vertice_attrs (np.ndarray): [N, C] vertex attributes
@@ -1152,12 +1174,12 @@ Returns:
 def point_map_to_normal_map(point: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
     """Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
-Args:
+## Parameters
     point (np.ndarray): shape (height, width, 3), point map
     mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
     edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
 
-Returns:
+## Returns
     normal (np.ndarray): shape (height, width, 3), normal map. """
     utils3d.numpy.maps.point_map_to_normal_map
 
@@ -1165,12 +1187,12 @@ Returns:
 def depth_map_to_point_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
     """Unproject depth map to 3D points.
 
-Args:
+## Parameters
     depth (np.ndarray): [..., H, W] depth value
     intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
     extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
 
-Returns:
+## Returns
     points (np.ndarray): [..., N, 3] 3d points"""
     utils3d.numpy.maps.depth_map_to_point_map
 
@@ -1178,13 +1200,13 @@ Returns:
 def depth_map_to_normal_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
     """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
-Args:
+## Parameters
     depth (np.ndarray): shape (height, width), linear depth map
     intrinsics (np.ndarray): shape (3, 3), intrinsics matrix
     mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
     edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
 
-Returns:
+## Returns
     normal (np.ndarray): shape (height, width, 3), normal map. """
     utils3d.numpy.maps.depth_map_to_normal_map
 
@@ -1192,14 +1214,14 @@ Returns:
 def chessboard(height: int, width: int, grid_size: int, color_a: numpy_.ndarray, color_b: numpy_.ndarray) -> numpy_.ndarray:
     """get x chessboard image
 
-Args:
+## Parameters
     height (int): image height
     width (int): image width
     grid_size (int): size of chessboard grid
     color_a (np.ndarray): color of the grid at the top-left corner
     color_b (np.ndarray): color in complementary grid cells
 
-Returns:
+## Returns
     image (np.ndarray): shape (height, width, channels), chessboard image"""
     utils3d.numpy.maps.chessboard
 
@@ -1209,7 +1231,7 @@ def RastContext(*args, **kwargs):
 
 @overload
 def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
-    """Args:
+    """## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1225,7 +1247,7 @@ def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int
     background_interpolation_id (np.ndarray): (H, W) background triangle ID map
     background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
-Returns:
+## Returns
     A dictionary containing
     
     if attributes is not None
@@ -1241,7 +1263,7 @@ Returns:
 
 @overload
 def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
-    """Args:
+    """## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1252,7 +1274,7 @@ def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, wi
     view (np.ndarray): (4, 4) View matrix (world to camera).
     projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
     cull_backface (bool): whether to cull backface
-Returns:
+## Returns
     A context manager of generator of dictionary containing
     
     if attributes is not None
@@ -1285,7 +1307,7 @@ with rasterize_triangles_peeling(
 
 @overload
 def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, ...]:
-    """Args:
+    """## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1301,7 +1323,7 @@ def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, he
     background_interpolation_id (np.ndarray): (H, W) background triangle ID map
     background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
-Returns:
+## Returns
     A dictionary containing
     
     if attributes is not None
@@ -1314,6 +1336,39 @@ Returns:
     - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
     - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
     utils3d.numpy.rasterization.rasterize_lines
+
+@overload
+def rasterize_point_cloud(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
+    """## Parameters
+    ctx (RastContext): rasterization context
+    width (int): width of rendered image
+    height (int): height of rendered image
+    points (np.ndarray): (N, 3)
+    point_sizes (np.ndarray): (N,) or float
+    point_size_in: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
+    point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
+    attributes (np.ndarray): (N, C)
+    view (np.ndarray): (4, 4) View matrix (world to camera).
+    projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    cull_backface (bool): whether to cull backface,
+    return_depth (bool): whether to return depth map
+    return_point_id (bool): whether to return point ID map
+    background_image (np.ndarray): (H, W, C) background image
+    background_depth (np.ndarray): (H, W) background depth
+    background_point_id (np.ndarray): (H, W) background point ID map
+
+## Returns
+    A dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_point_id is True
+    - `point_id` (np.ndarray): (H, W) int32 point ID map"""
+    utils3d.numpy.rasterization.rasterize_point_cloud
 
 @overload
 def sample_texture(ctx: utils3d.numpy.rasterization.RastContext, uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: Union[int, Tuple[int, int]] = 0, repeat: Union[bool, Tuple[bool, bool]] = False, anisotropic: float = 1.0) -> numpy_.ndarray:
@@ -1364,90 +1419,50 @@ def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
     utils3d.torch.utils.lookup
 
 @overload
-def perspective(fov_y: Union[float, torch_.Tensor], aspect: Union[float, torch_.Tensor], near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
-    """Get OpenGL perspective matrix
+def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
+    """Get OpenGL perspective matrix from field of view 
 
-Args:
-    fov_y (float | torch.Tensor): field of view in y axis
-    aspect (float | torch.Tensor): aspect ratio
-    near (float | torch.Tensor): near plane to clip
-    far (float | torch.Tensor): far plane to clip
-
-Returns:
-    (torch.Tensor): [..., 4, 4] perspective matrix"""
-    utils3d.torch.transforms.perspective
-
-@overload
-def perspective_from_fov(fov: Union[float, torch_.Tensor], width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor], near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
-    """Get OpenGL perspective matrix from field of view in largest dimension
-
-Args:
-    fov (float | torch.Tensor): field of view in largest dimension
-    width (int | torch.Tensor): image width
-    height (int | torch.Tensor): image height
-    near (float | torch.Tensor): near plane to clip
-    far (float | torch.Tensor): far plane to clip
-
-Returns:
-    (torch.Tensor): [..., 4, 4] perspective matrix"""
+## Returns
+    (Tensor): [..., 4, 4] perspective matrix"""
     utils3d.torch.transforms.perspective_from_fov
 
 @overload
-def perspective_from_fov_xy(fov_x: Union[float, torch_.Tensor], fov_y: Union[float, torch_.Tensor], near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
-    """Get OpenGL perspective matrix from field of view in x and y axis
+def perspective_from_window(left: Union[float, torch_.Tensor], right: Union[float, torch_.Tensor], bottom: Union[float, torch_.Tensor], top: Union[float, torch_.Tensor], near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
+    """Get OpenGL perspective matrix from the window of z=-1 projection plane
 
-Args:
-    fov_x (float | torch.Tensor): field of view in x axis
-    fov_y (float | torch.Tensor): field of view in y axis
-    near (float | torch.Tensor): near plane to clip
-    far (float | torch.Tensor): far plane to clip
+## Returns
+    (Tensor): [..., 4, 4] perspective matrix"""
+    utils3d.torch.transforms.perspective_from_window
 
-Returns:
-    (torch.Tensor): [..., 4, 4] perspective matrix"""
-    utils3d.torch.transforms.perspective_from_fov_xy
+@overload
+def intrinsics_from_fov(fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None) -> torch_.Tensor:
+    """Get normalized OpenCV intrinsics matrix from given field of view.
+You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
+
+## Parameters
+    fov_x (float | Tensor): field of view in x axis
+    fov_y (float | Tensor): field of view in y axis
+    fov_max (float | Tensor): field of view in largest dimension
+    fov_min (float | Tensor): field of view in smallest dimension
+    aspect_ratio (float | Tensor): aspect ratio of the image
+
+## Returns
+    (Tensor): [..., 3, 3] OpenCV intrinsics matrix"""
+    utils3d.torch.transforms.intrinsics_from_fov
 
 @overload
 def intrinsics_from_focal_center(fx: Union[float, torch_.Tensor], fy: Union[float, torch_.Tensor], cx: Union[float, torch_.Tensor], cy: Union[float, torch_.Tensor]) -> torch_.Tensor:
     """Get OpenCV intrinsics matrix
 
-Args:
-    focal_x (float | torch.Tensor): focal length in x axis
-    focal_y (float | torch.Tensor): focal length in y axis
-    cx (float | torch.Tensor): principal point in x axis
-    cy (float | torch.Tensor): principal point in y axis
+## Parameters
+    focal_x (float | Tensor): focal length in x axis
+    focal_y (float | Tensor): focal length in y axis
+    cx (float | Tensor): principal point in x axis
+    cy (float | Tensor): principal point in y axis
 
-Returns:
-    (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix"""
+## Returns
+    (Tensor): [..., 3, 3] OpenCV intrinsics matrix"""
     utils3d.torch.transforms.intrinsics_from_focal_center
-
-@overload
-def intrinsics_from_fov(fov_max: Union[float, torch_.Tensor] = None, fov_min: Union[float, torch_.Tensor] = None, fov_x: Union[float, torch_.Tensor] = None, fov_y: Union[float, torch_.Tensor] = None, width: Union[int, torch_.Tensor] = None, height: Union[int, torch_.Tensor] = None) -> torch_.Tensor:
-    """Get normalized OpenCV intrinsics matrix from given field of view.
-You can provide either fov_max, fov_min, fov_x or fov_y
-
-Args:
-    width (int | torch.Tensor): image width
-    height (int | torch.Tensor): image height
-    fov_max (float | torch.Tensor): field of view in largest dimension
-    fov_min (float | torch.Tensor): field of view in smallest dimension
-    fov_x (float | torch.Tensor): field of view in x axis
-    fov_y (float | torch.Tensor): field of view in y axis
-
-Returns:
-    (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix"""
-    utils3d.torch.transforms.intrinsics_from_fov
-
-@overload
-def intrinsics_from_fov_xy(fov_x: Union[float, torch_.Tensor], fov_y: Union[float, torch_.Tensor]) -> torch_.Tensor:
-    """Get OpenCV intrinsics matrix from field of view in x and y axis
-
-Args:
-    fov_x (float | torch.Tensor): field of view in x axis
-    fov_y (float | torch.Tensor): field of view in y axis
-
-Returns:
-    (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix"""
-    utils3d.torch.transforms.intrinsics_from_fov_xy
 
 @overload
 def focal_to_fov(focal: torch_.Tensor):
@@ -1466,224 +1481,271 @@ def intrinsics_to_fov(intrinsics: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.
 def view_look_at(eye: torch_.Tensor, look_at: torch_.Tensor, up: torch_.Tensor) -> torch_.Tensor:
     """Get OpenGL view matrix looking at something
 
-Args:
-    eye (torch.Tensor): [..., 3] the eye position
-    look_at (torch.Tensor): [..., 3] the position to look at
-    up (torch.Tensor): [..., 3] head up direction (y axis in screen space). Not necessarily othogonal to view direction
+## Parameters
+    eye (Tensor): [..., 3] the eye position
+    look_at (Tensor): [..., 3] the position to look at
+    up (Tensor): [..., 3] head up direction (y axis in screen space). Not necessarily othogonal to view direction
 
-Returns:
-    (torch.Tensor): [..., 4, 4], view matrix"""
+## Returns
+    (Tensor): [..., 4, 4], view matrix"""
     utils3d.torch.transforms.view_look_at
 
 @overload
 def extrinsics_look_at(eye: torch_.Tensor, look_at: torch_.Tensor, up: torch_.Tensor) -> torch_.Tensor:
     """Get OpenCV extrinsics matrix looking at something
 
-Args:
-    eye (torch.Tensor): [..., 3] the eye position
-    look_at (torch.Tensor): [..., 3] the position to look at
-    up (torch.Tensor): [..., 3] head up direction (-y axis in screen space). Not necessarily othogonal to view direction
+## Parameters
+    eye (Tensor): [..., 3] the eye position
+    look_at (Tensor): [..., 3] the position to look at
+    up (Tensor): [..., 3] head up direction (-y axis in screen space). Not necessarily othogonal to view direction
 
-Returns:
-    (torch.Tensor): [..., 4, 4], extrinsics matrix"""
+## Returns
+    (Tensor): [..., 4, 4], extrinsics matrix"""
     utils3d.torch.transforms.extrinsics_look_at
 
 @overload
 def perspective_to_intrinsics(perspective: torch_.Tensor) -> torch_.Tensor:
     """OpenGL perspective matrix to OpenCV intrinsics
 
-Args:
-    perspective (torch.Tensor): [..., 4, 4] OpenGL perspective matrix
+## Parameters
+    perspective (Tensor): [..., 4, 4] OpenGL perspective matrix
 
-Returns:
-    (torch.Tensor): shape [..., 3, 3] OpenCV intrinsics"""
+## Returns
+    (Tensor): shape [..., 3, 3] OpenCV intrinsics"""
     utils3d.torch.transforms.perspective_to_intrinsics
 
 @overload
 def intrinsics_to_perspective(intrinsics: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
     """OpenCV intrinsics to OpenGL perspective matrix
+NOTE: not work for tile-shifting intrinsics currently
 
-Args:
-    intrinsics (torch.Tensor): [..., 3, 3] OpenCV intrinsics matrix
-    near (float | torch.Tensor): [...] near plane to clip
-    far (float | torch.Tensor): [...] far plane to clip
-Returns:
-    (torch.Tensor): [..., 4, 4] OpenGL perspective matrix"""
+## Parameters
+    intrinsics (Tensor): [..., 3, 3] OpenCV intrinsics matrix
+    near (float | Tensor): [...] near plane to clip
+    far (float | Tensor): [...] far plane to clip
+## Returns
+    (Tensor): [..., 4, 4] OpenGL perspective matrix"""
     utils3d.torch.transforms.intrinsics_to_perspective
 
 @overload
 def extrinsics_to_view(extrinsics: torch_.Tensor) -> torch_.Tensor:
     """OpenCV camera extrinsics to OpenGL view matrix
 
-Args:
-    extrinsics (torch.Tensor): [..., 4, 4] OpenCV camera extrinsics matrix
+## Parameters
+    extrinsics (Tensor): [..., 4, 4] OpenCV camera extrinsics matrix
 
-Returns:
-    (torch.Tensor): [..., 4, 4] OpenGL view matrix"""
+## Returns
+    (Tensor): [..., 4, 4] OpenGL view matrix"""
     utils3d.torch.transforms.extrinsics_to_view
 
 @overload
 def view_to_extrinsics(view: torch_.Tensor) -> torch_.Tensor:
     """OpenGL view matrix to OpenCV camera extrinsics
 
-Args:
-    view (torch.Tensor): [..., 4, 4] OpenGL view matrix
+## Parameters
+    view (Tensor): [..., 4, 4] OpenGL view matrix
 
-Returns:
-    (torch.Tensor): [..., 4, 4] OpenCV camera extrinsics matrix"""
+## Returns
+    (Tensor): [..., 4, 4] OpenCV camera extrinsics matrix"""
     utils3d.torch.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor]) -> torch_.Tensor:
+def normalize_intrinsics(intrinsics: torch_.Tensor, width: Union[numbers.Number, torch_.Tensor], height: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
     """Normalize camera intrinsics(s) to uv space
 
-Args:
-    intrinsics (torch.Tensor): [..., 3, 3] camera intrinsics(s) to normalize
-    width (int | torch.Tensor): [...] image width(s)
-    height (int | torch.Tensor): [...] image height(s)
+## Parameters
+    intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to normalize
+    width (int | Tensor): [...] image width(s)
+    height (int | Tensor): [...] image height(s)
 
-Returns:
-    (torch.Tensor): [..., 3, 3] normalized camera intrinsics(s)"""
+## Returns
+    (Tensor): [..., 3, 3] normalized camera intrinsics(s)"""
     utils3d.torch.transforms.normalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor], left: Union[int, torch_.Tensor], top: Union[int, torch_.Tensor], crop_width: Union[int, torch_.Tensor], crop_height: Union[int, torch_.Tensor]) -> torch_.Tensor:
+def crop_intrinsics(intrinsics: torch_.Tensor, width: Union[numbers.Number, torch_.Tensor], height: Union[numbers.Number, torch_.Tensor], left: Union[numbers.Number, torch_.Tensor], top: Union[numbers.Number, torch_.Tensor], crop_width: Union[numbers.Number, torch_.Tensor], crop_height: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
     """Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
-Args:
-    intrinsics (torch.Tensor): [..., 3, 3] camera intrinsics(s) to crop
-    width (int | torch.Tensor): [...] image width(s)
-    height (int | torch.Tensor): [...] image height(s)
-    left (int | torch.Tensor): [...] left crop boundary
-    top (int | torch.Tensor): [...] top crop boundary
-    crop_width (int | torch.Tensor): [...] crop width
-    crop_height (int | torch.Tensor): [...] crop height
+## Parameters
+    intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to crop
+    width (int | Tensor): [...] image width(s)
+    height (int | Tensor): [...] image height(s)
+    left (int | Tensor): [...] left crop boundary
+    top (int | Tensor): [...] top crop boundary
+    crop_width (int | Tensor): [...] crop width
+    crop_height (int | Tensor): [...] crop height
 
-Returns:
-    (torch.Tensor): [..., 3, 3] cropped camera intrinsics(s)"""
+## Returns
+    (Tensor): [..., 3, 3] cropped camera intrinsics(s)"""
     utils3d.torch.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor]) -> torch_.Tensor:
-    """Args:
-    pixel (torch.Tensor): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-    width (int | torch.Tensor): [...] image width(s)
-    height (int | torch.Tensor): [...] image height(s)
+def pixel_to_uv(pixel: torch_.Tensor, width: Union[numbers.Number, torch_.Tensor], height: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+    """## Parameters
+    pixel (Tensor): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
+    width (int | Tensor): [...] image width(s)
+    height (int | Tensor): [...] image height(s)
 
-Returns:
-    (torch.Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+## Returns
+    (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
     utils3d.torch.transforms.pixel_to_uv
 
 @overload
 def pixel_to_ndc(pixel: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor]) -> torch_.Tensor:
-    """Args:
-    pixel (torch.Tensor): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
-    width (int | torch.Tensor): [...] image width(s)
-    height (int | torch.Tensor): [...] image height(s)
+    """## Parameters
+    pixel (Tensor): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
+    width (int | Tensor): [...] image width(s)
+    height (int | Tensor): [...] image height(s)
 
-Returns:
-    (torch.Tensor): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)"""
+## Returns
+    (Tensor): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)"""
     utils3d.torch.transforms.pixel_to_ndc
 
 @overload
 def uv_to_pixel(uv: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor]) -> torch_.Tensor:
-    """Args:
-    uv (torch.Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
-    width (int | torch.Tensor): [...] image width(s)
-    height (int | torch.Tensor): [...] image height(s)
+    """## Parameters
+    uv (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
+    width (int | Tensor): [...] image width(s)
+    height (int | Tensor): [...] image height(s)
 
-Returns:
-    (torch.Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+## Returns
+    (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
     utils3d.torch.transforms.uv_to_pixel
 
 @overload
-def project_depth(depth: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
+def depth_linear_to_buffer(depth: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
     """Project linear depth to depth value in screen space
 
-Args:
-    depth (torch.Tensor): [...] depth value
-    near (float | torch.Tensor): [...] near plane to clip
-    far (float | torch.Tensor): [...] far plane to clip
+## Parameters
+    depth (Tensor): [...] depth value
+    near (float | Tensor): [...] near plane to clip
+    far (float | Tensor): [...] far plane to clip
 
-Returns:
-    (torch.Tensor): [..., 1] depth value in screen space, value ranging in [0, 1]"""
-    utils3d.torch.transforms.project_depth
+## Returns
+    (Tensor): [..., 1] depth value in screen space, value ranging in [0, 1]"""
+    utils3d.torch.transforms.depth_linear_to_buffer
 
 @overload
 def depth_buffer_to_linear(depth: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
     """Linearize depth value to linear depth
 
-Args:
-    depth (torch.Tensor): [...] screen depth value, ranging in [0, 1]
-    near (float | torch.Tensor): [...] near plane to clip
-    far (float | torch.Tensor): [...] far plane to clip
+## Parameters
+    depth (Tensor): [...] screen depth value, ranging in [0, 1]
+    near (float | Tensor): [...] near plane to clip
+    far (float | Tensor): [...] far plane to clip
 
-Returns:
-    (torch.Tensor): [...] linear depth"""
+## Returns
+    (Tensor): [...] linear depth"""
     utils3d.torch.transforms.depth_buffer_to_linear
 
 @overload
-def project_gl(points: torch_.Tensor, model: torch_.Tensor = None, view: torch_.Tensor = None, perspective: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def project_gl(points: torch_.Tensor, projection: torch_.Tensor, view: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
 
-Args:
-    points (torch.Tensor): [..., N, 3 or 4] 3D points to project, if the last 
+## Parameters
+    points (Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
         dimension is 4, the points are assumed to be in homogeneous coordinates
-    model (torch.Tensor): [..., 4, 4] model matrix
-    view (torch.Tensor): [..., 4, 4] view matrix
-    perspective (torch.Tensor): [..., 4, 4] perspective matrix
+    view (Tensor): [..., 4, 4] view matrix
+    projection (Tensor): [..., 4, 4] projection matrix
 
-Returns:
-    scr_coord (torch.Tensor): [..., N, 3] screen space coordinates, value ranging in [0, 1].
+## Returns
+    scr_coord (Tensor): [..., N, 3] screen space coordinates, value ranging in [0, 1].
         The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
-    linear_depth (torch.Tensor): [..., N] linear depth"""
+    linear_depth (Tensor): [..., N] linear depth"""
     utils3d.torch.transforms.project_gl
 
 @overload
-def project_cv(points: torch_.Tensor, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def project_cv(points: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Project 3D points to 2D following the OpenCV convention
 
-Args:
-    points (torch.Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last
-        dimension is 4, the points are assumed to be in homogeneous coordinates
-    extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix
-    intrinsics (torch.Tensor): [..., 3, 3] intrinsics matrix
+## Parameters
+    points (Tensor): [..., N, 3] 3D points
+    intrinsics (Tensor): [..., 3, 3] intrinsics matrix
+    extrinsics (Tensor): [..., 4, 4] extrinsics matrix
 
-Returns:
-    uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
+## Returns
+    uv_coord (Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
         The origin (0., 0.) is corresponding to the left & top
-    linear_depth (torch.Tensor): [..., N] linear depth"""
+    linear_depth (Tensor): [..., N] linear depth"""
     utils3d.torch.transforms.project_cv
 
 @overload
-def unproject_gl(screen_coord: torch_.Tensor, model: torch_.Tensor = None, view: torch_.Tensor = None, perspective: torch_.Tensor = None) -> torch_.Tensor:
+def unproject_gl(uv: torch_.Tensor, depth: torch_.Tensor, projection: torch_.Tensor, view: Optional[torch_.Tensor] = None) -> torch_.Tensor:
     """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
 
-Args:
-    screen_coord (torch.Tensor): [... N, 3] screen space coordinates, value ranging in [0, 1].
-        The origin (0., 0., 0.) is corresponding to the left & bottom & nearest
-    model (torch.Tensor): [..., 4, 4] model matrix
-    view (torch.Tensor): [..., 4, 4] view matrix
-    perspective (torch.Tensor): [..., 4, 4] perspective matrix
-
-Returns:
-    points (torch.Tensor): [..., N, 3] 3d points"""
+## Parameters
+    uv (Tensor): (..., N, 2) screen space XY coordinates, value ranging in [0, 1].
+        The origin (0., 0.) is corresponding to the left & bottom
+    depth (Tensor): (..., N) linear depth values
+    projection (Tensor): (..., 4, 4) projection  matrix
+    view (Tensor): (..., 4, 4) view matrix
+    
+## Returns
+    points (Tensor): (..., N, 3) 3d points"""
     utils3d.torch.transforms.unproject_gl
 
 @overload
-def unproject_cv(uv_coord: torch_.Tensor, depth: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None) -> torch_.Tensor:
+def unproject_cv(uv: torch_.Tensor, depth: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: torch_.Tensor = None) -> torch_.Tensor:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
-Args:
-    uv_coord (torch.Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
+## Parameters
+    uv (Tensor): [..., N, 2] uv coordinates, value ranging in [0, 1].
         The origin (0., 0.) is corresponding to the left & top
-    depth (torch.Tensor): [..., N] depth value
-    extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix
-    intrinsics (torch.Tensor): [..., 3, 3] intrinsics matrix
+    depth (Tensor): [..., N] depth value
+    extrinsics (Tensor): [..., 4, 4] extrinsics matrix
+    intrinsics (Tensor): [..., 3, 3] intrinsics matrix
 
-Returns:
-    points (torch.Tensor): [..., N, 3] 3d points"""
+## Returns
+    points (Tensor): [..., N, 3] 3d points"""
     utils3d.torch.transforms.unproject_cv
+
+@overload
+def project(points: torch_.Tensor, *, intrinsics: Optional[torch_.Tensor] = None, extrinsics: Optional[torch_.Tensor] = None, view: Optional[torch_.Tensor] = None, projection: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Calculate projection. 
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
+- For OpenGL convention, use `view` and `projection` matrice.
+
+## Parameters
+
+- `points`: (..., N, 3) 3D world-space points
+- `intrinsics`: (..., 3, 3) intrinsics matrix
+- `extrinsics`: (..., 4, 4) extrinsics matrix
+- `view`: (..., 4, 4) view matrix
+- `projection`: (..., 4, 4) projection matrix
+
+## Returns
+
+- `uv`: (..., N, 2) 2D coordinates. 
+    - For OpenCV convention, it is the normalized image coordinate where (0, 0) is the top left corner.
+    - For OpenGL convention, it is the screen space XY coordinate where (0, 0) is the bottom left corner.
+- `depth`: (..., N) linear depth values, where `depth > 0` is visible.
+    - For OpenCV convention, it is the Z coordinate in camera space.
+    - For OpenGL convention, it is the -Z coordinate in camera space."""
+    utils3d.torch.transforms.project
+
+@overload
+def unproject(uv: torch_.Tensor, depth: Optional[torch_.Tensor], *, intrinsics: Optional[torch_.Tensor] = None, extrinsics: Optional[torch_.Tensor] = None, projection: Optional[torch_.Tensor] = None, view: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+    """Calculate inverse projection. 
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
+- For OpenGL convention, use `view` and `projection` matrice.
+
+## Parameters
+
+- `uv`: (..., N, 2) 2D coordinates. 
+    - For OpenCV convention, it is the normalized image coordinate where (0, 0) is the top left corner.
+    - For OpenGL convention, it is the screen space XY coordinate where (0, 0) is the bottom left corner.
+- `depth`: (..., N) linear depth values, where `depth > 0` is visible.
+    - For OpenCV convention, it is the Z coordinate in camera space.
+    - For OpenGL convention, it is the -Z coordinate in camera space.
+- `intrinsics`: (..., 3, 3) intrinsics matrix
+- `extrinsics`: (..., 4, 4) extrinsics matrix
+- `view`: (..., 4, 4) view matrix
+- `projection`: (..., 4, 4) projection matrix
+
+## Returns
+
+- `points`: (..., N, 3) 3D world-space points"""
+    utils3d.torch.transforms.unproject
 
 @overload
 def skew_symmetric(v: torch_.Tensor):
@@ -1700,11 +1762,11 @@ def euler_axis_angle_rotation(axis: str, angle: torch_.Tensor) -> torch_.Tensor:
     """Return the rotation matrices for one of the rotations about an axis
 of which Euler angles describe, for each value of the angle given.
 
-Args:
+## Parameters
     axis: Axis label "X" or "Y or "Z".
     angle: any shape tensor of Euler angles in radians
 
-Returns:
+## Returns
     Rotation matrices as tensor of shape (..., 3, 3)."""
     utils3d.torch.transforms.euler_axis_angle_rotation
 
@@ -1712,11 +1774,11 @@ Returns:
 def euler_angles_to_matrix(euler_angles: torch_.Tensor, convention: str = 'XYZ') -> torch_.Tensor:
     """Convert rotations given as Euler angles in radians to rotation matrices.
 
-Args:
+## Parameters
     euler_angles: Euler angles in radians as tensor of shape (..., 3), XYZ
     convention: permutation of "X", "Y" or "Z", representing the order of Euler rotations to apply.
 
-Returns:
+## Returns
     Rotation matrices as tensor of shape (..., 3, 3)."""
     utils3d.torch.transforms.euler_angles_to_matrix
 
@@ -1725,11 +1787,11 @@ def matrix_to_euler_angles(matrix: torch_.Tensor, convention: str) -> torch_.Ten
     """Convert rotations given as rotation matrices to Euler angles in radians.
 NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), instead of `Rx * Ry * Rz` (like pytorch3d)
 
-Args:
+## Parameters
     matrix: Rotation matrices as tensor of shape (..., 3, 3).
     convention: Convention string of three uppercase letters.
 
-Returns:
+## Returns
     Euler angles in radians as tensor of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)"""
     utils3d.torch.transforms.matrix_to_euler_angles
 
@@ -1737,139 +1799,139 @@ Returns:
 def matrix_to_quaternion(rot_mat: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
     """Convert 3x3 rotation matrix to quaternion (w, x, y, z)
 
-Args:
-    rot_mat (torch.Tensor): shape (..., 3, 3), the rotation matrices to convert
+## Parameters
+    rot_mat (Tensor): shape (..., 3, 3), the rotation matrices to convert
 
-Returns:
-    torch.Tensor: shape (..., 4), the quaternions corresponding to the given rotation matrices"""
+## Returns
+    Tensor: shape (..., 4), the quaternions corresponding to the given rotation matrices"""
     utils3d.torch.transforms.matrix_to_quaternion
 
 @overload
 def quaternion_to_matrix(quaternion: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
     """Converts a batch of quaternions (w, x, y, z) to rotation matrices
 
-Args:
-    quaternion (torch.Tensor): shape (..., 4), the quaternions to convert
+## Parameters
+    quaternion (Tensor): shape (..., 4), the quaternions to convert
 
-Returns:
-    torch.Tensor: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions"""
+## Returns
+    Tensor: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions"""
     utils3d.torch.transforms.quaternion_to_matrix
 
 @overload
 def matrix_to_axis_angle(rot_mat: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
     """Convert a batch of 3x3 rotation matrices to axis-angle representation (rotation vector)
 
-Args:
-    rot_mat (torch.Tensor): shape (..., 3, 3), the rotation matrices to convert
+## Parameters
+    rot_mat (Tensor): shape (..., 3, 3), the rotation matrices to convert
 
-Returns:
-    torch.Tensor: shape (..., 3), the axis-angle vectors corresponding to the given rotation matrices"""
+## Returns
+    Tensor: shape (..., 3), the axis-angle vectors corresponding to the given rotation matrices"""
     utils3d.torch.transforms.matrix_to_axis_angle
 
 @overload
 def axis_angle_to_matrix(axis_angle: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
     """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
 
-Args:
-    axis_angle (torch.Tensor): shape (..., 3), axis-angle vcetors
+## Parameters
+    axis_angle (Tensor): shape (..., 3), axis-angle vcetors
 
-Returns:
-    torch.Tensor: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters"""
+## Returns
+    Tensor: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters"""
     utils3d.torch.transforms.axis_angle_to_matrix
 
 @overload
 def axis_angle_to_quaternion(axis_angle: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
     """Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z)
 
-Args:
-    axis_angle (torch.Tensor): shape (..., 3), axis-angle vcetors
+## Parameters
+    axis_angle (Tensor): shape (..., 3), axis-angle vcetors
 
-Returns:
-    torch.Tensor: shape (..., 4) The quaternions for the given axis-angle parameters"""
+## Returns
+    Tensor: shape (..., 4) The quaternions for the given axis-angle parameters"""
     utils3d.torch.transforms.axis_angle_to_quaternion
 
 @overload
 def quaternion_to_axis_angle(quaternion: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
     """Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector)
 
-Args:
-    quaternion (torch.Tensor): shape (..., 4), the quaternions to convert
+## Parameters
+    quaternion (Tensor): shape (..., 4), the quaternions to convert
 
-Returns:
-    torch.Tensor: shape (..., 3), the axis-angle vectors corresponding to the given quaternions"""
+## Returns
+    Tensor: shape (..., 3), the axis-angle vectors corresponding to the given quaternions"""
     utils3d.torch.transforms.quaternion_to_axis_angle
 
 @overload
 def slerp(rot_mat_1: torch_.Tensor, rot_mat_2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
     """Spherical linear interpolation between two rotation matrices
 
-Args:
-    rot_mat_1 (torch.Tensor): shape (..., 3, 3), the first rotation matrix
-    rot_mat_2 (torch.Tensor): shape (..., 3, 3), the second rotation matrix
-    t (torch.Tensor): scalar or shape (...,), the interpolation factor
+## Parameters
+    rot_mat_1 (Tensor): shape (..., 3, 3), the first rotation matrix
+    rot_mat_2 (Tensor): shape (..., 3, 3), the second rotation matrix
+    t (Tensor): scalar or shape (...,), the interpolation factor
 
-Returns:
-    torch.Tensor: shape (..., 3, 3), the interpolated rotation matrix"""
+## Returns
+    Tensor: shape (..., 3, 3), the interpolated rotation matrix"""
     utils3d.torch.transforms.slerp
 
 @overload
 def interpolate_extrinsics(ext1: torch_.Tensor, ext2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
     """Interpolate extrinsics between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
 
-Args:
-    ext1 (torch.Tensor): shape (..., 4, 4), the first camera pose
-    ext2 (torch.Tensor): shape (..., 4, 4), the second camera pose
-    t (torch.Tensor): scalar or shape (...,), the interpolation factor
+## Parameters
+    ext1 (Tensor): shape (..., 4, 4), the first camera pose
+    ext2 (Tensor): shape (..., 4, 4), the second camera pose
+    t (Tensor): scalar or shape (...,), the interpolation factor
 
-Returns:
-    torch.Tensor: shape (..., 4, 4), the interpolated camera pose"""
+## Returns
+    Tensor: shape (..., 4, 4), the interpolated camera pose"""
     utils3d.torch.transforms.interpolate_extrinsics
 
 @overload
 def interpolate_view(view1: torch_.Tensor, view2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]):
     """Interpolate view matrices between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
 
-Args:
-    ext1 (torch.Tensor): shape (..., 4, 4), the first camera pose
-    ext2 (torch.Tensor): shape (..., 4, 4), the second camera pose
-    t (torch.Tensor): scalar or shape (...,), the interpolation factor
+## Parameters
+    ext1 (Tensor): shape (..., 4, 4), the first camera pose
+    ext2 (Tensor): shape (..., 4, 4), the second camera pose
+    t (Tensor): scalar or shape (...,), the interpolation factor
 
-Returns:
-    torch.Tensor: shape (..., 4, 4), the interpolated camera pose"""
+## Returns
+    Tensor: shape (..., 4, 4), the interpolated camera pose"""
     utils3d.torch.transforms.interpolate_view
 
 @overload
 def extrinsics_to_essential(extrinsics: torch_.Tensor):
     """extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
 
-Args:
-    extrinsics (torch.Tensor): [..., 4, 4] extrinsics matrix
+## Parameters
+    extrinsics (Tensor): [..., 4, 4] extrinsics matrix
 
-Returns:
-    (torch.Tensor): [..., 3, 3] essential matrix"""
+## Returns
+    (Tensor): [..., 3, 3] essential matrix"""
     utils3d.torch.transforms.extrinsics_to_essential
 
 @overload
-def se3_matrix(R: torch_.Tensor, t: torch_.Tensor):
+def make_se3_matrix(R: torch_.Tensor, t: torch_.Tensor):
     """Compose rotation matrix and translation vector to 4x4 transformation matrix
 
-Args:
-    R (torch.Tensor): [..., 3, 3] rotation matrix
-    t (torch.Tensor): [..., 3] translation vector
+## Parameters
+    R (Tensor): [..., 3, 3] rotation matrix
+    t (Tensor): [..., 3] translation vector
 
-Returns:
-    (torch.Tensor): [..., 4, 4] transformation matrix"""
-    utils3d.torch.transforms.se3_matrix
+## Returns
+    (Tensor): [..., 4, 4] transformation matrix"""
+    utils3d.torch.transforms.make_se3_matrix
 
 @overload
 def rotation_matrix_2d(theta: Union[float, torch_.Tensor]):
     """2x2 matrix for 2D rotation
 
-Args:
-    theta (float | torch.Tensor): rotation angle in radians, arbitrary shape (...,)
+## Parameters
+    theta (float | Tensor): rotation angle in radians, arbitrary shape (...,)
 
-Returns:
-    (torch.Tensor): (..., 2, 2) rotation matrix"""
+## Returns
+    (Tensor): (..., 2, 2) rotation matrix"""
     utils3d.torch.transforms.rotation_matrix_2d
 
 @overload
@@ -1880,12 +1942,12 @@ def rotate_2d(theta: Union[float, torch_.Tensor], center: torch_.Tensor = None):
     [Ryx, Ryy, ty],
     [0,     0,  1]]
 ```
-Args:
-    theta (float | torch.Tensor): rotation angle in radians, arbitrary shape (...,)
-    center (torch.Tensor): rotation center, arbitrary shape (..., 2). Default to (0, 0)
+## Parameters
+    theta (float | Tensor): rotation angle in radians, arbitrary shape (...,)
+    center (Tensor): rotation center, arbitrary shape (..., 2). Default to (0, 0)
     
-Returns:
-    (torch.Tensor): (..., 3, 3) transformation matrix"""
+## Returns
+    (Tensor): (..., 3, 3) transformation matrix"""
     utils3d.torch.transforms.rotate_2d
 
 @overload
@@ -1896,11 +1958,11 @@ def translate_2d(translation: torch_.Tensor):
     [0, 1, ty],
     [0, 0,  1]]
 ```
-Args:
-    translation (torch.Tensor): translation vector, arbitrary shape (..., 2)
+## Parameters
+    translation (Tensor): translation vector, arbitrary shape (..., 2)
 
-Returns:
-    (torch.Tensor): (..., 3, 3) transformation matrix"""
+## Returns
+    (Tensor): (..., 3, 3) transformation matrix"""
     utils3d.torch.transforms.translate_2d
 
 @overload
@@ -1911,27 +1973,30 @@ def scale_2d(scale: Union[float, torch_.Tensor], center: torch_.Tensor = None):
     [0, s, ty],
     [0, 0,  1]]
 ```
-Args:
-    scale (float | torch.Tensor): scale factor, arbitrary shape (...,)
-    center (torch.Tensor): scale center, arbitrary shape (..., 2). Default to (0, 0)
+## Parameters
+    scale (float | Tensor): scale factor, arbitrary shape (...,)
+    center (Tensor): scale center, arbitrary shape (..., 2). Default to (0, 0)
 
-Returns:
-    (torch.Tensor): (..., 3, 3) transformation matrix"""
+## Returns
+    (Tensor): (..., 3, 3) transformation matrix"""
     utils3d.torch.transforms.scale_2d
 
 @overload
-def apply_2d(transform: torch_.Tensor, points: torch_.Tensor):
-    """Apply (3x3 or 2x3) 2D affine transformation to points
-```
-    p = R @ p + t
-```
-Args:
-    transform (torch.Tensor): (..., 2 or 3, 3) transformation matrix
-    points (torch.Tensor): (..., N, 2) points to transform
+def transform(x: torch_.Tensor, *Ts: torch_.Tensor) -> torch_.Tensor:
+    """Apply affine transformation(s) to a point or a set of points.
 
-Returns:
-    (torch.Tensor): (..., N, 2) transformed points"""
-    utils3d.torch.transforms.apply_2d
+## Parameters
+- `x`: Tensor, shape (..., D): the point or a set of points to be transformed.
+- `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrice)
+    If more than one transformation is given, they will be applied in corresponding order.
+## Returns
+- `y`: Tensor, shape (..., D): the transformed point or a set of points.
+
+## Example Usage
+```
+y = transform(x, T1, T2, T3)
+```"""
+    utils3d.torch.transforms.transform
 
 @overload
 def angle_between(v1: torch_.Tensor, v2: torch_.Tensor, eps: float = 1e-08) -> torch_.Tensor:
@@ -1944,7 +2009,7 @@ NOTE: `eps` prevents zero angle difference which is indifferentiable."""
 def triangulate(faces: torch_.Tensor, vertices: torch_.Tensor = None, backslash: bool = None) -> torch_.Tensor:
     """Triangulate a polygonal mesh.
 
-Args:
+## Parameters
     faces (torch.Tensor): [..., L, P] polygonal faces
     vertices (torch.Tensor, optional): [..., N, 3] 3-dimensional vertices.
         If given, the triangulation is performed according to the distance
@@ -1953,7 +2018,7 @@ Args:
         how to triangulate the quad faces. Defaults to None.
 
 
-Returns:
+## Returns
     (torch.Tensor): [L * (P - 2), 3] triangular faces"""
     utils3d.torch.mesh.triangulate
 
@@ -1961,11 +2026,11 @@ Returns:
 def compute_face_normal(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
     """Compute face normals of a triangular mesh
 
-Args:
+## Parameters
     vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
     faces (torch.Tensor): [..., T, 3] triangular face indices
 
-Returns:
+## Returns
     normals (torch.Tensor): [..., T, 3] face normals"""
     utils3d.torch.mesh.compute_face_normal
 
@@ -1973,11 +2038,11 @@ Returns:
 def compute_face_angles(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
     """Compute face angles of a triangular mesh
 
-Args:
+## Parameters
     vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices
 
-Returns:
+## Returns
     angles (torch.Tensor): [..., T, 3] face angles"""
     utils3d.torch.mesh.compute_face_angles
 
@@ -1985,13 +2050,13 @@ Returns:
 def compute_vertex_normal(vertices: torch_.Tensor, faces: torch_.Tensor, face_normal: torch_.Tensor = None) -> torch_.Tensor:
     """Compute vertex normals of a triangular mesh by averaging neightboring face normals
 
-Args:
+## Parameters
     vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices
     face_normal (torch.Tensor, optional): [..., T, 3] face normals.
         None to compute face normals from vertices and faces. Defaults to None.
 
-Returns:
+## Returns
     normals (torch.Tensor): [..., N, 3] vertex normals"""
     utils3d.torch.mesh.compute_vertex_normal
 
@@ -2000,13 +2065,13 @@ def compute_vertex_normal_weighted(vertices: torch_.Tensor, faces: torch_.Tensor
     """Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
 according to the angles
 
-Args:
+## Parameters
     vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices
     face_normal (torch.Tensor, optional): [..., T, 3] face normals.
         None to compute face normals from vertices and faces. Defaults to None.
 
-Returns:
+## Returns
     normals (torch.Tensor): [..., N, 3] vertex normals"""
     utils3d.torch.mesh.compute_vertex_normal_weighted
 
@@ -2014,10 +2079,10 @@ Returns:
 def compute_edges(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Compute edges of a mesh.
 
-Args:
+## Parameters
     faces (torch.Tensor): [T, 3] triangular face indices
     
-Returns:
+## Returns
     edges (torch.Tensor): [E, 2] edge indices
     face2edge (torch.Tensor): [T, 3] mapping from face to edge
     counts (torch.Tensor): [E] degree of each edge"""
@@ -2027,13 +2092,13 @@ Returns:
 def compute_connected_components(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None) -> List[torch_.Tensor]:
     """Compute connected faces of a mesh.
 
-Args:
+## Parameters
     faces (torch.Tensor): [T, 3] triangular face indices
     edges (torch.Tensor, optional): [E, 2] edge indices. Defaults to None.
     face2edge (torch.Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
         NOTE: If edges and face2edge are not provided, they will be computed.
 
-Returns:
+## Returns
     components (List[torch.Tensor]): list of connected faces"""
     utils3d.torch.mesh.compute_connected_components
 
@@ -2041,10 +2106,10 @@ Returns:
 def compute_edge_connected_components(edges: torch_.Tensor) -> List[torch_.Tensor]:
     """Compute connected edges of a mesh.
 
-Args:
+## Parameters
     edges (torch.Tensor): [E, 2] edge indices
 
-Returns:
+## Returns
     components (List[torch.Tensor]): list of connected edges"""
     utils3d.torch.mesh.compute_edge_connected_components
 
@@ -2052,13 +2117,13 @@ Returns:
 def compute_boundarys(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None, edge_degrees: torch_.Tensor = None) -> Tuple[List[torch_.Tensor], List[torch_.Tensor]]:
     """Compute boundary edges of a mesh.
 
-Args:
+## Parameters
     faces (torch.Tensor): [T, 3] triangular face indices
     edges (torch.Tensor): [E, 2] edge indices.
     face2edge (torch.Tensor): [T, 3] mapping from face to edge.
     edge_degrees (torch.Tensor): [E] degree of each edge.
 
-Returns:
+## Returns
     boundary_edge_indices (List[torch.Tensor]): list of boundary edge indices
     boundary_face_indices (List[torch.Tensor]): list of boundary face indices"""
     utils3d.torch.mesh.compute_boundarys
@@ -2067,10 +2132,10 @@ Returns:
 def compute_dual_graph(face2edge: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Compute dual graph of a mesh.
 
-Args:
+## Parameters
     face2edge (torch.Tensor): [T, 3] mapping from face to edge.
         
-Returns:
+## Returns
     dual_edges (torch.Tensor): [DE, 2] face indices of dual edges
     dual_edge2edge (torch.Tensor): [DE] mapping from dual edge to edge"""
     utils3d.torch.mesh.compute_dual_graph
@@ -2080,11 +2145,11 @@ def remove_unused_vertices(faces: torch_.Tensor, *vertice_attrs, return_indices:
     """Remove unreferenced vertices of a mesh. 
 Unreferenced vertices are removed, and the face indices are updated accordingly.
 
-Args:
+## Parameters
     faces (torch.Tensor): [T, P] face indices
     *vertice_attrs: vertex attributes
 
-Returns:
+## Returns
     faces (torch.Tensor): [T, P] face indices
     *vertice_attrs: vertex attributes
     indices (torch.Tensor, optional): [N] indices of vertices that are kept. Defaults to None."""
@@ -2094,10 +2159,10 @@ Returns:
 def remove_corrupted_faces(faces: torch_.Tensor) -> torch_.Tensor:
     """Remove corrupted faces (faces with duplicated vertices)
 
-Args:
+## Parameters
     faces (torch.Tensor): [T, 3] triangular face indices
 
-Returns:
+## Returns
     torch.Tensor: [T_, 3] triangular face indices"""
     utils3d.torch.mesh.remove_corrupted_faces
 
@@ -2107,7 +2172,7 @@ def remove_isolated_pieces(vertices: torch_.Tensor, faces: torch_.Tensor, connec
 Isolated pieces are removed, and the face indices are updated accordingly.
 If no face is left, will return the largest connected component.
 
-Args:
+## Parameters
     vertices (torch.Tensor): [N, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices
     connected_components (List[torch.Tensor], optional): connected components of the mesh. If None, it will be computed. Defaults to None.
@@ -2115,7 +2180,7 @@ Args:
     thresh_radius (float, optional): threshold of radius for isolated pieces. Defaults to None.
     remove_unreferenced (bool, optional): remove unreferenced vertices after removing isolated pieces. Defaults to True.
 
-Returns:
+## Returns
     vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices"""
     utils3d.torch.mesh.remove_isolated_pieces
@@ -2125,12 +2190,12 @@ def merge_duplicate_vertices(vertices: torch_.Tensor, faces: torch_.Tensor, tol:
     """Merge duplicate vertices of a triangular mesh. 
 Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
-Args:
+## Parameters
     vertices (torch.Tensor): [N, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices
     tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
-Returns:
+## Returns
     vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices"""
     utils3d.torch.mesh.merge_duplicate_vertices
@@ -2140,12 +2205,12 @@ def subdivide_mesh_simple(vertices: torch_.Tensor, faces: torch_.Tensor, n: int 
     """Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
 NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
 
-Args:
+## Parameters
     vertices (torch.Tensor): [N, 3] 3-dimensional vertices
     faces (torch.Tensor): [T, 3] triangular face indices
     n (int, optional): number of subdivisions. Defaults to 1.
 
-Returns:
+## Returns
     vertices (torch.Tensor): [N_, 3] subdivided 3-dimensional vertices
     faces (torch.Tensor): [4 * T, 3] subdivided triangular face indices"""
     utils3d.torch.mesh.subdivide_mesh_simple
@@ -2154,13 +2219,13 @@ Returns:
 def compute_face_tbn(pos: torch_.Tensor, faces_pos: torch_.Tensor, uv: torch_.Tensor, faces_uv: torch_.Tensor, eps: float = 1e-07) -> torch_.Tensor:
     """compute TBN matrix for each face
 
-Args:
+## Parameters
     pos (torch.Tensor): shape (..., N_pos, 3), positions
     faces_pos (torch.Tensor): shape(T, 3) 
     uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
     faces_uv (torch.Tensor): shape(T, 3) 
     
-Returns:
+## Returns
     torch.Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
     utils3d.torch.mesh.compute_face_tbn
 
@@ -2168,14 +2233,14 @@ Returns:
 def compute_vertex_tbn(faces_topo: torch_.Tensor, pos: torch_.Tensor, faces_pos: torch_.Tensor, uv: torch_.Tensor, faces_uv: torch_.Tensor) -> torch_.Tensor:
     """compute TBN matrix for each face
 
-Args:
+## Parameters
     faces_topo (torch.Tensor): (T, 3), face indice of topology
     pos (torch.Tensor): shape (..., N_pos, 3), positions
     faces_pos (torch.Tensor): shape(T, 3) 
     uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
     faces_uv (torch.Tensor): shape(T, 3) 
     
-Returns:
+## Returns
     torch.Tensor: (..., V, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
     utils3d.torch.mesh.compute_vertex_tbn
 
@@ -2183,7 +2248,7 @@ Returns:
 def laplacian(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'uniform') -> torch_.Tensor:
     """Laplacian smooth with cotangent weights
 
-Args:
+## Parameters
     vertices (torch.Tensor): shape (..., N, 3)
     faces (torch.Tensor): shape (T, 3)
     weight (str): 'uniform' or 'cotangent'"""
@@ -2193,7 +2258,7 @@ Args:
 def laplacian_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'uniform', times: int = 5) -> torch_.Tensor:
     """Laplacian smooth with cotangent weights
 
-Args:
+## Parameters
     vertices (torch.Tensor): shape (..., N, 3)
     faces (torch.Tensor): shape (T, 3)
     weight (str): 'uniform' or 'cotangent'"""
@@ -2203,13 +2268,13 @@ Args:
 def taubin_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, lambda_: float = 0.5, mu_: float = -0.51) -> torch_.Tensor:
     """Taubin smooth mesh
 
-Args:
+## Parameters
     vertices (torch.Tensor): _description_
     faces (torch.Tensor): _description_
     lambda_ (float, optional): _description_. Defaults to 0.5.
     mu_ (float, optional): _description_. Defaults to -0.51.
 
-Returns:
+## Returns
     torch.Tensor: _description_"""
     utils3d.torch.mesh.taubin_smooth_mesh
 
@@ -2229,11 +2294,11 @@ def uv_map(height: int, width: int, left: int = None, top: int = None, right: in
   ...             ...                  ...
  [[0.05, 0.95], [0.15, 0.95], ..., [0.95, 0.95]]]
 
-Args:
+## Parameters
     width (int): image width
     height (int): image height
 
-Returns:
+## Returns
     torch.Tensor: shape (height, width, 2)"""
     utils3d.torch.maps.uv_map
 
@@ -2248,11 +2313,11 @@ def pixel_center_coord_map(height: int, width: int, left: int = None, top: int =
   ...             ...                  ...
 [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
 
-Args:
+## Parameters
     width (int): image width
     height (int): image height
 
-Returns:
+## Returns
     torch.Tensor: shape (height, width, 2)"""
     utils3d.torch.maps.pixel_center_coord_map
 
@@ -2260,12 +2325,12 @@ Returns:
 def build_mesh_from_map(*maps: torch_.Tensor, mask: torch_.Tensor = None, device: torch_.device = None, dtype: torch_.dtype = None, return_indices: bool = False) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
-Args:
+## Parameters
     width (int): image width
     height (int): image height
     mask (torch.Tensor, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
-Returns:
+## Returns
     uv (torch.Tensor): uv corresponding to pixels as described in uv_map()
     faces (torch.Tensor): quad faces connecting neighboring pixels
     indices (torch.Tensor, optional): indices of vertices in the original mesh"""
@@ -2279,24 +2344,24 @@ def build_mesh_from_depth_map(depth: torch_.Tensor, extrinsics: torch_.Tensor = 
 def depth_map_edge(depth: torch_.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch_.Tensor = None) -> torch_.BoolTensor:
     """Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
 
-Args:
+## Parameters
     depth (torch.Tensor): shape (..., height, width), linear depth map
     atol (float): absolute tolerance
     rtol (float): relative tolerance
 
-Returns:
+## Returns
     edge (torch.Tensor): shape (..., height, width) of dtype torch.bool"""
     utils3d.torch.maps.depth_map_edge
 
 @overload
 def depth_map_aliasing(depth: torch_.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch_.Tensor = None) -> torch_.BoolTensor:
     """Compute the map that indicates the aliasing of a depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
-Args:
+## Parameters
     depth (torch.Tensor): shape (..., height, width), linear depth map
     atol (float): absolute tolerance
     rtol (float): relative tolerance
 
-Returns:
+## Returns
     edge (torch.Tensor): shape (..., height, width) of dtype torch.bool"""
     utils3d.torch.maps.depth_map_aliasing
 
@@ -2304,9 +2369,9 @@ Returns:
 def point_map_to_normal_map(point: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
     """Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
-Args:
+## Parameters
     point (torch.Tensor): shape (..., height, width, 3), point map
-Returns:
+## Returns
     normal (torch.Tensor): shape (..., height, width, 3), normal map. """
     utils3d.torch.maps.point_map_to_normal_map
 
@@ -2318,10 +2383,10 @@ def depth_map_to_point_map(depth: torch_.Tensor, intrinsics: torch_.Tensor, extr
 def depth_map_to_normal_map(depth: torch_.Tensor, intrinsics: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
     """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
-Args:
+## Parameters
     depth (torch.Tensor): shape (..., height, width), linear depth map
     intrinsics (torch.Tensor): shape (..., 3, 3), intrinsics matrix
-Returns:
+## Returns
     normal (torch.Tensor): shape (..., 3, height, width), normal map. """
     utils3d.torch.maps.depth_map_to_normal_map
 
@@ -2329,14 +2394,14 @@ Returns:
 def chessboard(width: int, height: int, grid_size: int, color_a: torch_.Tensor, color_b: torch_.Tensor) -> torch_.Tensor:
     """get a chessboard image
 
-Args:
+## Parameters
     width (int): image width
     height (int): image height
     grid_size (int): size of chessboard grid
     color_a (torch.Tensor): shape (chanenls,), color of the grid at the top-left corner
     color_b (torch.Tensor): shape (chanenls,), color in complementary grids
 
-Returns:
+## Returns
     image (torch.Tensor): shape (height, width, channels), chessboard image"""
     utils3d.torch.maps.chessboard
 
@@ -2344,10 +2409,10 @@ Returns:
 def bounding_rect_from_mask(mask: torch_.BoolTensor):
     """get bounding rectangle of a mask
 
-Args:
+## Parameters
     mask (torch.Tensor): shape (..., height, width), mask
 
-Returns:
+## Returns
     rect (torch.Tensor): shape (..., 4), bounding rectangle (left, top, right, bottom)"""
     utils3d.torch.maps.bounding_rect_from_mask
 
@@ -2360,7 +2425,7 @@ def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiff
 def rasterize_triangles(ctx: utils3d.torch.rasterization.RastContext, width: int, height: int, *, vertices: torch_.Tensor, faces: torch_.Tensor, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
     """Rasterize a mesh with vertex attributes.
 
-Args:
+## Parameters
     ctx (GLContext): rasterizer context
     vertices (np.ndarray): (B, N, 2 or 3 or 4)
     faces (torch.Tensor): (T, 3)
@@ -2375,7 +2440,7 @@ Args:
     antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
     diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
-Returns:
+## Returns
     Dictionary containing:
       - image: (torch.Tensor): (B, C, H, W)
       - depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
@@ -2392,7 +2457,7 @@ Returns:
 def rasterize_triangles_peeling(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
     """Rasterize a mesh with vertex attributes using depth peeling.
 
-Args:
+## Parameters
     ctx (GLContext): rasterizer context
     vertices (np.ndarray): (B, N, 2 or 3 or 4)
     faces (torch.Tensor): (T, 3)
@@ -2409,7 +2474,7 @@ Args:
     antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
     diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
-Returns:
+## Returns
     Dictionary containing:
       - image: (List[torch.Tensor]): list of (B, C, H, W) rendered images
       - depth: (List[torch.Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
@@ -2426,12 +2491,12 @@ Returns:
 def texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> torch_.Tensor:
     """Interpolate texture using uv coordinates.
 
-Args:
+## Parameters
     texture (torch.Tensor): (B, C, H, W) texture
     uv (torch.Tensor): (B, H, W, 2) uv coordinates
     uv_da (torch.Tensor): (B, H, W, 4) uv derivatives
     
-Returns:
+## Returns
     torch.Tensor: (B, C, H, W) interpolated texture"""
     utils3d.torch.rasterization.texture
 
@@ -2439,14 +2504,14 @@ Returns:
 def texture_composite(texture: torch_.Tensor, uv: List[torch_.Tensor], uv_da: List[torch_.Tensor], background: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Composite textures with depth peeling output.
 
-Args:
+## Parameters
     texture (torch.Tensor): (B, C+1, H, W) texture
         NOTE: the last channel is alpha channel
     uv (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates
     uv_da (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives
     background (Optional[torch.Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
     
-Returns:
+## Returns
     image: (torch.Tensor): (B, C, H, W) rendered image
     alpha: (torch.Tensor): (B, H, W) alpha channel"""
     utils3d.torch.rasterization.texture_composite
@@ -2457,7 +2522,7 @@ def warp_image_by_depth(ctx: utils3d.torch.rasterization.RastContext, depth: tor
 NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
 Otherwise, image mesh will be triangulated simply for batch rendering.
 
-Args:
+## Parameters
     ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
     depth (torch.Tensor): (B, H, W) linear depth
     image (torch.Tensor): (B, C, H, W). None to use image space uv. Defaults to None.
@@ -2475,7 +2540,7 @@ Args:
     return_uv (bool, optional): whether to return the uv. Defaults to False.
     return_dr (bool, optional): whether to return the image-space derivatives of uv. Defaults to False.
 
-Returns:
+## Returns
     image: (torch.FloatTensor): (B, C, H, W) rendered image
     depth: (torch.FloatTensor): (B, H, W) linear depth, ranging from 0 to inf
     mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
@@ -2489,7 +2554,7 @@ def warp_image_by_forward_flow(ctx: utils3d.torch.rasterization.RastContext, ima
 NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
 Otherwise, image mesh will be triangulated simply for batch rendering.
 
-Args:
+## Parameters
     ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
     image (torch.Tensor): (B, C, H, W) image
     flow (torch.Tensor): (B, 2, H, W) forward flow
@@ -2497,7 +2562,7 @@ Args:
     antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
     backslash (bool, optional): whether to use backslash triangulation. Defaults to False.
 
-Returns:
+## Returns
     image: (torch.FloatTensor): (B, C, H, W) rendered image
     mask: (torch.BoolTensor): (B, H, W) mask of valid pixels"""
     utils3d.torch.rasterization.warp_image_by_forward_flow

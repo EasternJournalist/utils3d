@@ -1,103 +1,105 @@
 # decorator
 import torch
+from torch import Tensor
 from numbers import Number
 import inspect
+from typing import *
 from functools import wraps
 from .._helpers import suppress_traceback
 
 
-def get_device(args, kwargs):
-    device = None
-    for arg in (list(args) + list(kwargs.values())):
-        if isinstance(arg, torch.Tensor):
-            if device is None:
-                device = arg.device
-            elif device != arg.device:
-                raise ValueError("All tensors must be on the same device.")
-    return device
+__all__ = [
+    'toarray',
+    'batched',
+]
 
+P = ParamSpec("P")  
+R = TypeVar("R")
 
-def get_args_order(func, args, kwargs):
+def totensor(*args_dtypes_devices: Union[torch.dtype, str, None], _others: Union[torch.dtype, str] = None, **kwargs_dtypes_devices: Union[torch.dtype, str]) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
-    Get the order of the arguments of a function.
+    Decorator generator that converts non-array arguments to array of specified default dtype.
     """
-    names = inspect.getfullargspec(func).args
-    names_idx = {name: i for i, name in enumerate(names)}
-    args_order = []
-    kwargs_order = {}
-    for name, arg in kwargs.items():
-        if name in names:
-            kwargs_order[name] = names_idx[name]
-            names.remove(name)
-    for i, arg in enumerate(args):
-        if i < len(names):
-            args_order.append(names_idx[names[i]])
-    return args_order, kwargs_order
-
-
-def broadcast_args(args, kwargs, args_dim, kwargs_dim):
-    spatial = []
-    for arg, arg_dim in zip(args + list(kwargs.values()), args_dim + list(kwargs_dim.values())):
-        if isinstance(arg, torch.Tensor) and arg_dim is not None:
-            arg_spatial = arg.shape[:arg.ndim-arg_dim]
-            if len(arg_spatial) > len(spatial):
-                spatial = [1] * (len(arg_spatial) - len(spatial)) + spatial
-            for j in range(len(arg_spatial)):
-                if spatial[-j] < arg_spatial[-j]:
-                    if spatial[-j] == 1:
-                        spatial[-j] = arg_spatial[-j]
-                    else:
-                        raise ValueError("Cannot broadcast arguments.")
-    for i, arg in enumerate(args):
-        if isinstance(arg, torch.Tensor) and args_dim[i] is not None:
-            args[i] = torch.broadcast_to(arg, [*spatial, *arg.shape[arg.ndim-args_dim[i]:]])
-    for key, arg in kwargs.items():
-        if isinstance(arg, torch.Tensor) and kwargs_dim[key] is not None:
-            kwargs[key] = torch.broadcast_to(arg, [*spatial, *arg.shape[arg.ndim-kwargs_dim[key]:]])
-    return args, kwargs, spatial
-
-@suppress_traceback
-def batched(*dims):
-    """
-    Decorator that allows a function to be called with batched arguments.
-    """
-    def decorator(func):
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        argnames = list(inspect.signature(func).parameters.keys())
+        dtypes_devices_dict = {
+            **dict(zip(argnames, args_dtypes_devices)),
+            **kwargs_dtypes_devices
+        }
+        dtypes_devices_dict = {
+            k: (v,) if v is not None and not isinstance(v, str) else v 
+            for k, v in dtypes_devices_dict.items()
+        }
         @wraps(func)
-        def wrapper(*args, device=torch.device('cpu'), **kwargs):
+        @suppress_traceback
+        def wrapper(*args, **kwargs):
+            inputs = {
+                **{argnames[i]: x for i, x in enumerate(args)},
+                **kwargs
+            }
+            args = tuple(
+                torch.tensor(x, *((inputs[dtype_device].dtype, inputs[dtype_device].device) if isinstance(dtype_device, str) else dtype_device))
+                if not isinstance(x, Tensor) \
+                    and (dtype_device := dtypes_devices_dict.get(argnames[i], _others)) is not None \
+                else x
+                for i, x in enumerate(args)
+            )
+            kwargs = {
+                k: torch.tensor(x, *((inputs[dtype_device].dtype, inputs[dtype_device].device) if isinstance(dtype_device, str) else dtype_device))
+                if not isinstance(x, Tensor) \
+                    and (dtype_device := dtypes_devices_dict.get(k, _others)) is not None \
+                else x
+                for k, x in kwargs.items()
+            }
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def batched(*args_dims: Union[int, None], _others: Union[int, None] = None, **kwargs_dims: Union[int, None]) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """
+    Decorator generator that extends a function's input and out batch dimensions.
+    """
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        argnames = list(inspect.signature(func).parameters.keys())
+        dims_dict = {
+            **dict(zip(argnames, args_dims)),
+            **kwargs_dims
+        }
+        @wraps(func)
+        @suppress_traceback
+        def wrapper(*args, **kwargs):
             args = list(args)
-            # get arguments dimensions
-            args_order, kwargs_order = get_args_order(func, args, kwargs)
-            args_dim = [dims[i] for i in args_order]
-            kwargs_dim = {key: dims[i] for key, i in kwargs_order.items()}
-            # convert to torch tensor
-            device = get_device(args, kwargs) or device
-            for i, arg in enumerate(args):
-                if isinstance(arg, (Number, list, tuple)) and args_dim[i] is not None:
-                    args[i] = torch.tensor(arg, device=device)
-            for key, arg in kwargs.items():
-                if isinstance(arg, (Number, list, tuple)) and kwargs_dim[key] is not None:
-                    kwargs[key] = torch.tensor(arg, device=device)
-            # broadcast arguments
-            args, kwargs, spatial = broadcast_args(args, kwargs, args_dim, kwargs_dim)
-            for i, (arg, arg_dim) in enumerate(zip(args, args_dim)):
-                if isinstance(arg, torch.Tensor) and arg_dim is not None:
-                    args[i] = arg.reshape([-1, *arg.shape[arg.ndim-arg_dim:]])
-            for key, arg in kwargs.items():
-                if isinstance(arg, torch.Tensor) and kwargs_dim[key] is not None:
-                    kwargs[key] = arg.reshape([-1, *arg.shape[arg.ndim-kwargs_dim[key]:]])
-            # call function
-            results = func(*args, **kwargs)
-            type_results = type(results)
-            results = list(results) if isinstance(results, (tuple, list)) else [results]
-            # restore spatial dimensions
-            for i, result in enumerate(results):
-                results[i] = result.reshape([*spatial, *result.shape[1:]])
-            if type_results == tuple:
-                results = tuple(results)
-            elif type_results == list:
-                results = list(results)
-            else:
-                results = results[0]
-            return results
+            # Get arguments non-batch dimensions
+            args_dim = tuple(dims_dict.get(argname, _others) for argname in argnames[:len(args)])
+            kwargs_dim = {k: dims_dict.get(k, _others) for k in kwargs}
+            # Find the common batch shape
+            batch_shape = torch.broadcast_shapes(*(
+                x.shape[:x.ndim - dim] 
+                for x, dim in zip((*args, *kwargs.values()), (*args_dim, *kwargs_dim.values())) 
+                if isinstance(x, Tensor) and dim is not None
+            ))
+            # Broadcast and flatten batch dimensions
+            args = tuple(
+                torch.broadcast_to(x, (*batch_shape, *x.shape[x.ndim - dim:])).reshape((-1, *x.shape[x.ndim - dim:]))
+                if isinstance(x, Tensor) and dim is not None else x
+                for x, dim in zip(args, args_dim)
+            )
+            kwargs = {
+                k: torch.broadcast_to(x, (*batch_shape, *x.shape[x.ndim - dim:])).reshape((-1, *x.shape[x.ndim - dim:]))
+                if isinstance(x, Tensor) and (dim := kwargs_dim[k]) is not None else x
+                for k, x in kwargs.items()
+            }
+            # Call function
+            result = func(*args, **kwargs)
+            # Restore batch shape
+            if isinstance(result, tuple):
+                result = tuple(
+                    x.reshape((*batch_shape, *x.shape[1:])) if isinstance(x, Tensor) else x
+                    for x in result
+                )
+            elif isinstance(result, Tensor):
+                result = result.reshape((*batch_shape, *result.shape[1:]))
+            return result
         return wrapper
     return decorator

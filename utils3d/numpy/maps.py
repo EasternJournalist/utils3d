@@ -4,7 +4,7 @@ import numpy as np
 
 from .._helpers import no_warnings
 from .utils import max_pool_2d, sliding_window_2d
-from .transforms import unproject_cv
+from .transforms import angle_between, unproject_cv
 from .mesh import triangulate, remove_unused_vertices
 
 __all__ = [
@@ -30,12 +30,12 @@ def depth_map_edge(depth: np.ndarray, atol: float = None, rtol: float = None, ke
     """
     Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
     
-    Args:
+    ## Parameters
         depth (np.ndarray): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
 
-    Returns:
+    ## Returns
         edge (np.ndarray): shape (..., height, width) of dtype torch.bool
     """
     if mask is None:
@@ -56,12 +56,12 @@ def depth_map_edge(depth: np.ndarray, atol: float = None, rtol: float = None, ke
 def depth_map_aliasing(depth: np.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: np.ndarray = None) -> np.ndarray:
     """
     Compute the map that indicates the aliasing of x depth map, identifying pixels which neither close to the maximum nor the minimum of its neighbors.
-    Args:
+    ## Parameters
         depth (np.ndarray): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
 
-    Returns:
+    ## Returns
         edge (np.ndarray): shape (..., height, width) of dtype torch.bool
     """
     if mask is None:
@@ -85,11 +85,11 @@ def normal_map_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask:
     """
     Compute the edge mask from normal map.
 
-    Args:
+    ## Parameters
         normal (np.ndarray): shape (..., height, width, 3), normal map
         tol (float): tolerance in degrees
    
-    Returns:
+    ## Returns
         edge (np.ndarray): shape (..., height, width) of dtype torch.bool
     """
     assert normals.ndim >= 3 and normals.shape[-1] == 3, "normal should be of shape (..., height, width, 3)"
@@ -123,12 +123,12 @@ def point_map_to_normal_map(point: np.ndarray, mask: np.ndarray = None, edge_thr
     """
     Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
-    Args:
+    ## Parameters
         point (np.ndarray): shape (height, width, 3), point map
         mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
         edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
 
-    Returns:
+    ## Returns
         normal (np.ndarray): shape (height, width, 3), normal map. 
     """
     height, width = point.shape[-3:-1]
@@ -161,7 +161,7 @@ def point_map_to_normal_map(point: np.ndarray, mask: np.ndarray = None, edge_thr
         mask[1:-1, 2:] & mask[:-2, 1:-1],
     ]) & mask[None, 1:-1, 1:-1]
     if edge_threshold is not None:
-        view_angle = angle_diff_vec3(pts[None, 1:-1, 1:-1, :], normal)
+        view_angle = angle_between(pts[None, 1:-1, 1:-1, :], normal)
         view_angle = np.minimum(view_angle, np.pi - view_angle)
         valid = valid & (view_angle < np.deg2rad(edge_threshold))
     
@@ -180,13 +180,13 @@ def depth_map_to_normal_map(depth: np.ndarray, intrinsics: np.ndarray, mask: np.
     """
     Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
 
-    Args:
+    ## Parameters
         depth (np.ndarray): shape (height, width), linear depth map
         intrinsics (np.ndarray): shape (3, 3), intrinsics matrix
         mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
         edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
 
-    Returns:
+    ## Returns
         normal (np.ndarray): shape (height, width, 3), normal map. 
     """
     height, width = depth.shape[-2:]
@@ -205,12 +205,12 @@ def depth_map_to_point_map(
     """
     Unproject depth map to 3D points.
 
-    Args:
+    ## Parameters
         depth (np.ndarray): [..., H, W] depth value
         intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
         extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
 
-    Returns:
+    ## Returns
         points (np.ndarray): [..., N, 3] 3d points
     """
     assert intrinsics is not None, "intrinsics matrix is required"
@@ -232,11 +232,11 @@ def screen_coord_map(
     Get OpenGL's screen space coordinates, ranging in [0, 1].
     [0, 0] is the bottom-left corner of the image.
 
-    Args:
+    ## Parameters
         width (int): image width
         height (int): image height
 
-    Returns:
+    ## Returns
         (np.ndarray): shape (height, width, 2)
     """
     x, y = np.meshgrid(
@@ -315,11 +315,11 @@ def pixel_center_coord_map(
       ...             ...                  ...
     [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
 
-    Args:
+    ## Parameters
         height (int): image height
         width (int): image width
 
-    Returns:
+    ## Returns
         np.ndarray: shape (height, width, 2)
     """
     if left is None: left = 0
@@ -350,11 +350,11 @@ def pixel_coord_map(
       ...             ...                  ...
     [[0, 9], [1, 9], ..., [9, 9]]]
 
-    Args:
+    ## Parameters
         width (int): image width
         height (int): image height
 
-    Returns:
+    ## Returns
         np.ndarray: shape (height, width, 2)
     """
     if left is None: left = 0
@@ -376,11 +376,11 @@ def build_mesh_from_map(
     """
     Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
-    Args:
+    ## Parameters
         *maps (np.ndarray): attribute maps in shape (height, width, [channels])
         mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
-    Returns:
+    ## Returns
         faces (np.ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
         *vertex_attrs (np.ndarray): vertex attributes in corresponding order with input image_attrs
         indices (np.ndarray, optional): indices of vertices in the original mesh
@@ -424,7 +424,7 @@ def build_mesh_from_depth_map(
     """
     Get x triangle mesh by lifting depth map to 3D.
 
-    Args:
+    ## Parameters
         depth (np.ndarray): [H, W] depth map
         extrinsics (np.ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
         intrinsics (np.ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
@@ -436,7 +436,7 @@ def build_mesh_from_depth_map(
         return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
         return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
 
-    Returns:
+    ## Returns
         vertices (np.ndarray): [N, 3] vertices
         faces (np.ndarray): [T, 3] faces
         *vertice_attrs (np.ndarray): [N, C] vertex attributes
@@ -476,14 +476,14 @@ def build_mesh_from_depth_map(
 def chessboard(height: int, width: int, grid_size: int, color_a: np.ndarray, color_b: np.ndarray) -> np.ndarray:
     """get x chessboard image
 
-    Args:
+    ## Parameters
         height (int): image height
         width (int): image width
         grid_size (int): size of chessboard grid
         color_a (np.ndarray): color of the grid at the top-left corner
         color_b (np.ndarray): color in complementary grid cells
 
-    Returns:
+    ## Returns
         image (np.ndarray): shape (height, width, channels), chessboard image
     """
     x = np.arange(width) // grid_size

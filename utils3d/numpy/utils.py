@@ -12,7 +12,6 @@ __all__ = [
     'max_pool_1d',
     'max_pool_2d',
     'max_pool_nd',
-    'interpolate',
     'lookup',
 ]
 
@@ -22,13 +21,13 @@ def sliding_window_1d(x: np.ndarray, window_size: int, stride: int, axis: int = 
     Return x view of the input array with x sliding window of the given kernel size and stride.
     The sliding window is performed over the given axis, and the window dimension is append to the end of the output array's shape.
 
-    Args:
+    ## Parameters
         x (np.ndarray): input array with shape (..., axis_size, ...)
         kernel_size (int): size of the sliding window
         stride (int): stride of the sliding window
         axis (int): axis to perform sliding window over
     
-    Returns:
+    ## Returns
         a_sliding (np.ndarray): view of the input array with shape (..., n_windows, ..., kernel_size), where n_windows = (axis_size - kernel_size + 1) // stride
     """
     assert x.shape[axis] >= window_size, f"kernel_size ({window_size}) is larger than axis_size ({x.shape[axis]})"
@@ -80,24 +79,6 @@ def max_pool_2d(x: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride:
         padding = (padding, padding)
     axis = tuple(axis)
     return max_pool_nd(x, kernel_size, stride, padding, axis)
-
-
-
-def interpolate(bary: np.ndarray, tri_id: np.ndarray, attr: np.ndarray, faces: np.ndarray) -> np.ndarray:
-    """Interpolate with given barycentric coordinates and triangle indices
-
-    Args:
-        bary (np.ndarray): shape (..., 3), barycentric coordinates
-        tri_id (np.ndarray): int array of shape (...), triangle indices
-        attr (np.ndarray): shape (N, M), vertices attributes
-        faces (np.ndarray): int array of shape (T, 3), face vertex indices
-
-    Returns:
-        np.ndarray: shape (..., M) interpolated result
-    """
-    faces_ = np.concatenate([np.zeros((1, 3), dtype=faces.dtype), faces + 1], axis=0)
-    attr_ = np.concatenate([np.zeros((1, attr.shape[1]), dtype=attr.dtype), attr], axis=0)
-    return np.sum(bary[..., None] * attr_[faces_[tri_id + 1]], axis=-2)
 
 
 def lookup(key: np.ndarray, query: np.ndarray, value: Optional[np.ndarray] = None, default_value: Optional[np.ndarray] = None) -> np.ndarray:

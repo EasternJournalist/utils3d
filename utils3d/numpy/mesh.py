@@ -32,7 +32,7 @@ def triangulate(
     """
     Triangulate a polygonal mesh.
 
-    Args:
+    ## Parameters
         faces (np.ndarray): [L, P] polygonal faces
         vertices (np.ndarray, optional): [N, 3] 3-dimensional vertices.
             If given, the triangulation is performed according to the distance
@@ -40,7 +40,7 @@ def triangulate(
         backslash (np.ndarray, optional): [L] boolean array indicating
             how to triangulate the quad faces. Defaults to None.
 
-    Returns:
+    ## Returns
         (np.ndarray): [L * (P - 2), 3] triangular faces
     """
     if faces.shape[-1] == 3:
@@ -76,11 +76,11 @@ def compute_face_normal(
     """
     Compute face normals of a triangular mesh
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         normals (np.ndarray): [..., T, 3] face normals
     """
     normal = np.cross(
@@ -102,11 +102,11 @@ def compute_face_angle(
     """
     Compute face angles of a triangular mesh
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         angles (np.ndarray): [..., T, 3] face angles
     """
     face_angle = np.zeros_like(faces, dtype=vertices.dtype)
@@ -131,13 +131,13 @@ def compute_vertex_normal(
     Compute vertex normals of a triangular mesh by averaging neightboring face normals
     TODO: can be improved.
     
-    Args:
+    ## Parameters
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
         face_normal (np.ndarray, optional): [..., T, 3] face normals.
             None to compute face normals from vertices and faces. Defaults to None.
 
-    Returns:
+    ## Returns
         normals (np.ndarray): [..., N, 3] vertex normals
     """
     if face_normal is None:
@@ -164,13 +164,13 @@ def compute_vertex_normal_weighted(
     Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
     according to the angles
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
         faces (np.ndarray): [..., T, 3] triangular face indices
         face_normal (np.ndarray, optional): [..., T, 3] face normals.
             None to compute face normals from vertices and faces. Defaults to None.
 
-    Returns:
+    ## Returns
         normals (np.ndarray): [..., N, 3] vertex normals
     """
     if face_normal is None:
@@ -194,10 +194,10 @@ def remove_corrupted_faces(
     """
     Remove corrupted faces (faces with duplicated vertices)
 
-    Args:
+    ## Parameters
         faces (np.ndarray): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         np.ndarray: [T_, 3] triangular face indices
     """
     corrupted = (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
@@ -213,12 +213,12 @@ def merge_duplicate_vertices(
     Merge duplicate vertices of a triangular mesh. 
     Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
         tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
-    Returns:
+    ## Returns
         vertices (np.ndarray): [N_, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
     """
@@ -238,11 +238,11 @@ def remove_unused_vertices(
     Remove unreferenced vertices of a mesh. 
     Unreferenced vertices are removed, and the face indices are updated accordingly.
 
-    Args:
+    ## Parameters
         faces (np.ndarray): [T, P] face indices
         *vertice_attrs: vertex attributes
 
-    Returns:
+    ## Returns
         faces (np.ndarray): [T, P] face indices
         *vertice_attrs: vertex attributes
         indices (np.ndarray, optional): [N] indices of vertices that are kept. Defaults to None.
@@ -267,12 +267,12 @@ def subdivide_mesh_simple(
     Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
     NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
     
-    Args:
+    ## Parameters
         vertices (np.ndarray): [N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
         n (int, optional): number of subdivisions. Defaults to 1.
 
-    Returns:
+    ## Returns
         vertices (np.ndarray): [N_, 3] subdivided 3-dimensional vertices
         faces (np.ndarray): [4 * T, 3] subdivided triangular face indices
     """
@@ -301,10 +301,10 @@ def mesh_relations(
     Calculate the relation between vertices and faces.
     NOTE: The input mesh must be a manifold triangle mesh.
 
-    Args:
+    ## Parameters
         faces (np.ndarray): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         edges (np.ndarray): [E, 2] edge indices
         edge2face (np.ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
         face2edge (np.ndarray): [T, 3] face to edge relation
@@ -344,7 +344,7 @@ def flatten_mesh_indices(faces1: np.ndarray, attr1: np.ndarray, *other_faces_att
     - `attr1`: [N1, ...] attributes of the first mesh
     - ...
 
-    ### Returns:
+    ### ## Returns
     - `faces`: [T, P] flattened face indices, contigous from 0 to T * P - 1
     - `attr1`: [T * P, ...] attributes of the first mesh, where every P values correspond to a face
     _ ...
@@ -460,7 +460,7 @@ def merge_meshes(meshes: List[Tuple[np.ndarray, ...]]) -> Tuple[np.ndarray, ...]
     ### Parameters:
         `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
 
-    ### Returns:
+    ### ## Returns
         `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
         `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face
     """

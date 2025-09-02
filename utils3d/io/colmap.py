@@ -11,7 +11,7 @@ __all__ = ['read_extrinsics_from_colmap', 'read_intrinsics_from_colmap', 'write_
 def write_extrinsics_as_colmap(file: Union[str, Path], extrinsics: np.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
     """
     Write extrinsics to colmap `images.txt` file.
-    Args:
+    ## Parameters
         file: Path to `images.txt` file.
         extrinsics: (N, 4, 4) array of extrinsics.
         image_names: str or List of str, image names. Length is N. 
@@ -43,7 +43,7 @@ def write_extrinsics_as_colmap(file: Union[str, Path], extrinsics: np.ndarray, i
 def write_intrinsics_as_colmap(file: Union[str, Path], intrinsics: np.ndarray, width: int, height: int, normalized: bool = False):
     """
     Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
-    Args:
+    ## Parameters
         file: Path to `cameras.txt` file.
         intrinsics: (N, 3, 3) array of intrinsics.
         width: Image width.
@@ -65,9 +65,9 @@ def write_intrinsics_as_colmap(file: Union[str, Path], intrinsics: np.ndarray, w
 def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, List[int], List[str]]:
     """
     Read extrinsics from colmap `images.txt` file. 
-    Args:
+    ## Parameters
         file: Path to `images.txt` file.
-    Returns:
+    ## Returns
         extrinsics: (N, 4, 4) array of extrinsics.
         camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap typically starts from 1.
         image_names: List of str, image names. Length is N.
@@ -103,10 +103,10 @@ def read_extrinsics_from_colmap(file: Union[str, Path]) -> Union[np.ndarray, Lis
 def read_intrinsics_from_colmap(file: Union[str, Path], normalize: bool = False) -> Tuple[List[int], np.ndarray, np.ndarray]:
     """
     Read intrinsics from colmap `cameras.txt` file.
-    Args:
+    ## Parameters
         file: Path to `cameras.txt` file.
         normalize: Whether to normalize the intrinsics. If True, the intrinsics will be normalized. (mapping coordinates to [0, 1] range)
-    Returns:
+    ## Returns
         camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap typically starts from 1.
         intrinsics: (N, 3, 3) array of intrinsics.
         distortions: (N, 5) array of distortions.

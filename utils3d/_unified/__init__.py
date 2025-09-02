@@ -10,11 +10,9 @@ __all__ = ["sliding_window_1d",
 "max_pool_1d", 
 "max_pool_2d", 
 "max_pool_nd", 
-"interpolate", 
 "lookup", 
-"perspective", 
 "perspective_from_fov", 
-"perspective_from_fov_xy", 
+"perspective_from_window", 
 "intrinsics_from_focal_center", 
 "intrinsics_from_fov", 
 "fov_to_focal", 
@@ -32,12 +30,15 @@ __all__ = ["sliding_window_1d",
 "pixel_to_uv", 
 "pixel_to_ndc", 
 "uv_to_pixel", 
-"project_depth", 
+"depth_linear_to_buffer", 
 "depth_buffer_to_linear", 
 "unproject_cv", 
 "unproject_gl", 
 "project_cv", 
 "project_gl", 
+"project", 
+"unproject", 
+"screen_coord_to_view_coord", 
 "quaternion_to_matrix", 
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
@@ -47,14 +48,14 @@ __all__ = ["sliding_window_1d",
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
-"se3_matrix", 
+"make_se3_matrix", 
 "slerp_quaternion", 
 "slerp_vector", 
 "lerp", 
 "lerp_se3_matrix", 
 "piecewise_lerp", 
 "piecewise_lerp_se3_matrix", 
-"apply_transform", 
+"transform", 
 "angle_between", 
 "triangulate", 
 "merge_meshes", 
@@ -96,11 +97,11 @@ __all__ = ["sliding_window_1d",
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
 "rasterize_lines", 
+"rasterize_point_cloud", 
 "sample_texture", 
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
-"intrinsics_from_fov_xy", 
 "matrix_to_euler_angles", 
 "matrix_to_axis_angle", 
 "axis_angle_to_quaternion", 
@@ -112,7 +113,6 @@ __all__ = ["sliding_window_1d",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"apply_2d", 
 "compute_face_angles", 
 "compute_edges", 
 "compute_connected_components", 
@@ -193,22 +193,10 @@ def max_pool_nd(*args, **kwargs):
     return _call_based_on_args('max_pool_nd', args, kwargs)
 
 @suppress_traceback
-def interpolate(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.interpolate, None
-    return _call_based_on_args('interpolate', args, kwargs)
-
-@suppress_traceback
 def lookup(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.lookup, utils3d.torch.lookup
     return _call_based_on_args('lookup', args, kwargs)
-
-@suppress_traceback
-def perspective(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.perspective, utils3d.torch.perspective
-    return _call_based_on_args('perspective', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):
@@ -217,10 +205,10 @@ def perspective_from_fov(*args, **kwargs):
     return _call_based_on_args('perspective_from_fov', args, kwargs)
 
 @suppress_traceback
-def perspective_from_fov_xy(*args, **kwargs):
+def perspective_from_window(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.perspective_from_fov_xy, utils3d.torch.perspective_from_fov_xy
-    return _call_based_on_args('perspective_from_fov_xy', args, kwargs)
+        utils3d.numpy.perspective_from_window, utils3d.torch.perspective_from_window
+    return _call_based_on_args('perspective_from_window', args, kwargs)
 
 @suppress_traceback
 def intrinsics_from_focal_center(*args, **kwargs):
@@ -325,10 +313,10 @@ def uv_to_pixel(*args, **kwargs):
     return _call_based_on_args('uv_to_pixel', args, kwargs)
 
 @suppress_traceback
-def project_depth(*args, **kwargs):
+def depth_linear_to_buffer(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.project_depth, utils3d.torch.project_depth
-    return _call_based_on_args('project_depth', args, kwargs)
+        utils3d.numpy.depth_linear_to_buffer, utils3d.torch.depth_linear_to_buffer
+    return _call_based_on_args('depth_linear_to_buffer', args, kwargs)
 
 @suppress_traceback
 def depth_buffer_to_linear(*args, **kwargs):
@@ -359,6 +347,24 @@ def project_gl(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.project_gl, utils3d.torch.project_gl
     return _call_based_on_args('project_gl', args, kwargs)
+
+@suppress_traceback
+def project(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.project, utils3d.torch.project
+    return _call_based_on_args('project', args, kwargs)
+
+@suppress_traceback
+def unproject(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.unproject, utils3d.torch.unproject
+    return _call_based_on_args('unproject', args, kwargs)
+
+@suppress_traceback
+def screen_coord_to_view_coord(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.screen_coord_to_view_coord, None
+    return _call_based_on_args('screen_coord_to_view_coord', args, kwargs)
 
 @suppress_traceback
 def quaternion_to_matrix(*args, **kwargs):
@@ -415,10 +421,10 @@ def ray_intersection(*args, **kwargs):
     return _call_based_on_args('ray_intersection', args, kwargs)
 
 @suppress_traceback
-def se3_matrix(*args, **kwargs):
+def make_se3_matrix(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.se3_matrix, utils3d.torch.se3_matrix
-    return _call_based_on_args('se3_matrix', args, kwargs)
+        utils3d.numpy.make_se3_matrix, utils3d.torch.make_se3_matrix
+    return _call_based_on_args('make_se3_matrix', args, kwargs)
 
 @suppress_traceback
 def slerp_quaternion(*args, **kwargs):
@@ -457,10 +463,10 @@ def piecewise_lerp_se3_matrix(*args, **kwargs):
     return _call_based_on_args('piecewise_lerp_se3_matrix', args, kwargs)
 
 @suppress_traceback
-def apply_transform(*args, **kwargs):
+def transform(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.apply_transform, None
-    return _call_based_on_args('apply_transform', args, kwargs)
+        utils3d.numpy.transform, utils3d.torch.transform
+    return _call_based_on_args('transform', args, kwargs)
 
 @suppress_traceback
 def angle_between(*args, **kwargs):
@@ -709,6 +715,12 @@ def rasterize_lines(*args, **kwargs):
     return _call_based_on_args('rasterize_lines', args, kwargs)
 
 @suppress_traceback
+def rasterize_point_cloud(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.rasterize_point_cloud, None
+    return _call_based_on_args('rasterize_point_cloud', args, kwargs)
+
+@suppress_traceback
 def sample_texture(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.sample_texture, None
@@ -731,12 +743,6 @@ def masked_max(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.masked_max
     return _call_based_on_args('masked_max', args, kwargs)
-
-@suppress_traceback
-def intrinsics_from_fov_xy(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.intrinsics_from_fov_xy
-    return _call_based_on_args('intrinsics_from_fov_xy', args, kwargs)
 
 @suppress_traceback
 def matrix_to_euler_angles(*args, **kwargs):
@@ -803,12 +809,6 @@ def scale_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.scale_2d
     return _call_based_on_args('scale_2d', args, kwargs)
-
-@suppress_traceback
-def apply_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.apply_2d
-    return _call_based_on_args('apply_2d', args, kwargs)
 
 @suppress_traceback
 def compute_face_angles(*args, **kwargs):

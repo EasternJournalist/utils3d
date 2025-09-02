@@ -16,7 +16,7 @@ def linear_spline_interpolate(x: np.ndarray, t: np.ndarray, s: np.ndarray, extra
     - `s`: np.ndarray, shape (m,): the times to be interpolated.
     - `extrapolation_mode`: str, the mode of extrapolation. 'constant' means extrapolate the boundary values, 'linear' means extrapolate linearly.
     
-    ### Returns:
+    ### ## Returns
     - `y`: np.ndarray, shape (..., m, d): the interpolated values.
     """
     i = np.searchsorted(t, s, side='left')
@@ -63,7 +63,7 @@ def _solve_tridiagonal(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarra
 #     - `v0`: np.ndarray, shape (...,): the value of the derivative at the first knot, as the boundary condition. If None, it is set to zero.
 #     - `vn`: np.ndarray, shape (...,): the value of the derivative at the last knot, as the boundary condition. If None, it is set to zero.
     
-#     ### Returns:
+#     ### ## Returns
 #     - `y`: np.ndarray, shape (..., m): the interpolated values.
 #     """
 #     h = t[..., 1:] - t[..., :-1]

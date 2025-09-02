@@ -12,11 +12,11 @@ def read_ply(
     """
     Read .ply file, without preprocessing.
     
-    Args:
+    ## Parameters
         file (Any): filepath
         encoding (str, optional): 
     
-    Returns:
+    ## Returns
         Tuple[np.ndarray, np.ndarray]: vertices, faces
     """
     import plyfile
@@ -41,7 +41,7 @@ def write_ply(
     """
     Write .ply file, without preprocessing.
     
-    Args:
+    ## Parameters
         file (Any): filepath
         vertices (np.ndarray): [N, 3]
         faces (np.ndarray): [T, E]

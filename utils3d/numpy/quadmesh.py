@@ -23,12 +23,12 @@ def calc_quad_candidates(
     """
     Calculate the candidate quad faces.
 
-    Args:
+    ## Parameters
         edges (np.ndarray): [E, 2] edge indices
         face2edge (np.ndarray): [T, 3] face to edge relation
         edge2face (np.ndarray): [E, 2] edge to face relation
 
-    Returns:
+    ## Returns
         quads (np.ndarray): [Q, 4] quad candidate indices
         quad2edge (np.ndarray): [Q, 4] edge to quad candidate relation
         quad2adj (np.ndarray): [Q, 8] adjacent quad candidates of each quad candidate
@@ -83,11 +83,11 @@ def calc_quad_distortion(
     """
     Calculate the distortion of each candidate quad face.
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [N, 3] 3-dimensional vertices
         quads (np.ndarray): [Q, 4] quad face indices
 
-    Returns:
+    ## Returns
         distortion (np.ndarray): [Q] distortion of each quad face
     """
     edge0 = vertices[quads[:, 1]] - vertices[quads[:, 0]]  # [Q, 3]
@@ -134,11 +134,11 @@ def calc_quad_direction(
     """
     Calculate the direction of each candidate quad face.
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [N, 3] 3-dimensional vertices
         quads (np.ndarray): [Q, 4] quad face indices
 
-    Returns:
+    ## Returns
         direction (np.ndarray): [Q, 4] direction of each quad face.
             Represented by the angle between the crossing and each edge.
     """
@@ -179,11 +179,11 @@ def calc_quad_smoothness(
     """
     Calculate the smoothness of each candidate quad face connection.
 
-    Args:
+    ## Parameters
         quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
         quads_direction (np.ndarray): [Q, 4] direction of each quad face
 
-    Returns:
+    ## Returns
         smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
     """
     Q = quad2adj.shape[0]
@@ -211,7 +211,7 @@ def sovle_quad(
     """
     Solve the quad mesh from the candidate quad faces.
 
-    Args:
+    ## Parameters
         face2edge (np.ndarray): [T, 3] face to edge relation
         edge2face (np.ndarray): [E, 2] edge to face relation
         quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
@@ -219,7 +219,7 @@ def sovle_quad(
         quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
         quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
 
-    Returns:
+    ## Returns
         weights (np.ndarray): [Q] weight of each valid quad face
     """
     T = face2edge.shape[0]
@@ -321,7 +321,7 @@ def sovle_quad_qp(
     """
     Solve the quad mesh from the candidate quad faces.
 
-    Args:
+    ## Parameters
         face2edge (np.ndarray): [T, 3] face to edge relation
         edge2face (np.ndarray): [E, 2] edge to face relation
         quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
@@ -329,7 +329,7 @@ def sovle_quad_qp(
         quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
         quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
 
-    Returns:
+    ## Returns
         weights (np.ndarray): [Q] weight of each valid quad face
     """
     T = face2edge.shape[0]
@@ -402,11 +402,11 @@ def tri_to_quad(
     Convert a triangle mesh to a quad mesh.
     NOTE: The input mesh must be a manifold mesh.
 
-    Args:
+    ## Parameters
         vertices (np.ndarray): [N, 3] 3-dimensional vertices
         faces (np.ndarray): [T, 3] triangular face indices
 
-    Returns:
+    ## Returns
         vertices (np.ndarray): [N_, 3] 3-dimensional vertices
         faces (np.ndarray): [Q, 4] quad face indices
     """
