@@ -318,7 +318,7 @@ def intrinsics_to_perspective(
     perspective = np.zeros((intrinsics.shape[0], 4, 4), dtype=intrinsics.dtype)
     perspective[..., [0, 1, 3], :3] = np.array([[2, 0, -1], [0, -2, 1], [0, 0, 1]], dtype=intrinsics.dtype) \
         @ intrinsics \
-        @ np.diagonal(np.array([1, -1, -1], dtype=intrinsics.dtype))
+        @ np.diag(np.array([1, -1, -1], dtype=intrinsics.dtype))
     perspective[:, 2, 2] = (near / far + 1) / (near / far - 1)
     perspective[:, 2, 3] = 2. * near / (near / far - 1)
     perspective[:, 3, 2] = -1.
@@ -586,8 +586,8 @@ def project_cv(
     assert intrinsics is not None, "intrinsics matrix is required"
     points = np.concatenate([points, np.ones((*points.shape[:-1], 1), dtype=points.dtype)], axis=-1)
     intrinsics = np.block([
-        [intrinsics, np.zeros((*intrinsics.shape[:-2], 1, 3), dtype=intrinsics.dtype)],
-        np.broadcast_to(np.array([0, 0, 0, 1], dtype=intrinsics.dtype), (*intrinsics.shape[:-2], 1, 4))
+        [intrinsics, np.zeros((*intrinsics.shape[:-2], 3, 1), dtype=intrinsics.dtype)],
+        [np.broadcast_to(np.array([0, 0, 0, 1], dtype=intrinsics.dtype), (*intrinsics.shape[:-2], 1, 4))]
     ])
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
     points = points @ transform.mT
@@ -653,15 +653,15 @@ def screen_coord_to_view_coord(
 @batched(2, 1, 2, 2)
 def unproject_cv(
     uv: ndarray,
-    depth: Optional[ndarray],
+    depth: ndarray,
     intrinsics: ndarray,
-    extrinsics: Optional[ndarray] = None,
+    extrinsics: ndarray = None,
 ) -> ndarray:
     """
     Unproject uv coordinates to 3D view space following the OpenCV convention
 
     ## Parameters
-        uv_coord (ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
+        uv (ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
             The origin (0., 0.) is corresponding to the left & top
         depth (ndarray): [..., N] depth value
         extrinsics (ndarray): [..., 4, 4] extrinsics matrix
@@ -670,14 +670,17 @@ def unproject_cv(
     ## Returns
         points (ndarray): [..., N, 3] 3d points
     """
-    assert intrinsics is not None, "intrinsics matrix is required"
-    points = np.concatenate([uv, np.ones_like(uv[..., :1])], axis=-1)
-    points = points @ np.linalg.inv(intrinsics).swapaxes(-1, -2) 
-    points = points * depth[..., None]
-    if extrinsics is not None:
-        points = np.concatenate([points, np.ones_like(points[..., :1])], axis=-1)
-        points = (points @ np.linalg.inv(extrinsics).swapaxes(-1, -2))[..., :3]
+    intrinsics = np.block([
+        [intrinsics, np.zeros((*intrinsics.shape[:-2], 3, 1), dtype=intrinsics.dtype)],
+        [np.broadcast_to(np.array([0, 0, 0, 1], dtype=intrinsics.dtype), (*intrinsics.shape[:-2], 1, 4))]
+    ])
+    transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
+    points = np.concatenate([uv, np.ones((*uv.shape[:-1], 1), dtype=uv.dtype)], dim=-1) * depth[..., None]
+    points = np.concatenate([points, np.ones((*points.shape[:-1], 1), dtype=uv.dtype)], dim=-1)
+    points = points @ np.linalg.inv(transform).mT
+    points = points[..., :3]
     return points
+
 
 
 def project(

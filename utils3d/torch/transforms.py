@@ -307,7 +307,7 @@ def intrinsics_to_perspective(
     """
     device, dtype = intrinsics.device, intrinsics.dtype
     batch_shape = intrinsics.shape[:-2]
-    m = torch.tensor([[2, 0, -1], [0, -2, 1], [0, 0, 1]], dtype=intrinsics.dtype) @ intrinsics @ torch.diagonal(torch.tensor([1, -1, -1], dtype=intrinsics.dtype))
+    m = torch.tensor([[2, 0, -1], [0, -2, 1], [0, 0, 1]], dtype=intrinsics.dtype) @ intrinsics @ torch.diag(torch.tensor([1, -1, -1], dtype=intrinsics.dtype))
     perspective = torch.cat([
         torch.cat([m[..., :2, :], torch.zeros((*batch_shape, 2, 1), dtype=dtype, device=device)], dim=-1),
         torch.cat([torch.zeros((*batch_shape, 1, 2), dtype=dtype, device=device), ((near / far + 1) / (near / far - 1))[..., None, None], (2. * near / (near / far - 1))[..., None, None]], dim=-1),
@@ -620,7 +620,7 @@ def unproject_cv(
         points (Tensor): [..., N, 3] 3d points
     """
     intrinsics = torch.cat([
-        torch.cat([intrinsics, torch.zeros((*intrinsics.shape[:-2], 1, 3), dtype=intrinsics.dtype, device=intrinsics.device)], dim=-1),
+        torch.cat([intrinsics, torch.zeros((*intrinsics.shape[:-2], 3, 1), dtype=intrinsics.dtype, device=intrinsics.device)], dim=-1),
         torch.tensor([[0, 0, 0, 1]], dtype=intrinsics.dtype, device=intrinsics.device).expand(*intrinsics.shape[:-2], 1, 4)
     ], dim=-2)
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
