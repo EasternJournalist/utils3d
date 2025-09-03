@@ -58,11 +58,11 @@ if __name__ == "__main__":
     modules = ["transforms", "maps", "mesh", "rasterization", "utils"]
     
 
-    with open("doc.md", "w", encoding="utf-8") as f:
+    with open("_doc.md", "w", encoding="utf-8") as f:
         for module_name in modules:
             f.write(f"### {module_name.capitalize()}\n\n")
-            f.write("| Function | Description | Numpy | Pytorch\n")
-            f.write("| ---- | ---- | ---- | ---- |\n")
+            f.write("| Function | Numpy | Pytorch |\n")
+            f.write("| ---- | ---- | ---- |\n")
             numpy_funcs = {name: getattr(utils3d.numpy, name) for name in utils3d.numpy.__modules_all__[module_name]}
             torch_funcs = {name: getattr(utils3d.torch, name) for name in utils3d.torch.__modules_all__[module_name]}
             for fname in sorted(set(numpy_funcs) | set(torch_funcs)):
@@ -88,5 +88,5 @@ if __name__ == "__main__":
                 else:
                     doc_column_torch = "-"
 
-                f.write(f"| {doc_column_function} | {doc_column_description} | {doc_column_numpy} | {doc_column_torch} | \n")
+                f.write(f"| {doc_column_function}<br>{doc_column_description} | {doc_column_numpy} | {doc_column_torch} | \n")
             f.write("\n\n")
