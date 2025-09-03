@@ -517,7 +517,7 @@ def project_gl(
     view: Tensor = None,
 ) -> Tuple[Tensor, Tensor]:
     """
-    Project 3D points to 2D following the OpenGL convention (except for row major matrice)
+    Project 3D points to 2D following the OpenGL convention (except for row major matrices)
 
     ## Parameters
         points (Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
@@ -577,7 +577,7 @@ def unproject_gl(
     view: Optional[Tensor] = None,
 ) -> Tensor:
     """
-    Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+    Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
     ## Parameters
         uv (Tensor): (..., N, 2) screen space XY coordinates, value ranging in [0, 1].
@@ -641,8 +641,8 @@ def project(
 ) -> Tuple[Tensor, Tensor]:
     """
     Calculate projection. 
-    - For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-    - For OpenGL convention, use `view` and `projection` matrice.
+    - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+    - For OpenGL convention, use `view` and `projection` matrices.
 
     ## Parameters
 
@@ -683,8 +683,8 @@ def unproject(
 ) -> Tensor:
     """
     Calculate inverse projection. 
-    - For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-    - For OpenGL convention, use `view` and `projection` matrice.
+    - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+    - For OpenGL convention, use `view` and `projection` matrices.
 
     ## Parameters
 
@@ -1217,7 +1217,7 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
 
     ## Parameters
     - `x`: Tensor, shape (..., D): the point or a set of points to be transformed.
-    - `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrice)
+    - `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
     - `y`: Tensor, shape (..., D): the transformed point or a set of points.

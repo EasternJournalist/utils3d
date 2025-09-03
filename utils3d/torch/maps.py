@@ -2,7 +2,7 @@ from typing import *
 import torch
 import torch.nn.functional as F
 
-from .mesh import remove_unused_vertices, triangulate
+from .mesh import remove_unused_vertices, triangulate_mesh
 from .transforms import unproject_cv
 from .utils import masked_max, masked_min
 from ._helpers import batched
@@ -198,14 +198,16 @@ def build_mesh_from_map(*maps: torch.Tensor, mask: torch.Tensor = None, device: 
 def build_mesh_from_depth_map(
     depth: torch.Tensor,
     extrinsics: torch.Tensor = None,
-    intrinsics: torch.Tensor = None
+    intrinsics: torch.Tensor = None,
+    tri: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     height, width = depth.shape
     uv, faces = build_mesh_from_map(uv_map(height, width))
     faces = faces.reshape(-1, 4)
     depth = depth.reshape(-1)
     pts = unproject_cv(uv, depth, extrinsics, intrinsics)
-    faces = triangulate(faces, vertices=pts)
+    if tri:
+        faces = triangulate_mesh(faces, vertices=pts, method='diagonal')
     return pts, faces
 
 

@@ -57,8 +57,7 @@ __all__ = ["sliding_window_1d",
 "piecewise_lerp_se3_matrix", 
 "transform", 
 "angle_between", 
-"triangulate", 
-"merge_meshes", 
+"triangulate_mesh", 
 "compute_face_normal", 
 "compute_face_angle", 
 "compute_vertex_normal", 
@@ -66,19 +65,20 @@ __all__ = ["sliding_window_1d",
 "remove_corrupted_faces", 
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
-"subdivide_mesh_simple", 
+"subdivide_mesh", 
 "mesh_relations", 
 "flatten_mesh_indices", 
 "cube", 
 "icosahedron", 
 "square", 
 "camera_frustum", 
+"merge_meshes", 
 "calc_quad_candidates", 
 "calc_quad_distortion", 
 "calc_quad_direction", 
 "calc_quad_smoothness", 
-"sovle_quad", 
-"sovle_quad_qp", 
+"solve_quad", 
+"solve_quad_qp", 
 "tri_to_quad", 
 "depth_map_edge", 
 "normal_map_edge", 
@@ -127,7 +127,6 @@ __all__ = ["sliding_window_1d",
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
 "bounding_rect_from_mask", 
-"texture", 
 "texture_composite", 
 "warp_image_by_depth", 
 "warp_image_by_forward_flow"]
@@ -475,16 +474,10 @@ def angle_between(*args, **kwargs):
     return _call_based_on_args('angle_between', args, kwargs)
 
 @suppress_traceback
-def triangulate(*args, **kwargs):
+def triangulate_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.triangulate, utils3d.torch.triangulate
-    return _call_based_on_args('triangulate', args, kwargs)
-
-@suppress_traceback
-def merge_meshes(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.merge_meshes, None
-    return _call_based_on_args('merge_meshes', args, kwargs)
+        utils3d.numpy.triangulate_mesh, utils3d.torch.triangulate_mesh
+    return _call_based_on_args('triangulate_mesh', args, kwargs)
 
 @suppress_traceback
 def compute_face_normal(*args, **kwargs):
@@ -529,10 +522,10 @@ def remove_unused_vertices(*args, **kwargs):
     return _call_based_on_args('remove_unused_vertices', args, kwargs)
 
 @suppress_traceback
-def subdivide_mesh_simple(*args, **kwargs):
+def subdivide_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.subdivide_mesh_simple, utils3d.torch.subdivide_mesh_simple
-    return _call_based_on_args('subdivide_mesh_simple', args, kwargs)
+        utils3d.numpy.subdivide_mesh, utils3d.torch.subdivide_mesh
+    return _call_based_on_args('subdivide_mesh', args, kwargs)
 
 @suppress_traceback
 def mesh_relations(*args, **kwargs):
@@ -571,6 +564,12 @@ def camera_frustum(*args, **kwargs):
     return _call_based_on_args('camera_frustum', args, kwargs)
 
 @suppress_traceback
+def merge_meshes(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.merge_meshes, None
+    return _call_based_on_args('merge_meshes', args, kwargs)
+
+@suppress_traceback
 def calc_quad_candidates(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.calc_quad_candidates, None
@@ -595,16 +594,16 @@ def calc_quad_smoothness(*args, **kwargs):
     return _call_based_on_args('calc_quad_smoothness', args, kwargs)
 
 @suppress_traceback
-def sovle_quad(*args, **kwargs):
+def solve_quad(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sovle_quad, None
-    return _call_based_on_args('sovle_quad', args, kwargs)
+        utils3d.numpy.solve_quad, None
+    return _call_based_on_args('solve_quad', args, kwargs)
 
 @suppress_traceback
-def sovle_quad_qp(*args, **kwargs):
+def solve_quad_qp(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sovle_quad_qp, None
-    return _call_based_on_args('sovle_quad_qp', args, kwargs)
+        utils3d.numpy.solve_quad_qp, None
+    return _call_based_on_args('solve_quad_qp', args, kwargs)
 
 @suppress_traceback
 def tri_to_quad(*args, **kwargs):
@@ -723,7 +722,7 @@ def rasterize_point_cloud(*args, **kwargs):
 @suppress_traceback
 def sample_texture(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sample_texture, None
+        utils3d.numpy.sample_texture, utils3d.torch.sample_texture
     return _call_based_on_args('sample_texture', args, kwargs)
 
 @suppress_traceback
@@ -893,12 +892,6 @@ def bounding_rect_from_mask(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.bounding_rect_from_mask
     return _call_based_on_args('bounding_rect_from_mask', args, kwargs)
-
-@suppress_traceback
-def texture(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.texture
-    return _call_based_on_args('texture', args, kwargs)
 
 @suppress_traceback
 def texture_composite(*args, **kwargs):

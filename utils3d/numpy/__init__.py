@@ -66,8 +66,7 @@ __modules_all__ = {
         'angle_between'
     ],
     'mesh':[
-        'triangulate',
-        'merge_meshes',
+        'triangulate_mesh',
         'compute_face_normal',
         'compute_face_angle',
         'compute_vertex_normal',
@@ -75,21 +74,20 @@ __modules_all__ = {
         'remove_corrupted_faces',
         'merge_duplicate_vertices',
         'remove_unused_vertices',
-        'subdivide_mesh_simple',
+        'subdivide_mesh',
         'mesh_relations',
         'flatten_mesh_indices',
         'cube',
         'icosahedron',
         'square',
         'camera_frustum',
-    ],
-    'quadmesh': [
+        'merge_meshes',
         'calc_quad_candidates',
         'calc_quad_distortion',
         'calc_quad_direction',
         'calc_quad_smoothness',
-        'sovle_quad',
-        'sovle_quad_qp',
+        'solve_quad',
+        'solve_quad_qp',
         'tri_to_quad'
     ],
     'maps': [
@@ -143,5 +141,4 @@ if TYPE_CHECKING:
     from .transforms import *
     from .mesh import *
     from .maps import *
-    from .quadmesh import *
     from .rasterization import *

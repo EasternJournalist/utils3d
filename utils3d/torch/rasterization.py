@@ -11,7 +11,7 @@ __all__ = [
     'RastContext',
     'rasterize_triangles', 
     'rasterize_triangles_peeling',
-    'texture',
+    'sample_texture',
     'texture_composite',
     'warp_image_by_depth',
     'warp_image_by_forward_flow',
@@ -268,7 +268,7 @@ def rasterize_triangles_peeling(
     return ret
 
 
-def texture(
+def sample_texture(
     texture: torch.Tensor,
     uv: torch.Tensor,
     uv_da: torch.Tensor,
@@ -436,9 +436,9 @@ def warp_image_by_depth(
 
     # triangulate
     if batch_size == 1:
-        faces = mesh.triangulate(faces, vertices=pts[0])
+        faces = mesh.triangulate_mesh(faces, vertices=pts[0])
     else:
-        faces = mesh.triangulate(faces, backslash=backslash)
+        faces = mesh.triangulate_mesh(faces, backslash=backslash)
 
     # rasterize attributes
     diff_attrs = None
@@ -550,9 +550,9 @@ def warp_image_by_forward_flow(
 
     # triangulate
     if batch_size == 1:
-        faces = mesh.triangulate(faces, vertices=pts[0])
+        faces = mesh.triangulate_mesh(faces, vertices=pts[0])
     else:
-        faces = mesh.triangulate(faces, backslash=backslash)
+        faces = mesh.triangulate_mesh(faces, backslash=backslash)
 
     # rasterize attributes
     attr = image.permute(0, 2, 3, 1).flatten(1, 2)

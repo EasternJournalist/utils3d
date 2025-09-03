@@ -63,7 +63,7 @@ __modules_all__ = {
         'angle_between'
     ],
     'mesh': [
-        'triangulate',
+        'triangulate_mesh',
         'compute_face_normal',
         'compute_face_angles',
         'compute_vertex_normal',
@@ -77,7 +77,7 @@ __modules_all__ = {
         'remove_corrupted_faces',
         'remove_isolated_pieces',
         'merge_duplicate_vertices',
-        'subdivide_mesh_simple',
+        'subdivide_mesh',
         'compute_face_tbn',
         'compute_vertex_tbn',
         'laplacian',
@@ -102,7 +102,7 @@ __modules_all__ = {
         'RastContext',
         'rasterize_triangles', 
         'rasterize_triangles_peeling',
-        'texture',
+        'sample_texture',
         'texture_composite',
         'warp_image_by_depth',
         'warp_image_by_forward_flow',

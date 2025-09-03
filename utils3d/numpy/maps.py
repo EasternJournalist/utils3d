@@ -5,7 +5,7 @@ import numpy as np
 from .._helpers import no_warnings
 from .utils import max_pool_2d, sliding_window_2d
 from .transforms import angle_between, unproject_cv
-from .mesh import triangulate, remove_unused_vertices
+from .mesh import triangulate_mesh, remove_unused_vertices
 
 __all__ = [
     'depth_map_edge',
@@ -393,7 +393,7 @@ def build_mesh_from_map(
     faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
     if mask is None:
         if tri:
-            faces = triangulate(faces)
+            faces = triangulate_mesh(faces)
         ret = [faces, *(img.reshape(-1, *img.shape[2:]) for img in image_attrs)]
         if return_indices:
             ret.append(np.arange(height * width, dtype=np.int32))
@@ -402,7 +402,7 @@ def build_mesh_from_map(
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
         if tri:
-            faces = triangulate(faces)
+            faces = triangulate_mesh(faces)
         return remove_unused_vertices(
             faces, 
             *(x.reshape(-1, *x.shape[2:]) for x in maps), 
@@ -447,7 +447,7 @@ def build_mesh_from_depth_map(
     uv_map, image_face = build_mesh_from_map(height, width)
     depth = depth.reshape(-1)
     pts = unproject_cv(uv_map, depth, extrinsics, intrinsics)
-    image_face = triangulate(image_face, vertices=pts)
+    image_face = triangulate_mesh(image_face, vertices=pts)
     ref_indices = None
     ret = []
     if atol is not None or rtol is not None:

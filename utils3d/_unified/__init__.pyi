@@ -60,8 +60,7 @@ __all__ = ["sliding_window_1d",
 "piecewise_lerp_se3_matrix", 
 "transform", 
 "angle_between", 
-"triangulate", 
-"merge_meshes", 
+"triangulate_mesh", 
 "compute_face_normal", 
 "compute_face_angle", 
 "compute_vertex_normal", 
@@ -69,19 +68,20 @@ __all__ = ["sliding_window_1d",
 "remove_corrupted_faces", 
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
-"subdivide_mesh_simple", 
+"subdivide_mesh", 
 "mesh_relations", 
 "flatten_mesh_indices", 
 "cube", 
 "icosahedron", 
 "square", 
 "camera_frustum", 
+"merge_meshes", 
 "calc_quad_candidates", 
 "calc_quad_distortion", 
 "calc_quad_direction", 
 "calc_quad_smoothness", 
-"sovle_quad", 
-"sovle_quad_qp", 
+"solve_quad", 
+"solve_quad_qp", 
 "tri_to_quad", 
 "depth_map_edge", 
 "normal_map_edge", 
@@ -130,7 +130,6 @@ __all__ = ["sliding_window_1d",
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
 "bounding_rect_from_mask", 
-"texture", 
 "texture_composite", 
 "warp_image_by_depth", 
 "warp_image_by_forward_flow"]
@@ -423,7 +422,7 @@ def unproject_cv(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], intrinsics
 
 @overload
 def unproject_gl(uv: numpy_.ndarray, depth: numpy_.ndarray, projection: numpy_.ndarray, view: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
-    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
 ## Parameters
     uv (ndarray): (..., N, 2) screen space XY coordinates, value ranging in [0, 1].
@@ -453,7 +452,7 @@ def project_cv(points: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: O
 
 @overload
 def project_gl(points: numpy_.ndarray, projection: numpy_.ndarray, view: numpy_.ndarray = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
+    """Project 3D points to 2D following the OpenGL convention (except for row major matrices)
 
 ## Parameters
     points (ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
@@ -470,8 +469,8 @@ def project_gl(points: numpy_.ndarray, projection: numpy_.ndarray, view: numpy_.
 @overload
 def project(points: numpy_.ndarray, *, intrinsics: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Calculate projection. 
-- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-- For OpenGL convention, use `view` and `projection` matrice.
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+- For OpenGL convention, use `view` and `projection` matrices.
 
 ## Parameters
 
@@ -494,8 +493,8 @@ def project(points: numpy_.ndarray, *, intrinsics: Optional[numpy_.ndarray] = No
 @overload
 def unproject(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], *, intrinsics: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, view: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
     """Calculate inverse projection. 
-- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-- For OpenGL convention, use `view` and `projection` matrice.
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+- For OpenGL convention, use `view` and `projection` matrices.
 
 ## Parameters
 
@@ -517,7 +516,7 @@ def unproject(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], *, intrinsics
 
 @overload
 def screen_coord_to_view_coord(screen_coord: numpy_.ndarray, projection: numpy_.ndarray) -> numpy_.ndarray:
-    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
 ## Parameters
     screen_coord (ndarray): (..., N, 3) screen space XYZ coordinates, value ranging in [0, 1]
@@ -720,7 +719,7 @@ def transform(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
 
 ## Parameters
 - `x`: ndarray, shape (..., D): the point or a set of points to be transformed.
-- `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrice)
+- `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
     If more than one transformation is given, they will be applied in corresponding order.
 ## Returns
 - `y`: ndarray, shape (..., D): the transformed point or a set of points.
@@ -737,7 +736,7 @@ def angle_between(v1: numpy_.ndarray, v2: numpy_.ndarray):
     utils3d.numpy.transforms.angle_between
 
 @overload
-def triangulate(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, backslash: numpy_.ndarray = None) -> numpy_.ndarray:
+def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> numpy_.ndarray:
     """Triangulate a polygonal mesh.
 
 ## Parameters
@@ -750,19 +749,7 @@ def triangulate(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, backslas
 
 ## Returns
     (np.ndarray): [L * (P - 2), 3] triangular faces"""
-    utils3d.numpy.mesh.triangulate
-
-@overload
-def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarray, ...]:
-    """Merge multiple meshes into one mesh. Vertices will be no longer shared.
-
-### Parameters:
-    `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
-
-### ## Returns
-    `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
-    `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face"""
-    utils3d.numpy.mesh.merge_meshes
+    utils3d.numpy.mesh.triangulate_mesh
 
 @overload
 def compute_face_normal(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
@@ -860,7 +847,7 @@ Unreferenced vertices are removed, and the face indices are updated accordingly.
     utils3d.numpy.mesh.remove_unused_vertices
 
 @overload
-def subdivide_mesh_simple(vertices: numpy_.ndarray, faces: numpy_.ndarray, n: int = 1) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def subdivide_mesh(vertices: numpy_.ndarray, faces: numpy_.ndarray, n: int = 1) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
 NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
 
@@ -872,7 +859,7 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
 ## Returns
     vertices (np.ndarray): [N_, 3] subdivided 3-dimensional vertices
     faces (np.ndarray): [4 * T, 3] subdivided triangular face indices"""
-    utils3d.numpy.mesh.subdivide_mesh_simple
+    utils3d.numpy.mesh.subdivide_mesh
 
 @overload
 def mesh_relations(faces: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
@@ -924,6 +911,18 @@ def camera_frustum(extrinsics: numpy_.ndarray, intrinsics: numpy_.ndarray, depth
     utils3d.numpy.mesh.camera_frustum
 
 @overload
+def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarray, ...]:
+    """Merge multiple meshes into one mesh. Vertices will be no longer shared.
+
+### Parameters:
+    `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
+
+### ## Returns
+    `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
+    `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face"""
+    utils3d.numpy.mesh.merge_meshes
+
+@overload
 def calc_quad_candidates(edges: numpy_.ndarray, face2edge: numpy_.ndarray, edge2face: numpy_.ndarray):
     """Calculate the candidate quad faces.
 
@@ -937,7 +936,7 @@ def calc_quad_candidates(edges: numpy_.ndarray, face2edge: numpy_.ndarray, edge2
     quad2edge (np.ndarray): [Q, 4] edge to quad candidate relation
     quad2adj (np.ndarray): [Q, 8] adjacent quad candidates of each quad candidate
     quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid"""
-    utils3d.numpy.quadmesh.calc_quad_candidates
+    utils3d.numpy.mesh.calc_quad_candidates
 
 @overload
 def calc_quad_distortion(vertices: numpy_.ndarray, quads: numpy_.ndarray):
@@ -949,7 +948,7 @@ def calc_quad_distortion(vertices: numpy_.ndarray, quads: numpy_.ndarray):
 
 ## Returns
     distortion (np.ndarray): [Q] distortion of each quad face"""
-    utils3d.numpy.quadmesh.calc_quad_distortion
+    utils3d.numpy.mesh.calc_quad_distortion
 
 @overload
 def calc_quad_direction(vertices: numpy_.ndarray, quads: numpy_.ndarray):
@@ -962,7 +961,7 @@ def calc_quad_direction(vertices: numpy_.ndarray, quads: numpy_.ndarray):
 ## Returns
     direction (np.ndarray): [Q, 4] direction of each quad face.
         Represented by the angle between the crossing and each edge."""
-    utils3d.numpy.quadmesh.calc_quad_direction
+    utils3d.numpy.mesh.calc_quad_direction
 
 @overload
 def calc_quad_smoothness(quad2edge: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_direction: numpy_.ndarray):
@@ -974,10 +973,10 @@ def calc_quad_smoothness(quad2edge: numpy_.ndarray, quad2adj: numpy_.ndarray, qu
 
 ## Returns
     smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection"""
-    utils3d.numpy.quadmesh.calc_quad_smoothness
+    utils3d.numpy.mesh.calc_quad_smoothness
 
 @overload
-def sovle_quad(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
+def solve_quad(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
     """Solve the quad mesh from the candidate quad faces.
 
 ## Parameters
@@ -990,10 +989,10 @@ def sovle_quad(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: n
 
 ## Returns
     weights (np.ndarray): [Q] weight of each valid quad face"""
-    utils3d.numpy.quadmesh.sovle_quad
+    utils3d.numpy.mesh.solve_quad
 
 @overload
-def sovle_quad_qp(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
+def solve_quad_qp(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
     """Solve the quad mesh from the candidate quad faces.
 
 ## Parameters
@@ -1006,7 +1005,7 @@ def sovle_quad_qp(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj
 
 ## Returns
     weights (np.ndarray): [Q] weight of each valid quad face"""
-    utils3d.numpy.quadmesh.sovle_quad_qp
+    utils3d.numpy.mesh.solve_quad_qp
 
 @overload
 def tri_to_quad(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
@@ -1020,7 +1019,7 @@ NOTE: The input mesh must be a manifold mesh.
 ## Returns
     vertices (np.ndarray): [N_, 3] 3-dimensional vertices
     faces (np.ndarray): [Q, 4] quad face indices"""
-    utils3d.numpy.quadmesh.tri_to_quad
+    utils3d.numpy.mesh.tri_to_quad
 
 @overload
 def depth_map_edge(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
@@ -1640,7 +1639,7 @@ def depth_buffer_to_linear(depth: torch_.Tensor, near: Union[float, torch_.Tenso
 
 @overload
 def project_gl(points: torch_.Tensor, projection: torch_.Tensor, view: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
-    """Project 3D points to 2D following the OpenGL convention (except for row major matrice)
+    """Project 3D points to 2D following the OpenGL convention (except for row major matrices)
 
 ## Parameters
     points (Tensor): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
@@ -1671,7 +1670,7 @@ def project_cv(points: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: Opt
 
 @overload
 def unproject_gl(uv: torch_.Tensor, depth: torch_.Tensor, projection: torch_.Tensor, view: Optional[torch_.Tensor] = None) -> torch_.Tensor:
-    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+    """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
 ## Parameters
     uv (Tensor): (..., N, 2) screen space XY coordinates, value ranging in [0, 1].
@@ -1702,8 +1701,8 @@ def unproject_cv(uv: torch_.Tensor, depth: torch_.Tensor, intrinsics: torch_.Ten
 @overload
 def project(points: torch_.Tensor, *, intrinsics: Optional[torch_.Tensor] = None, extrinsics: Optional[torch_.Tensor] = None, view: Optional[torch_.Tensor] = None, projection: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Calculate projection. 
-- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-- For OpenGL convention, use `view` and `projection` matrice.
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+- For OpenGL convention, use `view` and `projection` matrices.
 
 ## Parameters
 
@@ -1726,8 +1725,8 @@ def project(points: torch_.Tensor, *, intrinsics: Optional[torch_.Tensor] = None
 @overload
 def unproject(uv: torch_.Tensor, depth: Optional[torch_.Tensor], *, intrinsics: Optional[torch_.Tensor] = None, extrinsics: Optional[torch_.Tensor] = None, projection: Optional[torch_.Tensor] = None, view: Optional[torch_.Tensor] = None) -> torch_.Tensor:
     """Calculate inverse projection. 
-- For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-- For OpenGL convention, use `view` and `projection` matrice.
+- For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+- For OpenGL convention, use `view` and `projection` matrices.
 
 ## Parameters
 
@@ -1987,7 +1986,7 @@ def transform(x: torch_.Tensor, *Ts: torch_.Tensor) -> torch_.Tensor:
 
 ## Parameters
 - `x`: Tensor, shape (..., D): the point or a set of points to be transformed.
-- `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrice)
+- `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
     If more than one transformation is given, they will be applied in corresponding order.
 ## Returns
 - `y`: Tensor, shape (..., D): the transformed point or a set of points.
@@ -2006,32 +2005,31 @@ NOTE: `eps` prevents zero angle difference which is indifferentiable."""
     utils3d.torch.transforms.angle_between
 
 @overload
-def triangulate(faces: torch_.Tensor, vertices: torch_.Tensor = None, backslash: bool = None) -> torch_.Tensor:
+def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> torch_.Tensor:
     """Triangulate a polygonal mesh.
 
 ## Parameters
-    faces (torch.Tensor): [..., L, P] polygonal faces
-    vertices (torch.Tensor, optional): [..., N, 3] 3-dimensional vertices.
+    faces (Tensor): [L, P] polygonal faces
+    vertices (Tensor, optional): [N, 3] 3-dimensional vertices.
         If given, the triangulation is performed according to the distance
         between vertices. Defaults to None.
-    backslash (torch.Tensor, optional): [..., L] boolean array indicating
+    backslash (Tensor, optional): [L] boolean array indicating
         how to triangulate the quad faces. Defaults to None.
 
-
 ## Returns
-    (torch.Tensor): [L * (P - 2), 3] triangular faces"""
-    utils3d.torch.mesh.triangulate
+    (Tensor): [L * (P - 2), 3] triangular faces"""
+    utils3d.torch.mesh.triangulate_mesh
 
 @overload
 def compute_face_normal(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
     """Compute face normals of a triangular mesh
 
 ## Parameters
-    vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [..., T, 3] triangular face indices
+    vertices (Tensor): [..., N, 3] 3-dimensional vertices
+    faces (Tensor): [..., T, 3] triangular face indices
 
 ## Returns
-    normals (torch.Tensor): [..., T, 3] face normals"""
+    normals (Tensor): [..., T, 3] face normals"""
     utils3d.torch.mesh.compute_face_normal
 
 @overload
@@ -2039,11 +2037,11 @@ def compute_face_angles(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_
     """Compute face angles of a triangular mesh
 
 ## Parameters
-    vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices
+    vertices (Tensor): [..., N, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices
 
 ## Returns
-    angles (torch.Tensor): [..., T, 3] face angles"""
+    angles (Tensor): [..., T, 3] face angles"""
     utils3d.torch.mesh.compute_face_angles
 
 @overload
@@ -2051,13 +2049,13 @@ def compute_vertex_normal(vertices: torch_.Tensor, faces: torch_.Tensor, face_no
     """Compute vertex normals of a triangular mesh by averaging neightboring face normals
 
 ## Parameters
-    vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices
-    face_normal (torch.Tensor, optional): [..., T, 3] face normals.
+    vertices (Tensor): [..., N, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices
+    face_normal (Tensor, optional): [..., T, 3] face normals.
         None to compute face normals from vertices and faces. Defaults to None.
 
 ## Returns
-    normals (torch.Tensor): [..., N, 3] vertex normals"""
+    normals (Tensor): [..., N, 3] vertex normals"""
     utils3d.torch.mesh.compute_vertex_normal
 
 @overload
@@ -2066,13 +2064,13 @@ def compute_vertex_normal_weighted(vertices: torch_.Tensor, faces: torch_.Tensor
 according to the angles
 
 ## Parameters
-    vertices (torch.Tensor): [..., N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices
-    face_normal (torch.Tensor, optional): [..., T, 3] face normals.
+    vertices (Tensor): [..., N, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices
+    face_normal (Tensor, optional): [..., T, 3] face normals.
         None to compute face normals from vertices and faces. Defaults to None.
 
 ## Returns
-    normals (torch.Tensor): [..., N, 3] vertex normals"""
+    normals (Tensor): [..., N, 3] vertex normals"""
     utils3d.torch.mesh.compute_vertex_normal_weighted
 
 @overload
@@ -2080,12 +2078,12 @@ def compute_edges(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor, t
     """Compute edges of a mesh.
 
 ## Parameters
-    faces (torch.Tensor): [T, 3] triangular face indices
+    faces (Tensor): [T, 3] triangular face indices
     
 ## Returns
-    edges (torch.Tensor): [E, 2] edge indices
-    face2edge (torch.Tensor): [T, 3] mapping from face to edge
-    counts (torch.Tensor): [E] degree of each edge"""
+    edges (Tensor): [E, 2] edge indices
+    face2edge (Tensor): [T, 3] mapping from face to edge
+    counts (Tensor): [E] degree of each edge"""
     utils3d.torch.mesh.compute_edges
 
 @overload
@@ -2093,13 +2091,13 @@ def compute_connected_components(faces: torch_.Tensor, edges: torch_.Tensor = No
     """Compute connected faces of a mesh.
 
 ## Parameters
-    faces (torch.Tensor): [T, 3] triangular face indices
-    edges (torch.Tensor, optional): [E, 2] edge indices. Defaults to None.
-    face2edge (torch.Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
+    faces (Tensor): [T, 3] triangular face indices
+    edges (Tensor, optional): [E, 2] edge indices. Defaults to None.
+    face2edge (Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
         NOTE: If edges and face2edge are not provided, they will be computed.
 
 ## Returns
-    components (List[torch.Tensor]): list of connected faces"""
+    components (List[Tensor]): list of connected faces"""
     utils3d.torch.mesh.compute_connected_components
 
 @overload
@@ -2107,10 +2105,10 @@ def compute_edge_connected_components(edges: torch_.Tensor) -> List[torch_.Tenso
     """Compute connected edges of a mesh.
 
 ## Parameters
-    edges (torch.Tensor): [E, 2] edge indices
+    edges (Tensor): [E, 2] edge indices
 
 ## Returns
-    components (List[torch.Tensor]): list of connected edges"""
+    components (List[Tensor]): list of connected edges"""
     utils3d.torch.mesh.compute_edge_connected_components
 
 @overload
@@ -2118,14 +2116,14 @@ def compute_boundarys(faces: torch_.Tensor, edges: torch_.Tensor = None, face2ed
     """Compute boundary edges of a mesh.
 
 ## Parameters
-    faces (torch.Tensor): [T, 3] triangular face indices
-    edges (torch.Tensor): [E, 2] edge indices.
-    face2edge (torch.Tensor): [T, 3] mapping from face to edge.
-    edge_degrees (torch.Tensor): [E] degree of each edge.
+    faces (Tensor): [T, 3] triangular face indices
+    edges (Tensor): [E, 2] edge indices.
+    face2edge (Tensor): [T, 3] mapping from face to edge.
+    edge_degrees (Tensor): [E] degree of each edge.
 
 ## Returns
-    boundary_edge_indices (List[torch.Tensor]): list of boundary edge indices
-    boundary_face_indices (List[torch.Tensor]): list of boundary face indices"""
+    boundary_edge_indices (List[Tensor]): list of boundary edge indices
+    boundary_face_indices (List[Tensor]): list of boundary face indices"""
     utils3d.torch.mesh.compute_boundarys
 
 @overload
@@ -2133,11 +2131,11 @@ def compute_dual_graph(face2edge: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.
     """Compute dual graph of a mesh.
 
 ## Parameters
-    face2edge (torch.Tensor): [T, 3] mapping from face to edge.
+    face2edge (Tensor): [T, 3] mapping from face to edge.
         
 ## Returns
-    dual_edges (torch.Tensor): [DE, 2] face indices of dual edges
-    dual_edge2edge (torch.Tensor): [DE] mapping from dual edge to edge"""
+    dual_edges (Tensor): [DE, 2] face indices of dual edges
+    dual_edge2edge (Tensor): [DE] mapping from dual edge to edge"""
     utils3d.torch.mesh.compute_dual_graph
 
 @overload
@@ -2146,13 +2144,13 @@ def remove_unused_vertices(faces: torch_.Tensor, *vertice_attrs, return_indices:
 Unreferenced vertices are removed, and the face indices are updated accordingly.
 
 ## Parameters
-    faces (torch.Tensor): [T, P] face indices
+    faces (Tensor): [T, P] face indices
     *vertice_attrs: vertex attributes
 
 ## Returns
-    faces (torch.Tensor): [T, P] face indices
+    faces (Tensor): [T, P] face indices
     *vertice_attrs: vertex attributes
-    indices (torch.Tensor, optional): [N] indices of vertices that are kept. Defaults to None."""
+    indices (Tensor, optional): [N] indices of vertices that are kept. Defaults to None."""
     utils3d.torch.mesh.remove_unused_vertices
 
 @overload
@@ -2160,10 +2158,10 @@ def remove_corrupted_faces(faces: torch_.Tensor) -> torch_.Tensor:
     """Remove corrupted faces (faces with duplicated vertices)
 
 ## Parameters
-    faces (torch.Tensor): [T, 3] triangular face indices
+    faces (Tensor): [T, 3] triangular face indices
 
 ## Returns
-    torch.Tensor: [T_, 3] triangular face indices"""
+    Tensor: [T_, 3] triangular face indices"""
     utils3d.torch.mesh.remove_corrupted_faces
 
 @overload
@@ -2173,16 +2171,16 @@ Isolated pieces are removed, and the face indices are updated accordingly.
 If no face is left, will return the largest connected component.
 
 ## Parameters
-    vertices (torch.Tensor): [N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices
-    connected_components (List[torch.Tensor], optional): connected components of the mesh. If None, it will be computed. Defaults to None.
+    vertices (Tensor): [N, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices
+    connected_components (List[Tensor], optional): connected components of the mesh. If None, it will be computed. Defaults to None.
     thresh_num_faces (int, optional): threshold of number of faces for isolated pieces. Defaults to None.
     thresh_radius (float, optional): threshold of radius for isolated pieces. Defaults to None.
     remove_unreferenced (bool, optional): remove unreferenced vertices after removing isolated pieces. Defaults to True.
 
 ## Returns
-    vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices"""
+    vertices (Tensor): [N_, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices"""
     utils3d.torch.mesh.remove_isolated_pieces
 
 @overload
@@ -2191,42 +2189,42 @@ def merge_duplicate_vertices(vertices: torch_.Tensor, faces: torch_.Tensor, tol:
 Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
 ## Parameters
-    vertices (torch.Tensor): [N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices
+    vertices (Tensor): [N, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices
     tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
 ## Returns
-    vertices (torch.Tensor): [N_, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices"""
+    vertices (Tensor): [N_, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices"""
     utils3d.torch.mesh.merge_duplicate_vertices
 
 @overload
-def subdivide_mesh_simple(vertices: torch_.Tensor, faces: torch_.Tensor, n: int = 1) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def subdivide_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, n: int = 1) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
 NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
 
 ## Parameters
-    vertices (torch.Tensor): [N, 3] 3-dimensional vertices
-    faces (torch.Tensor): [T, 3] triangular face indices
+    vertices (Tensor): [N, 3] 3-dimensional vertices
+    faces (Tensor): [T, 3] triangular face indices
     n (int, optional): number of subdivisions. Defaults to 1.
 
 ## Returns
-    vertices (torch.Tensor): [N_, 3] subdivided 3-dimensional vertices
-    faces (torch.Tensor): [4 * T, 3] subdivided triangular face indices"""
-    utils3d.torch.mesh.subdivide_mesh_simple
+    vertices (Tensor): [N_, 3] subdivided 3-dimensional vertices
+    faces (Tensor): [4 * T, 3] subdivided triangular face indices"""
+    utils3d.torch.mesh.subdivide_mesh
 
 @overload
 def compute_face_tbn(pos: torch_.Tensor, faces_pos: torch_.Tensor, uv: torch_.Tensor, faces_uv: torch_.Tensor, eps: float = 1e-07) -> torch_.Tensor:
     """compute TBN matrix for each face
 
 ## Parameters
-    pos (torch.Tensor): shape (..., N_pos, 3), positions
-    faces_pos (torch.Tensor): shape(T, 3) 
-    uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
-    faces_uv (torch.Tensor): shape(T, 3) 
+    pos (Tensor): shape (..., N_pos, 3), positions
+    faces_pos (Tensor): shape(T, 3) 
+    uv (Tensor): shape (..., N_uv, 3) uv coordinates, 
+    faces_uv (Tensor): shape(T, 3) 
     
 ## Returns
-    torch.Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
+    Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
     utils3d.torch.mesh.compute_face_tbn
 
 @overload
@@ -2234,14 +2232,14 @@ def compute_vertex_tbn(faces_topo: torch_.Tensor, pos: torch_.Tensor, faces_pos:
     """compute TBN matrix for each face
 
 ## Parameters
-    faces_topo (torch.Tensor): (T, 3), face indice of topology
-    pos (torch.Tensor): shape (..., N_pos, 3), positions
-    faces_pos (torch.Tensor): shape(T, 3) 
-    uv (torch.Tensor): shape (..., N_uv, 3) uv coordinates, 
-    faces_uv (torch.Tensor): shape(T, 3) 
+    faces_topo (Tensor): (T, 3), face indice of topology
+    pos (Tensor): shape (..., N_pos, 3), positions
+    faces_pos (Tensor): shape(T, 3) 
+    uv (Tensor): shape (..., N_uv, 3) uv coordinates, 
+    faces_uv (Tensor): shape(T, 3) 
     
 ## Returns
-    torch.Tensor: (..., V, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
+    Tensor: (..., V, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
     utils3d.torch.mesh.compute_vertex_tbn
 
 @overload
@@ -2249,8 +2247,8 @@ def laplacian(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'unif
     """Laplacian smooth with cotangent weights
 
 ## Parameters
-    vertices (torch.Tensor): shape (..., N, 3)
-    faces (torch.Tensor): shape (T, 3)
+    vertices (Tensor): shape (..., N, 3)
+    faces (Tensor): shape (T, 3)
     weight (str): 'uniform' or 'cotangent'"""
     utils3d.torch.mesh.laplacian
 
@@ -2259,8 +2257,8 @@ def laplacian_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, weight:
     """Laplacian smooth with cotangent weights
 
 ## Parameters
-    vertices (torch.Tensor): shape (..., N, 3)
-    faces (torch.Tensor): shape (T, 3)
+    vertices (Tensor): shape (..., N, 3)
+    faces (Tensor): shape (T, 3)
     weight (str): 'uniform' or 'cotangent'"""
     utils3d.torch.mesh.laplacian_smooth_mesh
 
@@ -2269,13 +2267,13 @@ def taubin_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, lambda_: f
     """Taubin smooth mesh
 
 ## Parameters
-    vertices (torch.Tensor): _description_
-    faces (torch.Tensor): _description_
+    vertices (Tensor): _description_
+    faces (Tensor): _description_
     lambda_ (float, optional): _description_. Defaults to 0.5.
     mu_ (float, optional): _description_. Defaults to -0.51.
 
 ## Returns
-    torch.Tensor: _description_"""
+    Tensor: _description_"""
     utils3d.torch.mesh.taubin_smooth_mesh
 
 @overload
@@ -2337,7 +2335,7 @@ def build_mesh_from_map(*maps: torch_.Tensor, mask: torch_.Tensor = None, device
     utils3d.torch.maps.build_mesh_from_map
 
 @overload
-def build_mesh_from_depth_map(depth: torch_.Tensor, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def build_mesh_from_depth_map(depth: torch_.Tensor, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, tri: bool = False) -> Tuple[torch_.Tensor, torch_.Tensor]:
     utils3d.torch.maps.build_mesh_from_depth_map
 
 @overload
@@ -2488,7 +2486,7 @@ def rasterize_triangles_peeling(ctx: utils3d.torch.rasterization.RastContext, ve
     utils3d.torch.rasterization.rasterize_triangles_peeling
 
 @overload
-def texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> torch_.Tensor:
+def sample_texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> torch_.Tensor:
     """Interpolate texture using uv coordinates.
 
 ## Parameters
@@ -2498,7 +2496,7 @@ def texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> 
     
 ## Returns
     torch.Tensor: (B, C, H, W) interpolated texture"""
-    utils3d.torch.rasterization.texture
+    utils3d.torch.rasterization.sample_texture
 
 @overload
 def texture_composite(texture: torch_.Tensor, uv: List[torch_.Tensor], uv_da: List[torch_.Tensor], background: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:

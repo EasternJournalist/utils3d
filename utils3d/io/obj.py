@@ -6,7 +6,7 @@ from pathlib import Path
 __all__ = [
     'read_obj', 
     'write_obj', 
-    'simple_write_obj'
+    'write_simple_obj'
 ]
 
 def read_obj(
@@ -110,10 +110,10 @@ def read_obj(
 
 
 def write_obj(
-        file: Union[str, Path],
-        obj: Dict[str, Any],
-        encoding: Union[str, None] = None
-    ):
+    file: Union[str, Path],
+    obj: Dict[str, Any],
+    encoding: Union[str, None] = None
+):
     with open(file, 'w', encoding=encoding) as fp:
         for k in ['v', 'vt', 'vn', 'vp']:
             if k not in obj:
@@ -124,12 +124,12 @@ def write_obj(
             print('f', *((str('/').join(map(int, i)) if isinstance(int(i), Iterable) else i) for i in f), file=fp)
 
 
-def simple_write_obj(
-        file: Union[str, Path],
-        vertices: np.ndarray,
-        faces: np.ndarray,
-        encoding: Union[str, None] = None
-    ):
+def write_simple_obj(
+    file: Union[str, Path],
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    encoding: Union[str, None] = None
+):
     """
     Write wavefront .obj file, without preprocessing.
     

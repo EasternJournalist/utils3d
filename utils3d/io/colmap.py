@@ -2,7 +2,7 @@ from typing import *
 from pathlib import Path
 
 import numpy as np
-from scipy.spatial.transform import Rotation
+from ..numpy.transforms import matrix_to_quaternion
 
 
 __all__ = ['read_extrinsics_from_colmap', 'read_intrinsics_from_colmap', 'write_extrinsics_as_colmap', 'write_intrinsics_as_colmap']
@@ -22,7 +22,7 @@ def write_extrinsics_as_colmap(file: Union[str, Path], extrinsics: np.ndarray, i
     assert extrinsics.shape[1:] == (4, 4) and extrinsics.ndim == 3 or extrinsics.shape == (4, 4)
     if extrinsics.ndim == 2:
         extrinsics = extrinsics[np.newaxis, ...]
-    quats = Rotation.from_matrix(extrinsics[:, :3, :3]).as_quat()
+    quats = matrix_to_quaternion(extrinsics[:, :3, :3])
     trans = extrinsics[:, :3, 3]
     if camera_ids is None:
         camera_ids = list(range(1, len(extrinsics) + 1))

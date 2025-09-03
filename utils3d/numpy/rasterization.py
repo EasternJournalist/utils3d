@@ -1424,7 +1424,7 @@ def sample_texture(
 #     # unproject depth map
 #     uv, faces = utils.image_mesh(*src_depth.shape[-2:])
 #     pts = transforms.unproject_cv(uv, src_depth.reshape(-1), extrinsics_src, intrinsics_src)
-#     faces = mesh.triangulate(faces, vertices=pts)
+#     faces = mesh.triangulate_mesh(faces, vertices=pts)
 
 #     # rasterize attributes
 #     if src_image is not None:

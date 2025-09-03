@@ -533,7 +533,7 @@ def project_gl(
     view: ndarray = None,
 ) -> Tuple[ndarray, ndarray]:
     """
-    Project 3D points to 2D following the OpenGL convention (except for row major matrice)
+    Project 3D points to 2D following the OpenGL convention (except for row major matrices)
 
     ## Parameters
         points (ndarray): [..., N, 3] or [..., N, 4] 3D points to project, if the last 
@@ -595,7 +595,7 @@ def unproject_gl(
     view: Optional[ndarray] = None,
 ) -> ndarray:
     """
-    Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+    Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
     ## Parameters
         uv (ndarray): (..., N, 2) screen space XY coordinates, value ranging in [0, 1].
@@ -624,7 +624,7 @@ def screen_coord_to_view_coord(
     projection: ndarray,
 ) -> ndarray:
     """
-    Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrice)
+    Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
     ## Parameters
         screen_coord (ndarray): (..., N, 3) screen space XYZ coordinates, value ranging in [0, 1]
@@ -682,8 +682,8 @@ def project(
 ) -> Tuple[ndarray, ndarray]:
     """
     Calculate projection. 
-    - For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-    - For OpenGL convention, use `view` and `projection` matrice.
+    - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+    - For OpenGL convention, use `view` and `projection` matrices.
 
     ## Parameters
 
@@ -724,8 +724,8 @@ def unproject(
 ) -> ndarray:
     """
     Calculate inverse projection. 
-    - For OpenCV convention, use `intrinsics` and `extrinsics` matrice. 
-    - For OpenGL convention, use `view` and `projection` matrice.
+    - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
+    - For OpenGL convention, use `view` and `projection` matrices.
 
     ## Parameters
 
@@ -1171,7 +1171,7 @@ def transform(x: ndarray, *Ts: ndarray) -> ndarray:
 
     ## Parameters
     - `x`: ndarray, shape (..., D): the point or a set of points to be transformed.
-    - `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrice)
+    - `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
     - `y`: ndarray, shape (..., D): the transformed point or a set of points.
