@@ -6,8 +6,6 @@ from contextlib import contextmanager
 import numpy as np
 import moderngl
 
-from build.lib.utils3d._unified import texture
-
 
 __all__ = [
     'RastContext',
