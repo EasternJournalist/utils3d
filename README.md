@@ -1,6 +1,6 @@
 # utils3d
 
-A collectioin of useful Python utility functions for 3D computer vision and graphics researchers.
+A collection of useful Python utility functions for 3D computer vision and graphics researchers.
 
 > ***NOTE: This repo is frequently updated and never guarantees backward compatibility.***
 > - If using `utils3d` as a dependency, please use a commit ID or fork this repo.
