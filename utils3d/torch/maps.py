@@ -214,7 +214,7 @@ def build_mesh_from_depth_map(
 @batched(3, 2, 2)
 def point_map_to_normal_map(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
-    Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    Calculate normal map from point map. Value range is [-1, 1].
 
     ## Parameters
         point (torch.Tensor): shape (..., height, width, 3), point map
@@ -256,7 +256,7 @@ def point_map_to_normal_map(point: torch.Tensor, mask: torch.Tensor = None) -> t
 
 def depth_map_to_normal_map(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
     """
-    Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system.
 
     ## Parameters
         depth (torch.Tensor): shape (..., height, width), linear depth map

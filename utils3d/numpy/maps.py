@@ -18,8 +18,8 @@ __all__ = [
     'image_mesh',
     'image_mesh_from_depth',
     'point_map_to_normal_map',
-    'point_map_to_normal_map',
     'depth_map_to_point_map',
+    'depth_map_to_normal_map',
     'depth_to_normals',
     'chessboard',
 ]
@@ -121,7 +121,7 @@ def normal_map_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask:
 @no_warnings(category=RuntimeWarning)
 def point_map_to_normal_map(point: np.ndarray, mask: np.ndarray = None, edge_threshold: float = None) -> np.ndarray:
     """
-    Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    Calculate normal map from point map. Value range is [-1, 1]. 
 
     ## Parameters
         point (np.ndarray): shape (height, width, 3), point map
@@ -178,7 +178,7 @@ def point_map_to_normal_map(point: np.ndarray, mask: np.ndarray = None, edge_thr
 
 def depth_map_to_normal_map(depth: np.ndarray, intrinsics: np.ndarray, mask: np.ndarray = None, edge_threshold: float = None) -> np.ndarray:
     """
-    Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system.
 
     ## Parameters
         depth (np.ndarray): shape (height, width), linear depth map
