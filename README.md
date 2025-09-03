@@ -8,17 +8,17 @@ A collection of useful Python utility functions for 3D computer vision and graph
 
 ## Install
 
-Install by git
+Install via pip + git
 
 ```bash
 pip install git+https://github.com/EasternJournalist/utils3d.git
 ```
 
-or clone the repo and install with `-e` option for convenient updating and modifying.
+or clone the repo and install 
 
 ```bash
 git clone https://github.com/EasternJournalist/utils3d.git
-pip install -e ./utils3d
+pip install ./utils3d
 ```
 
 ## Table of Contents
