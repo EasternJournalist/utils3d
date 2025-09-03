@@ -21,7 +21,7 @@ git clone https://github.com/EasternJournalist/utils3d.git
 pip install -e ./utils3d
 ```
 
-## Documentation
+## Table of Contents
 
 ### Transformations
 
