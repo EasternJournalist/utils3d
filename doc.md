@@ -1,28 +1,3 @@
-# utils3d
-
-A collectioin of useful Python utility functions for 3D computer vision and graphics researchers.
-
-> ***NOTE: This repo is frequently updated and never guarantees backward compatibility.***
-> - If using `utils3d` as a dependency, please use a commit ID or fork this repo.
-> - If you find some functions helpful here, consider copying and pasting the functions to your own code.
-
-## Install
-
-Install by git
-
-```bash
-pip install git+https://github.com/EasternJournalist/utils3d.git
-```
-
-or clone the repo and install with `-e` option for convenient updating and modifying.
-
-```bash
-git clone https://github.com/EasternJournalist/utils3d.git
-pip install -e ./utils3d
-```
-
-## Table of Contents
-
 ### Transforms
 
 | Function | Description | Numpy | Pytorch
@@ -177,3 +152,5 @@ pip install -e ./utils3d
 | `utils3d.sliding_window_1d` | Return x view of the input array with x sliding window of the given kernel size and stride. | [`utils3d.np.sliding_window_1d(x, window_size, stride, axis)`](utils3d/numpy/utils.py#L19) | [`utils3d.th.sliding_window_1d(x, window_size, stride, dim)`](utils3d/torch/utils.py#L20) | 
 | `utils3d.sliding_window_2d` |  | [`utils3d.np.sliding_window_2d(x, window_size, stride, axis)`](utils3d/numpy/utils.py#L48) | [`utils3d.th.sliding_window_2d(x, window_size, stride, dim)`](utils3d/torch/utils.py#L36) | 
 | `utils3d.sliding_window_nd` |  | [`utils3d.np.sliding_window_nd(x, window_size, stride, axis)`](utils3d/numpy/utils.py#L41) | [`utils3d.th.sliding_window_nd(x, window_size, stride, dim)`](utils3d/torch/utils.py#L28) | 
+
+

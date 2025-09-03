@@ -462,6 +462,8 @@ def rasterize_triangles(
     background_interpolation_uv: Optional[np.ndarray] = None,
 ) -> Dict[str, np.ndarray]:
     """
+    Rasterize triangles.
+
     ## Parameters
         ctx (RastContext): rasterization context
         width (int): width of rendered image
@@ -680,6 +682,8 @@ def rasterize_triangles_peeling(
     return_interpolation: bool = False,
 ) -> Iterator[Iterator[Dict[str, np.ndarray]]]:
     """
+    Rasterize triangles with depth peeling.
+
     ## Parameters
         ctx (RastContext): rasterization context
         width (int): width of rendered image
@@ -914,6 +918,8 @@ def rasterize_lines(
     background_interpolation_uv: Optional[np.ndarray] = None
 ) -> Tuple[np.ndarray, ...]:
     """
+    Rasterize lines.
+
     ## Parameters
         ctx (RastContext): rasterization context
         width (int): width of rendered image
@@ -1131,6 +1137,8 @@ def rasterize_point_cloud(
     background_point_id: Optional[np.ndarray] = None,
 ) -> Dict[str, np.ndarray]:
     """
+    Rasterize point cloud.
+
     ## Parameters
         ctx (RastContext): rasterization context
         width (int): width of rendered image
@@ -1311,7 +1319,7 @@ def sample_texture(
     anisotropic: float = 1.0
 ) -> np.ndarray:
     """
-    Given an UV map, texturing from the texture map
+    Sample from a texture map with a UV map.
     """
     assert len(texture_map.shape) == 3 and 1 <= texture_map.shape[2] <= 4
     assert uv_map.shape[2] == 2

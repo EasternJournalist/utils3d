@@ -348,7 +348,9 @@ def crop_intrinsics(intrinsics: numpy_.ndarray, width: Union[numbers.Number, num
 
 @overload
 def pixel_to_uv(pixel: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
-    """## Parameters
+    """Convert pixel coordiantes to UV coordinates.
+
+## Parameters
     pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
     width (Number | ndarray): [...] image width(s)
     height (Number | ndarray): [...] image height(s)
@@ -359,7 +361,9 @@ def pixel_to_uv(pixel: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarr
 
 @overload
 def pixel_to_ndc(pixel: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray]) -> numpy_.ndarray:
-    """## Parameters
+    """Convert pixel coordinates to NDC (Normalized Device Coordinates).
+
+## Parameters
     pixel (ndarray): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
     width (int | ndarray): [...] image width(s)
     height (int | ndarray): [...] image height(s)
@@ -370,7 +374,9 @@ def pixel_to_ndc(pixel: numpy_.ndarray, width: Union[int, numpy_.ndarray], heigh
 
 @overload
 def uv_to_pixel(uv: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray]) -> numpy_.ndarray:
-    """## Parameters
+    """Convert UV coordinates to pixel coordinates.
+
+## Parameters
     pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
     width (int | ndarray): [...] image width(s)
     height (int | ndarray): [...] image height(s)
@@ -1230,7 +1236,9 @@ def RastContext(*args, **kwargs):
 
 @overload
 def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
-    """## Parameters
+    """Rasterize triangles.
+
+## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1262,7 +1270,9 @@ def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int
 
 @overload
 def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
-    """## Parameters
+    """Rasterize triangles with depth peeling.
+
+## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1306,7 +1316,9 @@ with rasterize_triangles_peeling(
 
 @overload
 def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, ...]:
-    """## Parameters
+    """Rasterize lines.
+
+## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1338,7 +1350,9 @@ def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, he
 
 @overload
 def rasterize_point_cloud(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
-    """## Parameters
+    """Rasterize point cloud.
+
+## Parameters
     ctx (RastContext): rasterization context
     width (int): width of rendered image
     height (int): height of rendered image
@@ -1371,7 +1385,7 @@ def rasterize_point_cloud(ctx: utils3d.numpy.rasterization.RastContext, width: i
 
 @overload
 def sample_texture(ctx: utils3d.numpy.rasterization.RastContext, uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: Union[int, Tuple[int, int]] = 0, repeat: Union[bool, Tuple[bool, bool]] = False, anisotropic: float = 1.0) -> numpy_.ndarray:
-    """Given an UV map, texturing from the texture map"""
+    """Sample from a texture map with a UV map."""
     utils3d.numpy.rasterization.sample_texture
 
 @overload

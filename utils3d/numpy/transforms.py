@@ -423,14 +423,16 @@ def crop_intrinsics(
     ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
-
+@toarray(_others='pixel')
 @batched(1, 0, 0)
 def pixel_to_uv(
     pixel: ndarray,
     width: Union[Number, ndarray],
-    height: Union[Number, ndarray]
+    height: Union[Number, ndarray],
 ) -> ndarray:
     """
+    Convert pixel coordiantes to UV coordinates.
+
     ## Parameters
         pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
         width (Number | ndarray): [...] image width(s)
@@ -445,6 +447,7 @@ def pixel_to_uv(
     return uv
 
 
+@toarray(_others='uv')
 @batched(1, 0, 0)
 def uv_to_pixel(
     uv: ndarray,
@@ -452,6 +455,8 @@ def uv_to_pixel(
     height: Union[int, ndarray]
 ) -> ndarray:
     """
+    Convert UV coordinates to pixel coordinates.
+
     ## Parameters
         pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
         width (int | ndarray): [...] image width(s)
@@ -464,13 +469,16 @@ def uv_to_pixel(
     return pixel
 
 
-@batched(1,0,0)
+@toarray(_others='pixel')
+@batched(1, 0, 0)
 def pixel_to_ndc(
     pixel: ndarray,
     width: Union[int, ndarray],
     height: Union[int, ndarray]
 ) -> ndarray:
     """
+    Convert pixel coordinates to NDC (Normalized Device Coordinates).
+
     ## Parameters
         pixel (ndarray): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
         width (int | ndarray): [...] image width(s)

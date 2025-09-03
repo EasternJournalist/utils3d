@@ -7,6 +7,7 @@ import importlib
 import sys
 import functools
 from pathlib import Path
+import shutil
 
 from utils3d._helpers import suppress_traceback
 
@@ -34,7 +35,7 @@ def _call_based_on_args(fname, args, kwargs):
     return fn(*args, **kwargs)
     
 
-def extract_signature(fn):
+def get_signature(fn):
     signature = inspect.signature(fn)
     
     signature_str = str(signature)
@@ -56,9 +57,11 @@ if __name__ == "__main__":
 
     all = {**numpy_funcs, **torch_funcs}
 
-    Path("utils3d/_unified").mkdir(exist_ok=True)
+    if Path("utils3d/interface").exists():
+        shutil.rmtree("utils3d/interface")
+    Path("utils3d/interface").mkdir(exist_ok=True)
 
-    with open("utils3d/_unified/__init__.pyi", "w", encoding="utf-8") as f:
+    with open("utils3d/interface/__init__.pyi", "w", encoding="utf-8") as f:
         f.write(inspect.cleandoc(
             f"""
             # Auto-generated interface file
@@ -75,14 +78,14 @@ if __name__ == "__main__":
         f.write(f"__all__ = [{', \n'.join('\"' + s + '\"' for s in all.keys())}]\n\n")
 
         for fname, fn in itertools.chain(numpy_funcs.items(), torch_funcs.items()):
-            sig, doc = extract_signature(fn), inspect.getdoc(fn)
+            sig, doc = get_signature(fn), inspect.getdoc(fn)
 
             f.write(f"@overload\n")
             f.write(f"def {fname}{sig}:\n")
             f.write(f"    \"\"\"{doc}\"\"\"\n" if doc else "")
             f.write(f"    {fn.__module__}.{fn.__qualname__}\n\n")
 
-    with open("utils3d/_unified/__init__.py", "w", encoding="utf-8") as f:
+    with open("utils3d/interface/__init__.py", "w", encoding="utf-8") as f:
         f.write(inspect.cleandoc(
             f"""
             # Auto-generated implementation redirecting to numpy/torch implementations

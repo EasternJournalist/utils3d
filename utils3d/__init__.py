@@ -6,16 +6,30 @@ import importlib
 from typing import TYPE_CHECKING
 
 try:
-    from ._unified import *
+    from .interface import *
 except ImportError:
     pass
 
 __all__ = ['numpy', 'torch', 'io']
 
 def __getattr__(name: str):
-    return globals().get(name, importlib.import_module(f'.{name}', __package__)) 
+    if (module := globals().get(name, None)):
+        return module
+    if name == 'numpy' or name == 'np':
+        module = importlib.import_module(f'.numpy', __package__)
+        globals()['numpy'] = globals()['np'] = module
+    if name == 'torch' or name == 'th':
+        module = importlib.import_module(f'.torch', __package__)
+        globals()['torch'] = globals()['th'] = module
+    if name == 'io':
+        module = importlib.import_module(f'.io', __package__)
+        globals()['io'] = module
+    return module
+
 
 if TYPE_CHECKING:
-    from . import torch
     from . import numpy
+    from . import numpy as np   # short alias
+    from . import torch
+    from . import torch as th   # short alias
     from . import io

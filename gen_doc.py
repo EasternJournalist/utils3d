@@ -40,6 +40,16 @@ def get_function_source_location(fn):
     start_line = inspect.getsourcelines(fn)[1]
     return filepath, start_line
 
+
+def get_description(fn):
+    return fn.__doc__.strip().split("\n")[0]
+
+
+def collapse_long_text(text):
+    if len(text) > 40:
+        text = text[:37] + '...'
+    return text
+
 if __name__ == "__main__":
     import utils3d.numpy, utils3d.torch
     numpy_impl = utils3d.numpy
@@ -50,28 +60,33 @@ if __name__ == "__main__":
 
     with open("doc.md", "w", encoding="utf-8") as f:
         for module_name in modules:
-            f.write(f"# {module_name.capitalize()}\n\n")
-            f.write("| Function | Numpy | Pytorch| Description |\n")
-            f.write("| -------- | ----- | -----) | ----------- |\n")
+            f.write(f"### {module_name.capitalize()}\n\n")
+            f.write("| Function | Description | Numpy | Pytorch\n")
+            f.write("| ---- | ---- | ---- | ---- |\n")
             numpy_funcs = {name: getattr(utils3d.numpy, name) for name in utils3d.numpy.__modules_all__[module_name]}
             torch_funcs = {name: getattr(utils3d.torch, name) for name in utils3d.torch.__modules_all__[module_name]}
             for fname in sorted(set(numpy_funcs) | set(torch_funcs)):
                 doc_column_function = f'`utils3d.{fname}`'
+                doc_column_description = ""
                 if fname in numpy_funcs:
                     fn = numpy_funcs[fname]
                     filepath, start_line = get_function_source_location(fn)
                     signature = get_simple_signature(fn)
-                    doc_column_numpy = f'[`utils3d.numpy.{signature}`]({filepath}#L{start_line})'
+                    if fn.__doc__ is not None:
+                        doc_column_description = get_description(fn)
+                    doc_column_numpy = f'[`utils3d.np.{signature}`]({filepath}#L{start_line})'
                 else:
                     doc_column_numpy = "-"
 
                 if fname in torch_funcs:
                     fn = torch_funcs[fname]
                     filepath, start_line = get_function_source_location(fn)
-                    signature = get_simple_signature(fn)
-                    doc_column_torch = f'[`utils3d.torch.{signature}`]({filepath}#L{start_line})'
+                    signature =  get_simple_signature(fn)
+                    if doc_column_description is None and fn.__doc__ is not None:
+                        doc_column_description = get_description(fn)
+                    doc_column_torch = f'[`utils3d.th.{signature}`]({filepath}#L{start_line})'
                 else:
                     doc_column_torch = "-"
 
-                f.write(f"| {doc_column_function} | {doc_column_numpy} | {doc_column_torch} | |\n")
+                f.write(f"| {doc_column_function} | {doc_column_description} | {doc_column_numpy} | {doc_column_torch} | \n")
             f.write("\n\n")
