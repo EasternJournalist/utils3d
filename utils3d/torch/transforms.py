@@ -565,7 +565,7 @@ def project_cv(
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
     points = torch.cat([points, torch.ones((*points.shape[:-1], 1), dtype=points.dtype, device=points.device)], dim=-1)
     points = points @ transform.mT
-    uv_coord = points[..., :2] / points[..., 2:]
+    uv_coord = points[..., :2] / points[..., 2:3]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
 
