@@ -423,12 +423,14 @@ def crop_intrinsics(
     ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
+
 @toarray(_others='pixel')
 @batched(1, 0, 0)
 def pixel_to_uv(
     pixel: ndarray,
     width: Union[Number, ndarray],
     height: Union[Number, ndarray],
+    pixel_definition: str = 'corner'
 ) -> ndarray:
     """
     Convert pixel coordiantes to UV coordinates.
@@ -443,7 +445,9 @@ def pixel_to_uv(
     """
     if not np.issubdtype(pixel.dtype, np.floating):
         pixel = pixel.astype(np.float32)
-    uv = (pixel + 0.5) / np.stack([width, height], axis=-1)
+    if pixel_definition == 'corner':
+        pixel = pixel + 0.5
+    uv = pixel / np.stack([width, height], axis=-1)
     return uv
 
 
@@ -452,7 +456,8 @@ def pixel_to_uv(
 def uv_to_pixel(
     uv: ndarray,
     width: Union[int, ndarray],
-    height: Union[int, ndarray]
+    height: Union[int, ndarray],
+    pixel_definition: str = 'corner'
 ) -> ndarray:
     """
     Convert UV coordinates to pixel coordinates.
@@ -465,7 +470,9 @@ def uv_to_pixel(
     ## Returns
         (ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
     """
-    pixel = uv * np.stack([width, height], axis=-1).astype(uv.dtype) - 0.5
+    pixel = uv * np.stack([width, height], axis=-1).astype(uv.dtype)
+    if pixel_definition == 'corner':
+        pixel = pixel - 0.5
     return pixel
 
 
@@ -474,7 +481,8 @@ def uv_to_pixel(
 def pixel_to_ndc(
     pixel: ndarray,
     width: Union[int, ndarray],
-    height: Union[int, ndarray]
+    height: Union[int, ndarray],
+    pixel_definition: str = 'corner'
 ) -> ndarray:
     """
     Convert pixel coordinates to NDC (Normalized Device Coordinates).
@@ -490,7 +498,9 @@ def pixel_to_ndc(
     if not np.issubdtype(pixel.dtype, np.floating):
         pixel = pixel.astype(np.float32)
     dtype = pixel.dtype
-    ndc = (pixel + np.array(0.5, dtype=dtype)) / (np.stack([width, height], dim=-1) * np.array([2, -2], dtype=dtype)) \
+    if pixel_definition == 'corner':
+        pixel = pixel + 0.5
+    ndc = pixel / (np.stack([width, height], dim=-1) * np.array([2, -2], dtype=dtype)) \
         + np.array([-1, 1], dtype=dtype)
     return ndc
 
@@ -626,11 +636,8 @@ def unproject_gl(
     return points[..., :3]
 
 
-@batched(2, 1, 2, 2)
-def screen_coord_to_view_coord(
-    screen_coord: ndarray,
-    projection: ndarray,
-) -> ndarray:
+@batched(2, 2)
+def screen_coord_to_view_coord(screen_coord: ndarray, projection: ndarray) -> ndarray:
     """
     Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
@@ -640,7 +647,7 @@ def screen_coord_to_view_coord(
         projection (ndarray): (..., 4, 4) projection matrix
 
     ## Returns
-        points (ndarray): [..., N, 3] 3d points
+        points (ndarray): [..., N, 3] 3d points in view space
     """
     assert projection is not None, "projection matrix is required"
     ndc_xy = screen_coord * 2 - 1

@@ -85,7 +85,6 @@ __all__ = ["sliding_window_1d",
 "depth_map_aliasing", 
 "screen_coord_map", 
 "uv_map", 
-"pixel_center_coord_map", 
 "pixel_coord_map", 
 "build_mesh_from_map", 
 "build_mesh_from_depth_map", 
@@ -641,15 +640,9 @@ def uv_map(*args, **kwargs):
     return _call_based_on_args('uv_map', args, kwargs)
 
 @suppress_traceback
-def pixel_center_coord_map(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.pixel_center_coord_map, utils3d.torch.pixel_center_coord_map
-    return _call_based_on_args('pixel_center_coord_map', args, kwargs)
-
-@suppress_traceback
 def pixel_coord_map(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.pixel_coord_map, None
+        utils3d.numpy.pixel_coord_map, utils3d.torch.pixel_coord_map
     return _call_based_on_args('pixel_coord_map', args, kwargs)
 
 @suppress_traceback

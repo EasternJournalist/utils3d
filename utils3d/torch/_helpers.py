@@ -39,14 +39,14 @@ def totensor(*args_dtypes_devices: Union[torch.dtype, str, None], _others: Union
             }
             args = tuple(
                 torch.tensor(x, *((inputs[dtype_device].dtype, inputs[dtype_device].device) if isinstance(dtype_device, str) else dtype_device))
-                if not isinstance(x, Tensor) \
+                if isinstance(x, (Number, list, tuple)) \
                     and (dtype_device := dtypes_devices_dict.get(argnames[i], _others)) is not None \
                 else x
                 for i, x in enumerate(args)
             )
             kwargs = {
                 k: torch.tensor(x, *((inputs[dtype_device].dtype, inputs[dtype_device].device) if isinstance(dtype_device, str) else dtype_device))
-                if not isinstance(x, Tensor) \
+                if isinstance(x, (Number, list, tuple)) \
                     and (dtype_device := dtypes_devices_dict.get(k, _others)) is not None \
                 else x
                 for k, x in kwargs.items()

@@ -87,7 +87,7 @@ __modules_all__ = {
     ],
     "maps": [
         'uv_map',
-        'pixel_center_coord_map',
+        'pixel_coord_map',
         'build_mesh_from_map',
         'build_mesh_from_depth_map',
         'depth_map_edge',

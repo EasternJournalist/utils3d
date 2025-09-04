@@ -35,14 +35,14 @@ def toarray(*args_dtypes: Union[np.dtype, str, None], _others: Union[np.dtype, s
             }
             args = tuple(
                 np.array(x, inputs[dtype].dtype if isinstance(dtype, str) else dtype) 
-                if not isinstance(x, np.ndarray) \
+                if isinstance(x, (Number, list, tuple)) \
                     and (dtype := dtypes_dict.get(argnames[i], _others)) is not None \
                 else x
                 for i, x in enumerate(args)
             )
             kwargs = {
                 k: np.array(x, inputs[dtype].dtype if isinstance(dtype, str) else dtype) 
-                if not isinstance(x, np.ndarray) \
+                if isinstance(x, (Number, list, tuple)) \
                     and (dtype := dtypes_dict.get(k, _others)) is not None \
                 else x
                 for k, x in kwargs.items()

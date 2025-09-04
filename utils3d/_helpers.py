@@ -1,6 +1,6 @@
 from functools import wraps
 import warnings
-
+from typing import *
 
 def suppress_traceback(fn):
     @wraps(fn)
@@ -12,13 +12,15 @@ def suppress_traceback(fn):
             raise
     return wrapper
 
+P = TypeVar('P')
+R = TypeVar('R')
 
 class no_warnings:
     def __init__(self, action: str = 'ignore', **kwargs):
         self.action = action
         self.filter_kwargs = kwargs
     
-    def __call__(self, fn):
+    def __call__(self, fn: Callable[[P], R]) -> Callable[[P], R]:
         @wraps(fn)
         def wrapper(*args, **kwargs):
             with warnings.catch_warnings():

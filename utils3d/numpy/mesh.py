@@ -326,19 +326,24 @@ def mesh_relations(
 
 
 @overload
-def flatten_mesh_indices(faces1: np.ndarray, attr1: np.ndarray, *other_faces_attrs_pairs: np.ndarray) -> Tuple[np.ndarray, ...]: 
+def flatten_mesh_indices(faces1: np.ndarray, attr1: np.ndarray, *more_faces_attrs_pairs: np.ndarray) -> Tuple[np.ndarray, ...]: 
     """
     Rearrange the indices of a mesh to a flattened version. Vertices will be no longer shared.
 
-    ### Parameters:
+    ## Parameters:
     - `faces1`: [T, P] face indices of the first attribute
     - `attr1`: [N1, ...] attributes of the first mesh
+
+    Optionally, more pairs of faces and attributes can be provided:
+    - `faces2`: ...
+    - `attr2`: ...
     - ...
 
-    ### ## Returns
+    ## Returns
     - `faces`: [T, P] flattened face indices, contigous from 0 to T * P - 1
     - `attr1`: [T * P, ...] attributes of the first mesh, where every P values correspond to a face
-    _ ...
+    - `attr2`: ...
+    - ...
     """
 def flatten_mesh_indices(*args: np.ndarray) -> Tuple[np.ndarray, ...]:
     assert len(args) % 2 == 0, "The number of arguments must be even."
@@ -357,12 +362,12 @@ def square(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get a square mesh of area 1 centered at origin in the xy-plane.
 
-    ### Returns
+    ## Returns
         vertices (np.ndarray): shape (4, 3)
         faces (np.ndarray): shape (1, 4)
     """
     vertices = np.array([
-        [-0.5, 0.5, 0],   [0.5, 0.5, 0],   [0.5, -0.5, 0],   [-0.5, -0.5, 0] # v0-v1-v2-v3
+        [0.5, 0.5, 0],   [-0.5, 0.5, 0],   [-0.5, -0.5, 0],   [0.5, -0.5, 0] # v0-v1-v2-v3
     ], dtype=np.float32)
     if tri:
         faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
@@ -448,12 +453,12 @@ def merge_meshes(meshes: List[Tuple[np.ndarray, ...]]) -> Tuple[np.ndarray, ...]
     """
     Merge multiple meshes into one mesh. Vertices will be no longer shared.
 
-    ### Parameters:
-        `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
+    ## Parameters
+        - `meshes`: a list of tuple (faces, vertices_attr1, vertices_attr2, ....)
 
-    ### ## Returns
-        `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
-        `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face
+    ## Returns
+        - `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
+        - `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face
     """
     faces_merged = []
     attrs_merged = [[] for _ in meshes[0][1:]]

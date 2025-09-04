@@ -13,7 +13,7 @@ __all__ = [
     'depth_aliasing',
     'screen_coord_map',
     'uv_map',
-    'pixel_center_coord_map',
+    'pixel_coord_map',
     'image_pixel',
     'image_mesh',
     'image_mesh_from_depth',
@@ -224,110 +224,41 @@ def depth_map_to_point_map(
     return points
 
 
-def screen_coord_map(
+def uv_map(
     height: int,
     width: int,
-) -> np.ndarray:
-    """
-    Get OpenGL's screen space coordinates, ranging in [0, 1].
-    [0, 0] is the bottom-left corner of the image.
-
-    ## Parameters
-        width (int): image width
-        height (int): image height
-
-    ## Returns
-        (np.ndarray): shape (height, width, 2)
-    """
-    x, y = np.meshgrid(
-        np.linspace(0.5 / width, 1 - 0.5 / width, width, dtype=np.float32),
-        np.linspace(1 - 0.5 / height, 0.5 / height, height, dtype=np.float32),
-        indexing='xy'
-    )
-    return np.stack([x, y], axis=2)
-
-
-def uv_map(
-    height: int = None,
-    width: int = None,
-    mask: np.ndarray = None,
-    left: int = None,
-    top: int = None,
-    right: int = None,
-    bottom: int = None,
+    left: float = 0.,
+    top: float = 0.,
+    right: float = 1.,
+    bottom: float = 1.,
     dtype: np.dtype = np.float32
 ) -> np.ndarray:
     """
-    Get image UV space map, ranging in [0, 1]. 
+    Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
+    This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
+
+    ## Parameters
+        * `height`: `int` image height
+        * `width`: `int` image width
+        * `left`: `float`, optional left boundary in uv space. Defaults to 0.
+        * `top`: `float`, optional top boundary in uv space. Defaults to 0.
+        * `right`: `float`, optional right boundary in uv space. Defaults to 1.
+        * `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
+        * `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to np.float32.
+
+    ## Returns
+        - `uv (np.ndarray)`: shape `(height, width, 2)`
+
+    ## Example Usage
 
     >>> uv_map(10, 10):
     [[[0.05, 0.05], [0.15, 0.05], ..., [0.95, 0.05]],
      [[0.05, 0.15], [0.15, 0.15], ..., [0.95, 0.15]],
       ...             ...                  ...
      [[0.05, 0.95], [0.15, 0.95], ..., [0.95, 0.95]]]
-
-    ### Parameters
-        * `height (int)`: image height
-        * `width (int)`: image width
-        * `mask (np.ndarray, optional)`: binary mask of shape (height, width), dtype=bool. Defaults to None.
-            If provided, the UV grid will be computed only for the masked pixels. 
-            For 2-D mask, results is identical to image_ uv_map(height, width)[mask]
-            Extra dimensions other than the last two will be treated as batch dimensions
-    
-    ### Returns
-        * `*batch_indices (np.ndarray, optional)`: only available when mask is provided and has more than 2 dimensions.
-        * `uv (np.ndarray)`: shape (height, width, 2) if mask is None, otherwise (N, 2)
     """
-    if left is None: left = 0
-    if top is None: top = 0
-    if right is None: right = width
-    if bottom is None: bottom = height
-    if mask is None:
-        assert width is not None and height is not None, "either mask or width and height should be provided"
-        u = np.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, dtype=dtype)
-        v = np.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, dtype=dtype)
-        u, v = np.meshgrid(u, v, indexing='xy')
-        return np.stack([u, v], axis=2)
-    else:
-        assert (width is None or width == mask.shape[-1]) and (height is None or height == mask.shape[-2]), "width and height should be consistent with mask"
-        height, width = mask.shape[-2:]
-        *batch, i, j = np.where(mask)
-        u, v = (j.astype(dtype) + 0.5) / width, (i.astype(dtype) + 0.5) / height
-        return *batch, np.stack([u, v], axis=-1)
-
-
-def pixel_center_coord_map(
-    height: int,
-    width: int,
-    left: int = None,
-    top: int = None,
-    right: int = None,
-    bottom: int = None,
-    dtype: np.dtype = np.float32
-) -> np.ndarray:
-    """
-    Get image pixel center coordinates, ranging in [0, width] and [0, height].
-    `image[i, j]` has pixel center coordinates `(j + 0.5, i + 0.5)`.
-
-    >>> pixel_center_coord_map(10, 10):
-    [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
-     [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
-      ...             ...                  ...
-    [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
-
-    ## Parameters
-        height (int): image height
-        width (int): image width
-
-    ## Returns
-        np.ndarray: shape (height, width, 2)
-    """
-    if left is None: left = 0
-    if top is None: top = 0
-    if right is None: right = width
-    if bottom is None: bottom = height
-    u = np.linspace(left + 0.5, right - 0.5, right - left, dtype=dtype)
-    v = np.linspace(top + 0.5, bottom - 0.5, bottom - top, dtype=dtype)
+    u = np.linspace(left + 0.5 / width, right - 0.5 / width, height, dtype=dtype)
+    v = np.linspace(top + 0.5 / height, bottom - 0.5 / height, width, dtype=dtype)
     u, v = np.meshgrid(u, v, indexing='xy')
     return np.stack([u, v], axis=2)
 
@@ -335,43 +266,84 @@ def pixel_center_coord_map(
 def pixel_coord_map(
     height: int,
     width: int,
-    left: int = None,
-    top: int = None,
-    right: int = None,
-    bottom: int = None,
-    dtype: np.dtype = np.int32
+    left: int = 0,
+    top: int = 0,
+    definition: Literal['corner', 'center'] = 'corner',
+    dtype: np.dtype = np.float32
 ) -> np.ndarray:
     """
-    Get image pixel coordinates grid, ranging in [0, width - 1] and [0, height - 1].
-
-    >>> pixel_center_coord_map(10, 10):
-    [[[0, 0], [1, 0], ..., [9, 0]],
-     [[0, 1], [1, 1], ..., [9, 1]],
-      ...             ...                  ...
-    [[0, 9], [1, 9], ..., [9, 9]]]
+    Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
 
     ## Parameters
-        width (int): image width
-        height (int): image height
+        - `height`: `int` image height
+        - `width`: `int` image width
+        - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
+        - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
+        - `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
+            - 'corner': coordinates range in [0, width - 1], [0, height - 1]
+            - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
+        - `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
 
     ## Returns
         np.ndarray: shape (height, width, 2)
+    
+    >>> pixel_coord_map(10, 10, definition='center', dtype=np.float32):
+    [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
+     [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
+      ...             ...                  ...
+    [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
+
+    >>> pixel_coord_map(10, 10, definition='corner', dtype=np.int32):
+    [[[0, 0], [1, 0], ..., [9, 0]],
+     [[0, 1], [1, 1], ..., [9, 1]],
+        ...      ...         ...
+     [[0, 9], [1, 9], ..., [9, 9]]]
     """
-    if left is None: left = 0
-    if top is None: top = 0
-    if right is None: right = width
-    if bottom is None: bottom = height
-    u = np.arange(left, right, dtype=dtype)
-    v = np.arange(top, bottom, dtype=dtype)
+    u = np.arange(left, left + width, dtype=dtype)
+    v = np.arange(top, top + height, dtype=dtype)
+    if definition == 'center':
+        assert np.issubdtype(dtype, np.floating), "dtype should be a floating point type when definition is 'center'"
+        u = u + 0.5
+        v = v + 0.5
     u, v = np.meshgrid(u, v, indexing='xy')
     return np.stack([u, v], axis=2)
 
 
+def screen_coord_map(
+    height: int,
+    width: int,
+    left: float = 0.,
+    top: float = 1.,
+    right: float = 1.,
+    bottom: float = 0.,
+    dtype: np.dtype = np.float32
+) -> np.ndarray:
+    """
+    Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
+    This is commonly used in graphics APIs like OpenGL.
+
+    ## Parameters
+        - `height`: `int` map height
+        - `width`: `int` map width
+        - `left`: `float`, optional left boundary in the screen space. Defaults to 0.
+        - `top`: `float`, optional top boundary in the screen space. Defaults to 1.
+        - `right`: `float`, optional right boundary in the screen space. Defaults to 1.
+        - `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
+        - `dtype`: `np.dtype`, optional data type of the output map. Defaults to np.float32.
+
+    ## Returns
+        (np.ndarray): shape (height, width, 2)
+    """
+    x = np.linspace(left + 0.5 / width, right - 0.5 / width, width, dtype=dtype)
+    y = np.linspace(top - 0.5 / height, bottom - 0.5 / height, height, dtype=dtype)
+    x, y = np.meshgrid(x, y, indexing='xy')
+    return np.stack([x, y], axis=2)
+
+
 def build_mesh_from_map(
     *maps: np.ndarray,
-    mask: np.ndarray = None,
+    mask: Optional[np.ndarray] = None,
     tri: bool = False,
-    return_indices: bool = False
 ) -> Tuple[np.ndarray, ...]:
     """
     Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
@@ -382,53 +354,42 @@ def build_mesh_from_map(
 
     ## Returns
         faces (np.ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-        *vertex_attrs (np.ndarray): vertex attributes in corresponding order with input image_attrs
+        *attributes (np.ndarray): vertex attributes in corresponding order with input maps
         indices (np.ndarray, optional): indices of vertices in the original mesh
     """
     assert (len(maps) > 0) or (mask is not None), "At least one of maps or mask should be provided"
-    height, width = next(maps).shape[:2] if mask is None else mask.shape
+    height, width = maps[0].shape[:2] if mask is None else mask.shape
     assert all(x.shape[:2] == (height, width) for x in maps), "All maps should have the same shape"
 
     row_faces = np.stack([np.arange(0, width - 1, dtype=np.int32), np.arange(width, 2 * width - 1, dtype=np.int32), np.arange(1 + width, 2 * width, dtype=np.int32), np.arange(1, width, dtype=np.int32)], axis=1)
     faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
-    if mask is None:
-        if tri:
-            faces = triangulate_mesh(faces)
-        ret = [faces, *(img.reshape(-1, *img.shape[2:]) for img in image_attrs)]
-        if return_indices:
-            ret.append(np.arange(height * width, dtype=np.int32))
-        return tuple(ret)
-    else:
+    attributes = tuple(x.reshape(-1, *x.shape[2:]) for x in maps)
+    if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
-        if tri:
-            faces = triangulate_mesh(faces)
-        return remove_unused_vertices(
-            faces, 
-            *(x.reshape(-1, *x.shape[2:]) for x in maps), 
-            return_indices=return_indices
-        )
+        faces, *attributes = remove_unused_vertices(faces, *attributes)
+    if tri:
+        faces = triangulate_mesh(faces)
+    return faces, *attributes
 
 
 def build_mesh_from_depth_map(
     depth: np.ndarray,
-    extrinsics: np.ndarray = None,
-    intrinsics: np.ndarray = None,
-    *vertice_attrs: np.ndarray,
-    atol: float = None,
-    rtol: float = None,
-    remove_by_depth: bool = False,
-    return_uv: bool = False,
-    return_indices: bool = False
+    *other_maps: np.ndarray,
+    intrinsics: np.ndarray,
+    extrinsics: Optional[np.ndarray] = None,
+    atol: Optional[float] = None,
+    rtol: Optional[float] = 0.05,
+    tri: bool = False,
 ) -> Tuple[np.ndarray, ...]:
     """
-    Get x triangle mesh by lifting depth map to 3D.
+    Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
     ## Parameters
         depth (np.ndarray): [H, W] depth map
         extrinsics (np.ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
         intrinsics (np.ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
-        *vertice_attrs (np.ndarray): [H, W, C] vertex attributes. Defaults to None.
+        *other_maps (np.ndarray): [H, W, C] vertex attributes. Defaults to None.
         atol (float, optional): absolute tolerance. Defaults to None.
         rtol (float, optional): relative tolerance. Defaults to None.
             triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
@@ -437,40 +398,21 @@ def build_mesh_from_depth_map(
         return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
 
     ## Returns
-        vertices (np.ndarray): [N, 3] vertices
         faces (np.ndarray): [T, 3] faces
-        *vertice_attrs (np.ndarray): [N, C] vertex attributes
-        uv_map (np.ndarray, optional): [N, 2] uv coordinates
-        ref_indices (np.ndarray, optional): [N] indices of vertices in the original mesh
+        vertices (np.ndarray): [N, 3] vertices
+        *other_attrs (np.ndarray): [N, C] vertex attributes
     """
     height, width = depth.shape
-    uv_map, image_face = build_mesh_from_map(height, width)
-    depth = depth.reshape(-1)
-    pts = unproject_cv(uv_map, depth, extrinsics, intrinsics)
-    image_face = triangulate_mesh(image_face, vertices=pts)
-    ref_indices = None
-    ret = []
+    uv = uv_map(height, width, dtype=depth.dtype)
+    mask = np.isfinite(depth)
     if atol is not None or rtol is not None:
-        atol = 0 if atol is None else atol
-        rtol = 0 if rtol is None else rtol
-        mean = depth[image_face].mean(axis=1)
-        diff = np.max(np.abs(depth[image_face] - depth[image_face[:, [1, 2, 0]]]), axis=1)
-        mask = (diff <= atol + rtol * mean)
-        image_face_ = image_face[mask]
-        image_face_, ref_indices = remove_unused_vertices(image_face_, return_indices=True)
-
-    remove = remove_by_depth and ref_indices is not None
-    if remove:
-        pts = pts[ref_indices]
-        image_face = image_face_
-    ret += [pts, image_face]
-    for attr in vertice_attrs:
-        ret.append(attr.reshape(-1, attr.shape[-1]) if not remove else attr.reshape(-1, attr.shape[-1])[ref_indices])
-    if return_uv:
-        ret.append(uv_map if not remove else uv_map[ref_indices])
-    if return_indices and ref_indices is not None:
-        ret.append(ref_indices)
-    return tuple(ret)
+        mask = mask & ~depth_map_edge(depth, atol=atol, rtol=rtol, kernel_size=3, mask=mask)
+    uv, depth, other_attrs, faces = build_mesh_from_map(uv, depth, *other_maps, mask=mask)
+    pts = unproject_cv(uv, depth, intrinsics, extrinsics)
+    if tri:
+        faces = triangulate_mesh(faces, vertices=pts, method='diagonal')
+        faces, pts, *other_attrs = remove_unused_vertices(faces, pts, *other_attrs)
+    return faces, pts, *other_attrs
 
 
 def chessboard(height: int, width: int, grid_size: int, color_a: np.ndarray, color_b: np.ndarray) -> np.ndarray:

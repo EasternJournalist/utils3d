@@ -376,33 +376,33 @@ def normalize_intrinsics(
 @batched(2, _others=0)
 def crop_intrinsics(
     intrinsics: Tensor,
-    width: Union[Number, Tensor],
-    height: Union[Number, Tensor],
-    left: Union[Number, Tensor],
-    top: Union[Number, Tensor],
-    crop_width: Union[Number, Tensor],
-    crop_height: Union[Number, Tensor]
+    original_height: Union[Number, Tensor],
+    original_width: Union[Number, Tensor],
+    cropped_left: Union[Number, Tensor],
+    cropped_top: Union[Number, Tensor],
+    cropped_height: Union[Number, Tensor],
+    cropped_width: Union[Number, Tensor],
 ) -> Tensor:
     """
     Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
 
     ## Parameters
         intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to crop
-        width (int | Tensor): [...] image width(s)
-        height (int | Tensor): [...] image height(s)
-        left (int | Tensor): [...] left crop boundary
-        top (int | Tensor): [...] top crop boundary
-        crop_width (int | Tensor): [...] crop width
-        crop_height (int | Tensor): [...] crop height
+        original_height (int | Tensor): [...] original image height(s)
+        original_width (int | Tensor): [...] original image width(s)
+        cropped_left (int | Tensor): [...] left pixel index of the cropped image(s)
+        cropped_top (int | Tensor): [...] top pixel index of the cropped image(s)
+        cropped_height (int | Tensor): [...] cropped image height(s)
+        cropped_width (int | Tensor): [...] cropped image width(s)
 
     ## Returns
         (Tensor): [..., 3, 3] cropped camera intrinsics(s)
     """
-    zeros = torch.zeros_like(width)
-    ones = torch.ones_like(width)
+    zeros = torch.zeros_like(original_height)
+    ones = torch.ones_like(original_height)
     transform = torch.stack([
-        width / crop_width, zeros, -left / crop_width,
-        zeros, height / crop_height, -top / crop_height,
+        original_width / cropped_width, zeros, -cropped_left / cropped_width,
+        zeros, original_height / cropped_height, -cropped_top / cropped_height,
         zeros, zeros, ones
     ]).reshape(*zeros.shape, 3, 3).to(intrinsics)
     return transform @ intrinsics
@@ -413,7 +413,8 @@ def crop_intrinsics(
 def pixel_to_uv(
     pixel: Tensor,
     width: Union[Number, Tensor],
-    height: Union[Number, Tensor]
+    height: Union[Number, Tensor],
+    pixel_definition: Literal['corner', 'center'] = 'corner'
 ) -> Tensor:
     """
     ## Parameters
@@ -426,7 +427,9 @@ def pixel_to_uv(
     """
     if not torch.is_floating_point(pixel):
         pixel = pixel.float()
-    uv = (pixel + 0.5) / torch.stack([width, height], dim=-1).to(pixel)
+    if pixel_definition == 'corner':
+        pixel = pixel + 0.5
+    uv = pixel / torch.stack([width, height], dim=-1).to(pixel)
     return uv
 
 
@@ -435,7 +438,8 @@ def pixel_to_uv(
 def uv_to_pixel(
     uv: Tensor,
     width: Union[int, Tensor],
-    height: Union[int, Tensor]
+    height: Union[int, Tensor],
+    pixel_definition: Literal['corner', 'center'] = 'corner'
 ) -> Tensor:
     """
     ## Parameters
@@ -446,7 +450,9 @@ def uv_to_pixel(
     ## Returns
         (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
     """
-    pixel = uv * torch.stack([width, height], dim=-1).to(uv) - 0.5
+    pixel = uv * torch.stack([width, height], dim=-1).to(uv)
+    if pixel_definition == 'corner':
+        pixel = pixel - 0.5
     return pixel
 
 
@@ -455,7 +461,8 @@ def uv_to_pixel(
 def pixel_to_ndc(
     pixel: Tensor,
     width: Union[int, Tensor],
-    height: Union[int, Tensor]
+    height: Union[int, Tensor],
+    pixel_definition: Literal['corner', 'center'] = 'corner'
 ) -> Tensor:
     """
     ## Parameters
@@ -468,7 +475,9 @@ def pixel_to_ndc(
     """
     if not torch.is_floating_point(pixel):
         pixel = pixel.float()
-    ndc = (pixel + 0.5) / (torch.stack([width, height], dim=-1).to(pixel) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device)) \
+    if pixel_definition == 'corner':
+        pixel = pixel + 0.5
+    ndc = pixel / (torch.stack([width, height], dim=-1).to(pixel) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device)) \
         + torch.tensor([-1, 1], dtype=pixel.dtype, device=pixel.device)
     return ndc
 

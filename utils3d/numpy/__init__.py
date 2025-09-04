@@ -96,7 +96,6 @@ __modules_all__ = {
         'depth_map_aliasing',
         'screen_coord_map',
         'uv_map',
-        'pixel_center_coord_map',
         'pixel_coord_map',
         'build_mesh_from_map',
         'build_mesh_from_depth_map',

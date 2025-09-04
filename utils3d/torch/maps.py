@@ -1,5 +1,6 @@
 from typing import *
 import torch
+from torch import Tensor
 import torch.nn.functional as F
 
 from .mesh import remove_unused_vertices, triangulate_mesh
@@ -9,7 +10,7 @@ from ._helpers import batched
 
 __all__ = [
     'uv_map',
-    'pixel_center_coord_map',
+    'pixel_coord_map',
     'build_mesh_from_map',
     'build_mesh_from_depth_map',
     'depth_map_edge',
@@ -22,82 +23,137 @@ __all__ = [
 ]
 
 
-def uv_map(height: int, width: int, left: int = None, top: int = None, right: int = None, bottom: int = None, device: torch.device = None, dtype: torch.dtype = None) -> torch.Tensor:
+def uv_map(
+    height: int,
+    width: int,
+    left: float = 0.,
+    top: float = 0.,
+    right: float = 1.,
+    bottom: float = 1.,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device = None
+) -> Tensor:
     """
-    Get image space UV grid, ranging in [0, 1]. 
+    Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
+    This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
+
+    ## Parameters
+        * `height`: `int` image height
+        * `width`: `int` image width
+        * `left`: `float`, optional left boundary in uv space. Defaults to 0.
+        * `top`: `float`, optional top boundary in uv space. Defaults to 0.
+        * `right`: `float`, optional right boundary in uv space. Defaults to 1.
+        * `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
+        * `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to np.float32.
+
+    ## Returns
+        - `uv (Tensor)`: shape `(height, width, 2)`
+
+    ## Example Usage
 
     >>> uv_map(10, 10):
     [[[0.05, 0.05], [0.15, 0.05], ..., [0.95, 0.05]],
      [[0.05, 0.15], [0.15, 0.15], ..., [0.95, 0.15]],
       ...             ...                  ...
      [[0.05, 0.95], [0.15, 0.95], ..., [0.95, 0.95]]]
-
-    ## Parameters
-        width (int): image width
-        height (int): image height
-
-    ## Returns
-        torch.Tensor: shape (height, width, 2)
     """
-    if left is None: left = 0
-    if top is None: top = 0
-    if right is None: right = width
-    if bottom is None: bottom = height
-    u = torch.linspace((left + 0.5) / width, (right - 0.5) / width, right - left, device=device, dtype=dtype)
-    v = torch.linspace((top + 0.5) / height, (bottom - 0.5) / height, bottom - top, device=device, dtype=dtype)
+    u = torch.linspace(left + 0.5 / width, right - 0.5 / width, height, dtype=dtype, device=device)
+    v = torch.linspace(top + 0.5 / height, bottom - 0.5 / height, width, dtype=dtype, device=device)
     u, v = torch.meshgrid(u, v, indexing='xy')
-    uv = torch.stack([u, v], dim=-1)
-    return uv
+    return torch.stack([u, v], dim=2)
 
 
-def pixel_center_coord_map(
+def pixel_coord_map(
     height: int,
     width: int,
-    left: int = None,
-    top: int = None,
-    right: int = None,
-    bottom: int = None,
-    dtype: torch.dtype = None,
+    left: int = 0,
+    top: int = 0,
+    definition: Literal['corner', 'center'] = 'corner',
+    dtype: torch.dtype = torch.float32,
     device: torch.device = None
-) -> torch.Tensor:
+) -> Tensor:
     """
-    Get image pixel center coordinates, ranging in [0, width] and [0, height].
-    `image[i, j]` has pixel center coordinates `(j + 0.5, i + 0.5)`.
+    Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
 
-    >>> pixel_center_coord_map(10, 10):
+    ## Parameters
+        - `height`: `int` image height
+        - `width`: `int` image width
+        - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
+        - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
+        - `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
+            - 'corner': coordinates range in [0, width - 1], [0, height - 1]
+            - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
+        - `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
+
+    ## Returns
+        Tensor: shape (height, width, 2)
+    
+    >>> pixel_coord_map(10, 10, definition='center', dtype=np.float32):
     [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
      [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
       ...             ...                  ...
     [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
 
-    ## Parameters
-        width (int): image width
-        height (int): image height
-
-    ## Returns
-        torch.Tensor: shape (height, width, 2)
+    >>> pixel_coord_map(10, 10, definition='corner', dtype=np.int32):
+    [[[0, 0], [1, 0], ..., [9, 0]],
+     [[0, 1], [1, 1], ..., [9, 1]],
+        ...      ...         ...
+     [[0, 9], [1, 9], ..., [9, 9]]]
     """
-    if left is None: left = 0
-    if top is None: top = 0
-    if right is None: right = width
-    if bottom is None: bottom = height
-    u = torch.linspace(left + 0.5, right - 0.5, right - left, dtype=dtype, device=device)
-    v = torch.linspace(top + 0.5, bottom - 0.5, bottom - top, dtype=dtype, device=device)
+    u = torch.arange(left, left + width, dtype=dtype, device=device)
+    v = torch.arange(top, top + height, dtype=dtype, device=device)
+    if definition == 'center':
+        assert torch.is_floating_point(u), "dtype should be a floating point type when definition is 'center'"
+        u = u + 0.5
+        v = v + 0.5
     u, v = torch.meshgrid(u, v, indexing='xy')
     return torch.stack([u, v], dim=2)
 
 
-def depth_map_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch.Tensor = None) -> torch.BoolTensor:
+def screen_coord_map(
+    height: int,
+    width: int,
+    left: float = 0.,
+    top: float = 1.,
+    right: float = 1.,
+    bottom: float = 0.,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device = None
+) -> Tensor:
+    """
+    Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
+    This is commonly used in graphics APIs like OpenGL.
+
+    ## Parameters
+        - `height`: `int` map height
+        - `width`: `int` map width
+        - `left`: `float`, optional left boundary in the screen space. Defaults to 0.
+        - `top`: `float`, optional top boundary in the screen space. Defaults to 1.
+        - `right`: `float`, optional right boundary in the screen space. Defaults to 1.
+        - `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
+        - `dtype`: `np.dtype`, optional data type of the output map. Defaults to np.float32.
+
+    ## Returns
+        (Tensor): shape (height, width, 2)
+    """
+    x = torch.linspace(left + 0.5 / width, right - 0.5 / width, width, dtype=dtype, device=device)
+    y = torch.linspace(top - 0.5 / height, bottom - 0.5 / height, height, dtype=dtype, device=device)
+    x, y = torch.meshgrid(x, y, indexing='xy')
+    return torch.stack([x, y], dim=2)
+
+
+
+def depth_map_edge(depth: Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: Tensor = None) -> torch.BoolTensor:
     """
     Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
     
     ## Parameters
-        depth (torch.Tensor): shape (..., height, width), linear depth map
+        depth (Tensor): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
 
     ## Returns
-        edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
+        edge (Tensor): shape (..., height, width) of dtype torch.bool
     """
     shape = depth.shape
     depth = depth.reshape(-1, 1, *shape[-2:])
@@ -118,16 +174,16 @@ def depth_map_edge(depth: torch.Tensor, atol: float = None, rtol: float = None, 
     return edge
 
 
-def depth_map_aliasing(depth: torch.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch.Tensor = None) -> torch.BoolTensor:
+def depth_map_aliasing(depth: Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: Tensor = None) -> torch.BoolTensor:
     """
     Compute the map that indicates the aliasing of a depth map. The aliasing is defined as the pixels which neither close to the maximum nor the minimum of its neighbors.
     ## Parameters
-        depth (torch.Tensor): shape (..., height, width), linear depth map
+        depth (Tensor): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
 
     ## Returns
-        edge (torch.Tensor): shape (..., height, width) of dtype torch.bool
+        edge (Tensor): shape (..., height, width) of dtype torch.bool
     """
     shape = depth.shape
     depth = depth.reshape(-1, 1, *shape[-2:])
@@ -150,76 +206,97 @@ def depth_map_aliasing(depth: torch.Tensor, atol: float = None, rtol: float = No
     edge = edge.reshape(*shape)
     return edge
 
-def build_mesh_from_map(*maps: torch.Tensor, mask: torch.Tensor = None, device: torch.device = None, dtype: torch.dtype = None, return_indices: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+
+def build_mesh_from_map(
+    *maps: Tensor,
+    mask: Optional[Tensor] = None,
+    tri: bool = False,
+) -> Tuple[Tensor, ...]:
     """
-    Get a quad mesh regarding image pixel uv coordinates as vertices and image grid as faces.
+    Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
     ## Parameters
-        width (int): image width
-        height (int): image height
-        mask (torch.Tensor, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+        *maps (Tensor): attribute maps in shape (height, width, [channels])
+        mask (Tensor, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
     ## Returns
-        uv (torch.Tensor): uv corresponding to pixels as described in uv_map()
-        faces (torch.Tensor): quad faces connecting neighboring pixels
-        indices (torch.Tensor, optional): indices of vertices in the original mesh
+        faces (Tensor): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
+        *attributes (Tensor): vertex attributes in corresponding order with input maps
+        indices (Tensor, optional): indices of vertices in the original mesh
     """
-    if device is None and mask is not None:
-        device = mask.device
     assert (len(maps) > 0) or (mask is not None), "At least one of maps or mask should be provided"
-    height, width = next(maps).shape[:2] if mask is None else mask.shape
+    height, width = maps[0].shape[:2] if mask is None else mask.shape
+    device = maps[0].device if len(maps) > 0 else mask.device
     assert all(x.shape[:2] == (height, width) for x in maps), "All maps should have the same shape"
 
-    if mask is not None:
-        assert mask.shape[0] == height and mask.shape[1] == width
-        assert mask.dtype == torch.bool
     row_faces = torch.stack([
         torch.arange(0, width - 1, dtype=torch.int32, device=device), 
         torch.arange(width, 2 * width - 1, dtype=torch.int32, device=device), 
         torch.arange(1 + width, 2 * width, dtype=torch.int32, device=device), 
-        torch.arange(1, width, dtype=torch.int32, device=device)
-    ], dim=1)
-    faces = (torch.arange(0, (height - 1) * width, width, device=device, dtype=torch.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
-    if mask is None:
-        ret = [faces, *(img.reshape(-1, *img.shape[2:]) for img in image_attrs)]
-        if return_indices:
-            ret.append(torch.arange(height * width, dtype=torch.int32, device=device))
-        return tuple(ret)
-    else:
+        torch.arange(1, width, dtype=torch.int32, device=device)], 
+    dim=1)
+    faces = (torch.arange(0, (height - 1) * width, width, dtype=torch.int32, device=device)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
+    attributes = tuple(x.reshape(-1, *x.shape[2:]) for x in maps)
+    if mask is not None:
         quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
         faces = faces[quad_mask]
-        return remove_unused_vertices(
-            faces, 
-            *(x.reshape(-1, *x.shape[2:]) for x in maps), 
-            return_indices=return_indices
-        )
+        faces, *attributes = remove_unused_vertices(faces, *attributes)
+    if tri:
+        faces = triangulate_mesh(faces)
+    return faces, *attributes
 
 
 def build_mesh_from_depth_map(
-    depth: torch.Tensor,
-    extrinsics: torch.Tensor = None,
-    intrinsics: torch.Tensor = None,
+    depth: Tensor,
+    *other_maps: Tensor,
+    intrinsics: Tensor,
+    extrinsics: Optional[Tensor] = None,
+    atol: Optional[float] = None,
+    rtol: Optional[float] = 0.05,
     tri: bool = False,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[Tensor, ...]:
+    """
+    Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
+
+    ## Parameters
+        depth (Tensor): [H, W] depth map
+        extrinsics (Tensor, optional): [4, 4] extrinsics matrix. Defaults to None.
+        intrinsics (Tensor, optional): [3, 3] intrinsics matrix. Defaults to None.
+        *other_maps (Tensor): [H, W, C] vertex attributes. Defaults to None.
+        atol (float, optional): absolute tolerance. Defaults to None.
+        rtol (float, optional): relative tolerance. Defaults to None.
+            triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
+        remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
+        return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
+        return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
+
+    ## Returns
+        faces (Tensor): [T, 3] faces
+        vertices (Tensor): [N, 3] vertices
+        *other_attrs (Tensor): [N, C] vertex attributes
+    """
     height, width = depth.shape
-    uv, faces = build_mesh_from_map(uv_map(height, width))
-    faces = faces.reshape(-1, 4)
-    depth = depth.reshape(-1)
-    pts = unproject_cv(uv, depth, extrinsics, intrinsics)
+    uv = uv_map(height, width, dtype=depth.dtype, device=depth.device)
+    mask = torch.isfinite(depth)
+    if atol is not None or rtol is not None:
+        mask = mask & ~depth_map_edge(depth, atol=atol, rtol=rtol, kernel_size=3, mask=mask)
+    uv, depth, other_attrs, faces = build_mesh_from_map(uv, depth, *other_maps, mask=mask)
+    pts = unproject_cv(uv, depth, intrinsics, extrinsics)
     if tri:
         faces = triangulate_mesh(faces, vertices=pts, method='diagonal')
-    return pts, faces
+        faces, pts, *other_attrs = remove_unused_vertices(faces, pts, *other_attrs)
+    return faces, pts, *other_attrs
 
 
 @batched(3, 2, 2)
-def point_map_to_normal_map(point: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def point_map_to_normal_map(point: Tensor, mask: Tensor = None) -> Tensor:
     """
     Calculate normal map from point map. Value range is [-1, 1].
 
     ## Parameters
-        point (torch.Tensor): shape (..., height, width, 3), point map
+        point (Tensor): shape (..., height, width, 3), point map
     ## Returns
-        normal (torch.Tensor): shape (..., height, width, 3), normal map. 
+        normal (Tensor): shape (..., height, width, 3), normal map. 
     """
     has_mask = mask is not None
 
@@ -254,21 +331,21 @@ def point_map_to_normal_map(point: torch.Tensor, mask: torch.Tensor = None) -> t
         return normal
 
 
-def depth_map_to_normal_map(depth: torch.Tensor, intrinsics: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+def depth_map_to_normal_map(depth: Tensor, intrinsics: Tensor, mask: Tensor = None) -> Tensor:
     """
     Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system.
 
     ## Parameters
-        depth (torch.Tensor): shape (..., height, width), linear depth map
-        intrinsics (torch.Tensor): shape (..., 3, 3), intrinsics matrix
+        depth (Tensor): shape (..., height, width), linear depth map
+        intrinsics (Tensor): shape (..., 3, 3), intrinsics matrix
     ## Returns
-        normal (torch.Tensor): shape (..., 3, height, width), normal map. 
+        normal (Tensor): shape (..., 3, height, width), normal map. 
     """
     pts = depth_map_to_point_map(depth, intrinsics)
     return point_map_to_normal_map(pts, mask)
 
 
-def depth_map_to_point_map(depth: torch.Tensor, intrinsics: torch.Tensor, extrinsics: torch.Tensor = None):
+def depth_map_to_point_map(depth: Tensor, intrinsics: Tensor, extrinsics: Tensor = None):
     height, width = depth.shape[-2:]
     uv = uv_map(width=width, height=height, dtype=depth.dtype, device=depth.device)
     pts = unproject_cv(uv, depth, intrinsics=intrinsics[..., None, :, :], extrinsics=extrinsics[..., None, :, :] if extrinsics is not None else None)
@@ -279,10 +356,10 @@ def bounding_rect_from_mask(mask: torch.BoolTensor):
     """get bounding rectangle of a mask
 
     ## Parameters
-        mask (torch.Tensor): shape (..., height, width), mask
+        mask (Tensor): shape (..., height, width), mask
 
     ## Returns
-        rect (torch.Tensor): shape (..., 4), bounding rectangle (left, top, right, bottom)
+        rect (Tensor): shape (..., 4), bounding rectangle (left, top, right, bottom)
     """
     height, width = mask.shape[-2:]
     mask = mask.flatten(-2).unsqueeze(-1)
@@ -292,18 +369,18 @@ def bounding_rect_from_mask(mask: torch.BoolTensor):
     return torch.cat([left_top, right_bottom], dim=-1)
 
 
-def chessboard(width: int, height: int, grid_size: int, color_a: torch.Tensor, color_b: torch.Tensor) -> torch.Tensor:
+def chessboard(width: int, height: int, grid_size: int, color_a: Tensor, color_b: Tensor) -> Tensor:
     """get a chessboard image
 
     ## Parameters
         width (int): image width
         height (int): image height
         grid_size (int): size of chessboard grid
-        color_a (torch.Tensor): shape (chanenls,), color of the grid at the top-left corner
-        color_b (torch.Tensor): shape (chanenls,), color in complementary grids
+        color_a (Tensor): shape (chanenls,), color of the grid at the top-left corner
+        color_b (Tensor): shape (chanenls,), color in complementary grids
 
     ## Returns
-        image (torch.Tensor): shape (height, width, channels), chessboard image
+        image (Tensor): shape (height, width, channels), chessboard image
     """
     x = torch.div(torch.arange(width), grid_size, rounding_mode='floor')
     y = torch.div(torch.arange(height), grid_size, rounding_mode='floor')
