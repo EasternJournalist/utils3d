@@ -25,8 +25,6 @@ pip install ./utils3d
 
 ### Transforms
 
-### Transforms
-
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.angle_between`<br>Calculate the angle between two vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1201) | [`utils3d.th.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1236) | 
