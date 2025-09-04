@@ -58,10 +58,10 @@ __all__ = ["sliding_window_1d",
 "transform", 
 "angle_between", 
 "triangulate_mesh", 
-"compute_face_normal", 
-"compute_face_angle", 
-"compute_vertex_normal", 
-"compute_vertex_normal_weighted", 
+"compute_face_normals", 
+"compute_face_corner_angles", 
+"compute_face_corner_normals", 
+"compute_vertex_normals", 
 "remove_corrupted_faces", 
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
@@ -113,11 +113,10 @@ __all__ = ["sliding_window_1d",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"compute_face_angles", 
 "compute_edges", 
 "compute_connected_components", 
 "compute_edge_connected_components", 
-"compute_boundarys", 
+"compute_boundaries", 
 "compute_dual_graph", 
 "remove_isolated_pieces", 
 "compute_face_tbn", 
@@ -480,28 +479,28 @@ def triangulate_mesh(*args, **kwargs):
     return _call_based_on_args('triangulate_mesh', args, kwargs)
 
 @suppress_traceback
-def compute_face_normal(*args, **kwargs):
+def compute_face_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_face_normal, utils3d.torch.compute_face_normal
-    return _call_based_on_args('compute_face_normal', args, kwargs)
+        utils3d.numpy.compute_face_normals, utils3d.torch.compute_face_normals
+    return _call_based_on_args('compute_face_normals', args, kwargs)
 
 @suppress_traceback
-def compute_face_angle(*args, **kwargs):
+def compute_face_corner_angles(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_face_angle, None
-    return _call_based_on_args('compute_face_angle', args, kwargs)
+        utils3d.numpy.compute_face_corner_angles, utils3d.torch.compute_face_corner_angles
+    return _call_based_on_args('compute_face_corner_angles', args, kwargs)
 
 @suppress_traceback
-def compute_vertex_normal(*args, **kwargs):
+def compute_face_corner_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_vertex_normal, utils3d.torch.compute_vertex_normal
-    return _call_based_on_args('compute_vertex_normal', args, kwargs)
+        utils3d.numpy.compute_face_corner_normals, utils3d.torch.compute_face_corner_normals
+    return _call_based_on_args('compute_face_corner_normals', args, kwargs)
 
 @suppress_traceback
-def compute_vertex_normal_weighted(*args, **kwargs):
+def compute_vertex_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_vertex_normal_weighted, utils3d.torch.compute_vertex_normal_weighted
-    return _call_based_on_args('compute_vertex_normal_weighted', args, kwargs)
+        utils3d.numpy.compute_vertex_normals, utils3d.torch.compute_vertex_normals
+    return _call_based_on_args('compute_vertex_normals', args, kwargs)
 
 @suppress_traceback
 def remove_corrupted_faces(*args, **kwargs):
@@ -810,12 +809,6 @@ def scale_2d(*args, **kwargs):
     return _call_based_on_args('scale_2d', args, kwargs)
 
 @suppress_traceback
-def compute_face_angles(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_face_angles
-    return _call_based_on_args('compute_face_angles', args, kwargs)
-
-@suppress_traceback
 def compute_edges(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.compute_edges
@@ -834,10 +827,10 @@ def compute_edge_connected_components(*args, **kwargs):
     return _call_based_on_args('compute_edge_connected_components', args, kwargs)
 
 @suppress_traceback
-def compute_boundarys(*args, **kwargs):
+def compute_boundaries(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_boundarys
-    return _call_based_on_args('compute_boundarys', args, kwargs)
+        None, utils3d.torch.compute_boundaries
+    return _call_based_on_args('compute_boundaries', args, kwargs)
 
 @suppress_traceback
 def compute_dual_graph(*args, **kwargs):

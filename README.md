@@ -25,6 +25,8 @@ pip install ./utils3d
 
 ### Transforms
 
+### Transforms
+
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.angle_between`<br>Calculate the angle between two vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1201) | [`utils3d.th.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1236) | 
@@ -96,12 +98,12 @@ pip install ./utils3d
 | `utils3d.chessboard`<br>get x chessboard image | [`utils3d.np.chessboard(height, width, grid_size, color_a, color_b)`](utils3d/numpy/maps.py#L476) | [`utils3d.th.chessboard(width, height, grid_size, color_a, color_b)`](utils3d/torch/maps.py#L295) | 
 | `utils3d.depth_map_aliasing`<br>Compute the map that indicates the aliasing of x depth map, identifying pixels which neither close to the maximum nor the minimum of its neighbors. | [`utils3d.np.depth_map_aliasing(depth, atol, rtol, kernel_size, mask)`](utils3d/numpy/maps.py#L55) | [`utils3d.th.depth_map_aliasing(depth, atol, rtol, kernel_size, mask)`](utils3d/torch/maps.py#L121) | 
 | `utils3d.depth_map_edge`<br>Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth. | [`utils3d.np.depth_map_edge(depth, atol, rtol, kernel_size, mask)`](utils3d/numpy/maps.py#L28) | [`utils3d.th.depth_map_edge(depth, atol, rtol, kernel_size, mask)`](utils3d/torch/maps.py#L90) | 
-| `utils3d.depth_map_to_normal_map`<br>Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system. | [`utils3d.np.depth_map_to_normal_map(depth, intrinsics, mask, edge_threshold)`](utils3d/numpy/maps.py#L179) | [`utils3d.th.depth_map_to_normal_map(depth, intrinsics, mask)`](utils3d/torch/maps.py#L257) | 
+| `utils3d.depth_map_to_normal_map`<br>Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system. | [`utils3d.np.depth_map_to_normal_map(depth, intrinsics, mask, edge_threshold)`](utils3d/numpy/maps.py#L179) | [`utils3d.th.depth_map_to_normal_map(depth, intrinsics, mask)`](utils3d/torch/maps.py#L257) | 
 | `utils3d.depth_map_to_point_map`<br>Unproject depth map to 3D points. | [`utils3d.np.depth_map_to_point_map(depth, intrinsics, extrinsics)`](utils3d/numpy/maps.py#L200) | [`utils3d.th.depth_map_to_point_map(depth, intrinsics, extrinsics)`](utils3d/torch/maps.py#L271) | 
 | `utils3d.normal_map_edge`<br>Compute the edge mask from normal map. | [`utils3d.np.normal_map_edge(normals, tol, kernel_size, mask)`](utils3d/numpy/maps.py#L83) | - | 
 | `utils3d.pixel_center_coord_map`<br>Get image pixel center coordinates, ranging in [0, width] and [0, height]. | [`utils3d.np.pixel_center_coord_map(height, width, left, top, right, bottom, dtype)`](utils3d/numpy/maps.py#L299) | [`utils3d.th.pixel_center_coord_map(height, width, left, top, right, bottom, dtype, device)`](utils3d/torch/maps.py#L53) | 
 | `utils3d.pixel_coord_map`<br>Get image pixel coordinates grid, ranging in [0, width - 1] and [0, height - 1]. | [`utils3d.np.pixel_coord_map(height, width, left, top, right, bottom, dtype)`](utils3d/numpy/maps.py#L335) | - | 
-| `utils3d.point_map_to_normal_map`<br>Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system. | [`utils3d.np.point_map_to_normal_map(point, mask, edge_threshold)`](utils3d/numpy/maps.py#L121) | [`utils3d.th.point_map_to_normal_map(point, mask)`](utils3d/torch/maps.py#L214) | 
+| `utils3d.point_map_to_normal_map`<br>Calculate normal map from point map. Value range is [-1, 1].  | [`utils3d.np.point_map_to_normal_map(point, mask, edge_threshold)`](utils3d/numpy/maps.py#L121) | [`utils3d.th.point_map_to_normal_map(point, mask)`](utils3d/torch/maps.py#L214) | 
 | `utils3d.screen_coord_map`<br>Get OpenGL's screen space coordinates, ranging in [0, 1]. | [`utils3d.np.screen_coord_map(height, width)`](utils3d/numpy/maps.py#L227) | - | 
 | `utils3d.uv_map`<br>Get image UV space map, ranging in [0, 1].  | [`utils3d.np.uv_map(height, width, mask, left, top, right, bottom, dtype)`](utils3d/numpy/maps.py#L250) | [`utils3d.th.uv_map(height, width, left, top, right, bottom, device, dtype)`](utils3d/torch/maps.py#L25) | 
 
@@ -110,42 +112,41 @@ pip install ./utils3d
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.calc_quad_candidates`<br>Calculate the candidate quad faces. | [`utils3d.np.calc_quad_candidates(edges, face2edge, edge2face)`](utils3d/numpy/mesh.py#L490) | - | 
-| `utils3d.calc_quad_direction`<br>Calculate the direction of each candidate quad face. | [`utils3d.np.calc_quad_direction(vertices, quads)`](utils3d/numpy/mesh.py#L602) | - | 
-| `utils3d.calc_quad_distortion`<br>Calculate the distortion of each candidate quad face. | [`utils3d.np.calc_quad_distortion(vertices, quads)`](utils3d/numpy/mesh.py#L551) | - | 
-| `utils3d.calc_quad_smoothness`<br>Calculate the smoothness of each candidate quad face connection. | [`utils3d.np.calc_quad_smoothness(quad2edge, quad2adj, quads_direction)`](utils3d/numpy/mesh.py#L643) | - | 
-| `utils3d.camera_frustum`<br>Get x triangle mesh of camera frustum. | [`utils3d.np.camera_frustum(extrinsics, intrinsics, depth)`](utils3d/numpy/mesh.py#L423) | - | 
-| `utils3d.compute_boundarys`<br> | - | [`utils3d.th.compute_boundarys(faces, edges, face2edge, edge_degrees)`](utils3d/torch/mesh.py#L331) | 
-| `utils3d.compute_connected_components`<br> | - | [`utils3d.th.compute_connected_components(faces, edges, face2edge)`](utils3d/torch/mesh.py#L250) | 
-| `utils3d.compute_dual_graph`<br> | - | [`utils3d.th.compute_dual_graph(face2edge)`](utils3d/torch/mesh.py#L387) | 
-| `utils3d.compute_edge_connected_components`<br> | - | [`utils3d.th.compute_edge_connected_components(edges)`](utils3d/torch/mesh.py#L292) | 
-| `utils3d.compute_edges`<br> | - | [`utils3d.th.compute_edges(faces)`](utils3d/torch/mesh.py#L228) | 
-| `utils3d.compute_face_angle`<br>Compute face angles of a triangular mesh | [`utils3d.np.compute_face_angle(vertices, faces, eps)`](utils3d/numpy/mesh.py#L107) | - | 
-| `utils3d.compute_face_angles`<br> | - | [`utils3d.th.compute_face_angles(vertices, faces)`](utils3d/torch/mesh.py#L145) | 
-| `utils3d.compute_face_normal`<br>Compute face normals of a triangular mesh | [`utils3d.np.compute_face_normal(vertices, faces)`](utils3d/numpy/mesh.py#L82) | [`utils3d.th.compute_face_normal(vertices, faces)`](utils3d/torch/mesh.py#L120) | 
-| `utils3d.compute_face_tbn`<br> | - | [`utils3d.th.compute_face_tbn(pos, faces_pos, uv, faces_uv, eps)`](utils3d/torch/mesh.py#L573) | 
-| `utils3d.compute_vertex_normal`<br>Compute vertex normals of a triangular mesh by averaging neightboring face normals | [`utils3d.np.compute_vertex_normal(vertices, faces, face_normal)`](utils3d/numpy/mesh.py#L135) | [`utils3d.th.compute_vertex_normal(vertices, faces, face_normal)`](utils3d/torch/mesh.py#L170) | 
-| `utils3d.compute_vertex_normal_weighted`<br>Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals | [`utils3d.np.compute_vertex_normal_weighted(vertices, faces, face_normal)`](utils3d/numpy/mesh.py#L168) | [`utils3d.th.compute_vertex_normal_weighted(vertices, faces, face_normal)`](utils3d/torch/mesh.py#L199) | 
-| `utils3d.compute_vertex_tbn`<br> | - | [`utils3d.th.compute_vertex_tbn(faces_topo, pos, faces_pos, uv, faces_uv)`](utils3d/torch/mesh.py#L596) | 
-| `utils3d.cube`<br>Get x cube mesh of size 1 centered at origin. | [`utils3d.np.cube(tri)`](utils3d/numpy/mesh.py#L392) | - | 
-| `utils3d.flatten_mesh_indices`<br> | [`utils3d.np.flatten_mesh_indices(args)`](utils3d/numpy/mesh.py#L361) | - | 
-| `utils3d.icosahedron`<br> | [`utils3d.np.icosahedron()`](utils3d/numpy/mesh.py#L449) | - | 
-| `utils3d.laplacian`<br> | - | [`utils3d.th.laplacian(vertices, faces, weight)`](utils3d/torch/mesh.py#L619) | 
-| `utils3d.laplacian_hc_smooth_mesh`<br> | - | [`utils3d.th.laplacian_hc_smooth_mesh(vertices, faces, times, alpha, beta, weight)`](utils3d/torch/mesh.py#L678) | 
-| `utils3d.laplacian_smooth_mesh`<br> | - | [`utils3d.th.laplacian_smooth_mesh(vertices, faces, weight, times)`](utils3d/torch/mesh.py#L648) | 
-| `utils3d.merge_duplicate_vertices`<br>Merge duplicate vertices of a triangular mesh.  | [`utils3d.np.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/numpy/mesh.py#L216) | [`utils3d.th.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/torch/mesh.py#L451) | 
-| `utils3d.merge_meshes`<br>Merge multiple meshes into one mesh. Vertices will be no longer shared. | [`utils3d.np.merge_meshes(meshes)`](utils3d/numpy/mesh.py#L465) | - | 
-| `utils3d.mesh_relations`<br>Calculate the relation between vertices and faces. | [`utils3d.np.mesh_relations(faces)`](utils3d/numpy/mesh.py#L306) | - | 
-| `utils3d.remove_corrupted_faces`<br>Remove corrupted faces (faces with duplicated vertices) | [`utils3d.np.remove_corrupted_faces(faces)`](utils3d/numpy/mesh.py#L202) | [`utils3d.th.remove_corrupted_faces(faces)`](utils3d/torch/mesh.py#L435) | 
-| `utils3d.remove_isolated_pieces`<br> | - | [`utils3d.th.remove_isolated_pieces(vertices, faces, connected_components, thresh_num_faces, thresh_radius, thresh_boundary_ratio, remove_unreferenced)`](utils3d/torch/mesh.py#L476) | 
-| `utils3d.remove_unused_vertices`<br>Remove unreferenced vertices of a mesh.  | [`utils3d.np.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/numpy/mesh.py#L241) | [`utils3d.th.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/torch/mesh.py#L406) | 
-| `utils3d.solve_quad`<br>Solve the quad mesh from the candidate quad faces. | [`utils3d.np.solve_quad(face2edge, edge2face, quad2adj, quads_distortion, quads_smoothness, quads_valid)`](utils3d/numpy/mesh.py#L672) | - | 
-| `utils3d.solve_quad_qp`<br>Solve the quad mesh from the candidate quad faces. | [`utils3d.np.solve_quad_qp(face2edge, edge2face, quad2adj, quads_distortion, quads_smoothness, quads_valid)`](utils3d/numpy/mesh.py#L785) | - | 
-| `utils3d.square`<br>Get a square mesh of area 1 centered at origin in the xy-plane. | [`utils3d.np.square(tri)`](utils3d/numpy/mesh.py#L374) | - | 
-| `utils3d.subdivide_mesh`<br>Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles. | [`utils3d.np.subdivide_mesh(vertices, faces, n)`](utils3d/numpy/mesh.py#L270) | [`utils3d.th.subdivide_mesh(vertices, faces, n)`](utils3d/torch/mesh.py#L542) | 
-| `utils3d.taubin_smooth_mesh`<br> | - | [`utils3d.th.taubin_smooth_mesh(vertices, faces, lambda_, mu_)`](utils3d/torch/mesh.py#L661) | 
-| `utils3d.tri_to_quad`<br>Convert a triangle mesh to a quad mesh. | [`utils3d.np.tri_to_quad(vertices, faces)`](utils3d/numpy/mesh.py#L871) | - | 
-| `utils3d.triangulate_mesh`<br>Triangulate a polygonal mesh. | [`utils3d.np.triangulate_mesh(faces, vertices, method)`](utils3d/numpy/mesh.py#L34) | [`utils3d.th.triangulate_mesh(faces, vertices, method)`](utils3d/torch/mesh.py#L71) | 
+| `utils3d.calc_quad_candidates`<br>Calculate the candidate quad faces. | [`utils3d.np.calc_quad_candidates(edges, face2edge, edge2face)`](utils3d/numpy/mesh.py#L472) | - | 
+| `utils3d.calc_quad_direction`<br>Calculate the direction of each candidate quad face. | [`utils3d.np.calc_quad_direction(vertices, quads)`](utils3d/numpy/mesh.py#L584) | - | 
+| `utils3d.calc_quad_distortion`<br>Calculate the distortion of each candidate quad face. | [`utils3d.np.calc_quad_distortion(vertices, quads)`](utils3d/numpy/mesh.py#L533) | - | 
+| `utils3d.calc_quad_smoothness`<br>Calculate the smoothness of each candidate quad face connection. | [`utils3d.np.calc_quad_smoothness(quad2edge, quad2adj, quads_direction)`](utils3d/numpy/mesh.py#L625) | - | 
+| `utils3d.camera_frustum`<br>Get x triangle mesh of camera frustum. | [`utils3d.np.camera_frustum(extrinsics, intrinsics, depth)`](utils3d/numpy/mesh.py#L405) | - | 
+| `utils3d.compute_boundaries`<br> | - | [`utils3d.th.compute_boundaries(faces, edges, face2edge, edge_degrees)`](utils3d/torch/mesh.py#L324) | 
+| `utils3d.compute_connected_components`<br> | - | [`utils3d.th.compute_connected_components(faces, edges, face2edge)`](utils3d/torch/mesh.py#L243) | 
+| `utils3d.compute_dual_graph`<br> | - | [`utils3d.th.compute_dual_graph(face2edge)`](utils3d/torch/mesh.py#L380) | 
+| `utils3d.compute_edge_connected_components`<br> | - | [`utils3d.th.compute_edge_connected_components(edges)`](utils3d/torch/mesh.py#L285) | 
+| `utils3d.compute_edges`<br> | - | [`utils3d.th.compute_edges(faces)`](utils3d/torch/mesh.py#L221) | 
+| `utils3d.compute_face_corner_angles`<br>Compute face corner angles of a mesh | [`utils3d.np.compute_face_corner_angles(vertices, faces)`](utils3d/numpy/mesh.py#L81) | [`utils3d.th.compute_face_corner_angles(vertices, faces)`](utils3d/torch/mesh.py#L120) | 
+| `utils3d.compute_face_corner_normals`<br>Compute the face corner normals of a mesh | [`utils3d.np.compute_face_corner_normals(vertices, faces, normalized)`](utils3d/numpy/mesh.py#L101) | [`utils3d.th.compute_face_corner_normals(vertices, faces, normalized)`](utils3d/torch/mesh.py#L140) | 
+| `utils3d.compute_face_normals`<br>Compute face normals of a mesh | [`utils3d.np.compute_face_normals(vertices, faces)`](utils3d/numpy/mesh.py#L124) | [`utils3d.th.compute_face_normals(vertices, faces)`](utils3d/torch/mesh.py#L163) | 
+| `utils3d.compute_face_tbn`<br> | - | [`utils3d.th.compute_face_tbn(pos, faces_pos, uv, faces_uv, eps)`](utils3d/torch/mesh.py#L566) | 
+| `utils3d.compute_vertex_normals`<br>Compute vertex normals of a triangular mesh by averaging neighboring face normals | [`utils3d.np.compute_vertex_normals(vertices, faces, weighted)`](utils3d/numpy/mesh.py#L150) | [`utils3d.th.compute_vertex_normals(vertices, faces, weighted)`](utils3d/torch/mesh.py#L189) | 
+| `utils3d.compute_vertex_tbn`<br> | - | [`utils3d.th.compute_vertex_tbn(faces_topo, pos, faces_pos, uv, faces_uv)`](utils3d/torch/mesh.py#L589) | 
+| `utils3d.cube`<br>Get x cube mesh of size 1 centered at origin. | [`utils3d.np.cube(tri)`](utils3d/numpy/mesh.py#L374) | - | 
+| `utils3d.flatten_mesh_indices`<br> | [`utils3d.np.flatten_mesh_indices(args)`](utils3d/numpy/mesh.py#L343) | - | 
+| `utils3d.icosahedron`<br> | [`utils3d.np.icosahedron()`](utils3d/numpy/mesh.py#L431) | - | 
+| `utils3d.laplacian`<br> | - | [`utils3d.th.laplacian(vertices, faces, weight)`](utils3d/torch/mesh.py#L612) | 
+| `utils3d.laplacian_hc_smooth_mesh`<br> | - | [`utils3d.th.laplacian_hc_smooth_mesh(vertices, faces, times, alpha, beta, weight)`](utils3d/torch/mesh.py#L671) | 
+| `utils3d.laplacian_smooth_mesh`<br> | - | [`utils3d.th.laplacian_smooth_mesh(vertices, faces, weight, times)`](utils3d/torch/mesh.py#L641) | 
+| `utils3d.merge_duplicate_vertices`<br>Merge duplicate vertices of a triangular mesh.  | [`utils3d.np.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/numpy/mesh.py#L198) | [`utils3d.th.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/torch/mesh.py#L444) | 
+| `utils3d.merge_meshes`<br>Merge multiple meshes into one mesh. Vertices will be no longer shared. | [`utils3d.np.merge_meshes(meshes)`](utils3d/numpy/mesh.py#L447) | - | 
+| `utils3d.mesh_relations`<br>Calculate the relation between vertices and faces. | [`utils3d.np.mesh_relations(faces)`](utils3d/numpy/mesh.py#L288) | - | 
+| `utils3d.remove_corrupted_faces`<br>Remove corrupted faces (faces with duplicated vertices) | [`utils3d.np.remove_corrupted_faces(faces)`](utils3d/numpy/mesh.py#L184) | [`utils3d.th.remove_corrupted_faces(faces)`](utils3d/torch/mesh.py#L428) | 
+| `utils3d.remove_isolated_pieces`<br> | - | [`utils3d.th.remove_isolated_pieces(vertices, faces, connected_components, thresh_num_faces, thresh_radius, thresh_boundary_ratio, remove_unreferenced)`](utils3d/torch/mesh.py#L469) | 
+| `utils3d.remove_unused_vertices`<br>Remove unreferenced vertices of a mesh.  | [`utils3d.np.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/numpy/mesh.py#L223) | [`utils3d.th.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/torch/mesh.py#L399) | 
+| `utils3d.solve_quad`<br>Solve the quad mesh from the candidate quad faces. | [`utils3d.np.solve_quad(face2edge, edge2face, quad2adj, quads_distortion, quads_smoothness, quads_valid)`](utils3d/numpy/mesh.py#L654) | - | 
+| `utils3d.solve_quad_qp`<br>Solve the quad mesh from the candidate quad faces. | [`utils3d.np.solve_quad_qp(face2edge, edge2face, quad2adj, quads_distortion, quads_smoothness, quads_valid)`](utils3d/numpy/mesh.py#L767) | - | 
+| `utils3d.square`<br>Get a square mesh of area 1 centered at origin in the xy-plane. | [`utils3d.np.square(tri)`](utils3d/numpy/mesh.py#L356) | - | 
+| `utils3d.subdivide_mesh`<br>Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles. | [`utils3d.np.subdivide_mesh(vertices, faces, n)`](utils3d/numpy/mesh.py#L252) | [`utils3d.th.subdivide_mesh(vertices, faces, n)`](utils3d/torch/mesh.py#L535) | 
+| `utils3d.taubin_smooth_mesh`<br> | - | [`utils3d.th.taubin_smooth_mesh(vertices, faces, lambda_, mu_)`](utils3d/torch/mesh.py#L654) | 
+| `utils3d.tri_to_quad`<br>Convert a triangle mesh to a quad mesh. | [`utils3d.np.tri_to_quad(vertices, faces)`](utils3d/numpy/mesh.py#L853) | - | 
+| `utils3d.triangulate_mesh`<br>Triangulate a polygonal mesh. | [`utils3d.np.triangulate_mesh(faces, vertices, method)`](utils3d/numpy/mesh.py#L33) | [`utils3d.th.triangulate_mesh(faces, vertices, method)`](utils3d/torch/mesh.py#L71) | 
 
 
 ### Rasterization
@@ -177,4 +178,3 @@ pip install ./utils3d
 | `utils3d.sliding_window_1d`<br>Return x view of the input array with x sliding window of the given kernel size and stride. | [`utils3d.np.sliding_window_1d(x, window_size, stride, axis)`](utils3d/numpy/utils.py#L19) | [`utils3d.th.sliding_window_1d(x, window_size, stride, dim)`](utils3d/torch/utils.py#L20) | 
 | `utils3d.sliding_window_2d`<br> | [`utils3d.np.sliding_window_2d(x, window_size, stride, axis)`](utils3d/numpy/utils.py#L48) | [`utils3d.th.sliding_window_2d(x, window_size, stride, dim)`](utils3d/torch/utils.py#L36) | 
 | `utils3d.sliding_window_nd`<br> | [`utils3d.np.sliding_window_nd(x, window_size, stride, axis)`](utils3d/numpy/utils.py#L41) | [`utils3d.th.sliding_window_nd(x, window_size, stride, dim)`](utils3d/torch/utils.py#L28) | 
-

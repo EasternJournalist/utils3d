@@ -61,10 +61,10 @@ __all__ = ["sliding_window_1d",
 "transform", 
 "angle_between", 
 "triangulate_mesh", 
-"compute_face_normal", 
-"compute_face_angle", 
-"compute_vertex_normal", 
-"compute_vertex_normal_weighted", 
+"compute_face_normals", 
+"compute_face_corner_angles", 
+"compute_face_corner_normals", 
+"compute_vertex_normals", 
 "remove_corrupted_faces", 
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
@@ -116,11 +116,10 @@ __all__ = ["sliding_window_1d",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"compute_face_angles", 
 "compute_edges", 
 "compute_connected_components", 
 "compute_edge_connected_components", 
-"compute_boundarys", 
+"compute_boundaries", 
 "compute_dual_graph", 
 "remove_isolated_pieces", 
 "compute_face_tbn", 
@@ -412,11 +411,11 @@ def depth_buffer_to_linear(depth_buffer: numpy_.ndarray, near: Union[float, nump
     utils3d.numpy.transforms.depth_buffer_to_linear
 
 @overload
-def unproject_cv(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def unproject_cv(uv: numpy_.ndarray, depth: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: numpy_.ndarray = None) -> numpy_.ndarray:
     """Unproject uv coordinates to 3D view space following the OpenCV convention
 
 ## Parameters
-    uv_coord (ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
+    uv (ndarray): [..., N, 2] uv coordinates, value ranging in [0, 1].
         The origin (0., 0.) is corresponding to the left & top
     depth (ndarray): [..., N] depth value
     extrinsics (ndarray): [..., 4, 4] extrinsics matrix
@@ -758,58 +757,52 @@ def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, met
     utils3d.numpy.mesh.triangulate_mesh
 
 @overload
-def compute_face_normal(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
-    """Compute face normals of a triangular mesh
+def compute_face_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
+    """Compute face normals of a mesh
 
 ## Parameters
     vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices
+    faces (np.ndarray): [T, P] face indices
 
 ## Returns
     normals (np.ndarray): [..., T, 3] face normals"""
-    utils3d.numpy.mesh.compute_face_normal
+    utils3d.numpy.mesh.compute_face_normals
 
 @overload
-def compute_face_angle(vertices: numpy_.ndarray, faces: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
-    """Compute face angles of a triangular mesh
+def compute_face_corner_angles(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
+    """Compute face corner angles of a mesh
+
+## Parameters
+    vertices (np.ndarray): [..., N, 3] vertices
+    faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+
+## Returns
+    angles (np.ndarray): [..., T, P] face corner angles"""
+    utils3d.numpy.mesh.compute_face_corner_angles
+
+@overload
+def compute_face_corner_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray, normalized: bool = True) -> numpy_.ndarray:
+    """Compute the face corner normals of a mesh
+
+## Parameters
+    vertices (np.ndarray): [..., N, 3] vertices
+    faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+
+## Returns
+    angles (np.ndarray): [..., T, P, 3] face corner normals"""
+    utils3d.numpy.mesh.compute_face_corner_normals
+
+@overload
+def compute_vertex_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray, weighted: Literal['uniform', 'area', 'angle'] = 'uniform') -> numpy_.ndarray:
+    """Compute vertex normals of a triangular mesh by averaging neighboring face normals
 
 ## Parameters
     vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices
+    faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
 
 ## Returns
-    angles (np.ndarray): [..., T, 3] face angles"""
-    utils3d.numpy.mesh.compute_face_angle
-
-@overload
-def compute_vertex_normal(vertices: numpy_.ndarray, faces: numpy_.ndarray, face_normal: numpy_.ndarray = None) -> numpy_.ndarray:
-    """Compute vertex normals of a triangular mesh by averaging neightboring face normals
-TODO: can be improved.
-
-## Parameters
-    vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices
-    face_normal (np.ndarray, optional): [..., T, 3] face normals.
-        None to compute face normals from vertices and faces. Defaults to None.
-
-## Returns
-    normals (np.ndarray): [..., N, 3] vertex normals"""
-    utils3d.numpy.mesh.compute_vertex_normal
-
-@overload
-def compute_vertex_normal_weighted(vertices: numpy_.ndarray, faces: numpy_.ndarray, face_normal: numpy_.ndarray = None) -> numpy_.ndarray:
-    """Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
-according to the angles
-
-## Parameters
-    vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-    faces (np.ndarray): [..., T, 3] triangular face indices
-    face_normal (np.ndarray, optional): [..., T, 3] face normals.
-        None to compute face normals from vertices and faces. Defaults to None.
-
-## Returns
-    normals (np.ndarray): [..., N, 3] vertex normals"""
-    utils3d.numpy.mesh.compute_vertex_normal_weighted
+    normals (np.ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)"""
+    utils3d.numpy.mesh.compute_vertex_normals
 
 @overload
 def remove_corrupted_faces(faces: numpy_.ndarray) -> numpy_.ndarray:
@@ -1177,7 +1170,7 @@ def build_mesh_from_depth_map(depth: numpy_.ndarray, extrinsics: numpy_.ndarray 
 
 @overload
 def point_map_to_normal_map(point: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
-    """Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    """Calculate normal map from point map. Value range is [-1, 1]. 
 
 ## Parameters
     point (np.ndarray): shape (height, width, 3), point map
@@ -1203,7 +1196,7 @@ def depth_map_to_point_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, ex
 
 @overload
 def depth_map_to_normal_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
-    """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system.
 
 ## Parameters
     depth (np.ndarray): shape (height, width), linear depth map
@@ -2035,57 +2028,52 @@ def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, metho
     utils3d.torch.mesh.triangulate_mesh
 
 @overload
-def compute_face_normal(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
-    """Compute face normals of a triangular mesh
+def compute_face_normals(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
+    """Compute face normals of a polygon mesh
 
 ## Parameters
     vertices (Tensor): [..., N, 3] 3-dimensional vertices
-    faces (Tensor): [..., T, 3] triangular face indices
+    faces (Tensor): [T, P] face indices
 
 ## Returns
     normals (Tensor): [..., T, 3] face normals"""
-    utils3d.torch.mesh.compute_face_normal
+    utils3d.torch.mesh.compute_face_normals
 
 @overload
-def compute_face_angles(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
-    """Compute face angles of a triangular mesh
+def compute_face_corner_normals(vertices: torch_.Tensor, faces: torch_.Tensor, normalized: bool = True) -> torch_.Tensor:
+    """Compute the face corner normals of a polygon mesh
+
+## Parameters
+    vertices (Tensor): [..., N, 3] vertices
+    faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+
+## Returns
+    angles (Tensor): [..., T, P, 3] face corner normals"""
+    utils3d.torch.mesh.compute_face_corner_normals
+
+@overload
+def compute_face_corner_angles(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
+    """Compute face corner angles of a polygon mesh
+
+## Parameters
+    vertices (Tensor): [..., N, 3] vertices
+    faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+
+## Returns
+    angles (Tensor): [..., T, P] face corner angles"""
+    utils3d.torch.mesh.compute_face_corner_angles
+
+@overload
+def compute_vertex_normals(vertices: torch_.Tensor, faces: torch_.Tensor, weighted: Literal['uniform', 'area', 'angle'] = 'uniform') -> torch_.Tensor:
+    """Compute vertex normals of a polygon mesh by averaging neighboring face normals
 
 ## Parameters
     vertices (Tensor): [..., N, 3] 3-dimensional vertices
-    faces (Tensor): [T, 3] triangular face indices
+    faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
 
 ## Returns
-    angles (Tensor): [..., T, 3] face angles"""
-    utils3d.torch.mesh.compute_face_angles
-
-@overload
-def compute_vertex_normal(vertices: torch_.Tensor, faces: torch_.Tensor, face_normal: torch_.Tensor = None) -> torch_.Tensor:
-    """Compute vertex normals of a triangular mesh by averaging neightboring face normals
-
-## Parameters
-    vertices (Tensor): [..., N, 3] 3-dimensional vertices
-    faces (Tensor): [T, 3] triangular face indices
-    face_normal (Tensor, optional): [..., T, 3] face normals.
-        None to compute face normals from vertices and faces. Defaults to None.
-
-## Returns
-    normals (Tensor): [..., N, 3] vertex normals"""
-    utils3d.torch.mesh.compute_vertex_normal
-
-@overload
-def compute_vertex_normal_weighted(vertices: torch_.Tensor, faces: torch_.Tensor, face_normal: torch_.Tensor = None) -> torch_.Tensor:
-    """Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
-according to the angles
-
-## Parameters
-    vertices (Tensor): [..., N, 3] 3-dimensional vertices
-    faces (Tensor): [T, 3] triangular face indices
-    face_normal (Tensor, optional): [..., T, 3] face normals.
-        None to compute face normals from vertices and faces. Defaults to None.
-
-## Returns
-    normals (Tensor): [..., N, 3] vertex normals"""
-    utils3d.torch.mesh.compute_vertex_normal_weighted
+    normals (Tensor): [..., N, 3] vertex normals (already normalized to unit vectors)"""
+    utils3d.torch.mesh.compute_vertex_normals
 
 @overload
 def compute_edges(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
@@ -2126,7 +2114,7 @@ def compute_edge_connected_components(edges: torch_.Tensor) -> List[torch_.Tenso
     utils3d.torch.mesh.compute_edge_connected_components
 
 @overload
-def compute_boundarys(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None, edge_degrees: torch_.Tensor = None) -> Tuple[List[torch_.Tensor], List[torch_.Tensor]]:
+def compute_boundaries(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None, edge_degrees: torch_.Tensor = None) -> Tuple[List[torch_.Tensor], List[torch_.Tensor]]:
     """Compute boundary edges of a mesh.
 
 ## Parameters
@@ -2138,7 +2126,7 @@ def compute_boundarys(faces: torch_.Tensor, edges: torch_.Tensor = None, face2ed
 ## Returns
     boundary_edge_indices (List[Tensor]): list of boundary edge indices
     boundary_face_indices (List[Tensor]): list of boundary face indices"""
-    utils3d.torch.mesh.compute_boundarys
+    utils3d.torch.mesh.compute_boundaries
 
 @overload
 def compute_dual_graph(face2edge: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
@@ -2379,7 +2367,7 @@ def depth_map_aliasing(depth: torch_.Tensor, atol: float = None, rtol: float = N
 
 @overload
 def point_map_to_normal_map(point: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
-    """Calculate normal map from point map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    """Calculate normal map from point map. Value range is [-1, 1].
 
 ## Parameters
     point (torch.Tensor): shape (..., height, width, 3), point map
@@ -2393,7 +2381,7 @@ def depth_map_to_point_map(depth: torch_.Tensor, intrinsics: torch_.Tensor, extr
 
 @overload
 def depth_map_to_normal_map(depth: torch_.Tensor, intrinsics: torch_.Tensor, mask: torch_.Tensor = None) -> torch_.Tensor:
-    """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenGL identity camera's coordinate system.
+    """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system.
 
 ## Parameters
     depth (torch.Tensor): shape (..., height, width), linear depth map

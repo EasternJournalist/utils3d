@@ -1,15 +1,14 @@
 import numpy as np
 from typing import *
-from ._helpers import batched
 
-from .transforms import unproject_cv
+from .transforms import unproject_cv, angle_between
 
 __all__ = [
     'triangulate_mesh',
-    'compute_face_normal',
-    'compute_face_angle',
-    'compute_vertex_normal',
-    'compute_vertex_normal_weighted',
+    'compute_face_normals',
+    'compute_face_corner_angles',
+    'compute_face_corner_normals',
+    'compute_vertex_normals',
     'remove_corrupted_faces',
     'merge_duplicate_vertices',
     'remove_unused_vertices',
@@ -79,125 +78,108 @@ def triangulate_mesh(
         return faces
 
 
-@batched(2, None)
-def compute_face_normal(
+def compute_face_corner_angles(
     vertices: np.ndarray,
-    faces: np.ndarray
+    faces: np.ndarray,
 ) -> np.ndarray:
     """
-    Compute face normals of a triangular mesh
+    Compute face corner angles of a mesh
+
+    ## Parameters
+        vertices (np.ndarray): [..., N, 3] vertices
+        faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+
+    ## Returns
+        angles (np.ndarray): [..., T, P] face corner angles
+    """
+    loop = np.arange(faces.shape[1])
+    edges = vertices[..., faces[:, np.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    angles = angle_between(-np.roll(edges, 1, axis=-2), edges)
+    return angles
+
+
+def compute_face_corner_normals(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    normalized: bool = True
+) -> np.ndarray:
+    """
+    Compute the face corner normals of a mesh
+
+    ## Parameters
+        vertices (np.ndarray): [..., N, 3] vertices
+        faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+
+    ## Returns
+        angles (np.ndarray): [..., T, P, 3] face corner normals
+    """
+    loop = np.arange(faces.shape[1])
+    edges = vertices[..., faces[:, np.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    normals = np.cross(np.roll(edges, 1, axis=-2), edges)
+    if normalized:
+        normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
+    return normals
+
+
+def compute_face_normals(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute face normals of a mesh
 
     ## Parameters
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
+        faces (np.ndarray): [T, P] face indices
 
     ## Returns
         normals (np.ndarray): [..., T, 3] face normals
     """
-    normal = np.cross(
-        vertices[..., faces[:, 1], :] - vertices[..., faces[:, 0], :],
-        vertices[..., faces[:, 2], :] - vertices[..., faces[:, 0], :]
-    )
-    normal_norm = np.linalg.norm(normal, axis=-1, keepdims=True)
-    normal_norm[normal_norm == 0] = 1
-    normal /= normal_norm
+    if faces.shape[-1] == 3:
+        normals = np.cross(
+            vertices[..., faces[:, 1], :] - vertices[..., faces[:, 0], :],
+            vertices[..., faces[:, 2], :] - vertices[..., faces[:, 0], :]
+        )
+    else:
+        normals = compute_face_corner_normals(vertices, faces, normalized=False)
+        normals = np.mean(normals, axis=-2)
+    normal /= np.linalg.norm(normal, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
     return normal
 
 
-@batched(2, None)
-def compute_face_angle(
-        vertices: np.ndarray,
-        faces: np.ndarray,
-        eps: float = 1e-12
-    ) -> np.ndarray:
-    """
-    Compute face angles of a triangular mesh
-
-    ## Parameters
-        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
-
-    ## Returns
-        angles (np.ndarray): [..., T, 3] face angles
-    """
-    face_angle = np.zeros_like(faces, dtype=vertices.dtype)
-    for i in range(3):
-        edge1 = vertices[..., faces[:, (i + 1) % 3], :] - vertices[..., faces[:, i], :]
-        edge2 = vertices[..., faces[:, (i + 2) % 3], :] - vertices[..., faces[:, i], :]
-        face_angle[..., i] = np.arccos(np.sum(
-            edge1 / np.clip(np.linalg.norm(edge1, axis=-1, keepdims=True), eps, None) *
-            edge2 / np.clip(np.linalg.norm(edge2, axis=-1, keepdims=True), eps, None),
-            axis=-1
-        ))
-    return face_angle
-
-
-@batched(2, None, 2)
-def compute_vertex_normal(
+def compute_vertex_normals(
     vertices: np.ndarray,
     faces: np.ndarray,
-    face_normal: np.ndarray = None
+    weighted: Literal['uniform', 'area', 'angle'] = 'uniform'
 ) -> np.ndarray:
     """
-    Compute vertex normals of a triangular mesh by averaging neightboring face normals
-    TODO: can be improved.
-    
-    ## Parameters
-        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
-        face_normal (np.ndarray, optional): [..., T, 3] face normals.
-            None to compute face normals from vertices and faces. Defaults to None.
-
-    ## Returns
-        normals (np.ndarray): [..., N, 3] vertex normals
-    """
-    if face_normal is None:
-        face_normal = compute_face_normal(vertices, faces)
-    vertex_normal = np.zeros_like(vertices, dtype=vertices.dtype)
-    for n in range(vertices.shape[0]):
-        for i in range(3):
-            vertex_normal[n, :, 0] += np.bincount(faces[:, i], weights=face_normal[n, :, 0], minlength=vertices.shape[1])
-            vertex_normal[n, :, 1] += np.bincount(faces[:, i], weights=face_normal[n, :, 1], minlength=vertices.shape[1])
-            vertex_normal[n, :, 2] += np.bincount(faces[:, i], weights=face_normal[n, :, 2], minlength=vertices.shape[1])
-    vertex_normal_norm = np.linalg.norm(vertex_normal, axis=-1, keepdims=True)
-    vertex_normal_norm[vertex_normal_norm == 0] = 1
-    vertex_normal /= vertex_normal_norm
-    return vertex_normal
-
-
-@batched(2, None, 2)
-def compute_vertex_normal_weighted(
-    vertices: np.ndarray,
-    faces: np.ndarray,
-    face_normal: np.ndarray = None
-) -> np.ndarray:
-    """
-    Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
-    according to the angles
+    Compute vertex normals of a triangular mesh by averaging neighboring face normals
 
     ## Parameters
         vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [..., T, 3] triangular face indices
-        face_normal (np.ndarray, optional): [..., T, 3] face normals.
-            None to compute face normals from vertices and faces. Defaults to None.
+        faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
 
     ## Returns
-        normals (np.ndarray): [..., N, 3] vertex normals
+        normals (np.ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)
     """
-    if face_normal is None:
-        face_normal = compute_face_normal(vertices, faces)
-    face_angle = compute_face_angle(vertices, faces)
-    vertex_normal = np.zeros_like(vertices)
-    for n in range(vertices.shape[0]):
-        for i in range(3):
-            vertex_normal[n, :, 0] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 0] * face_angle[n, :, i], minlength=vertices.shape[1])
-            vertex_normal[n, :, 1] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 1] * face_angle[n, :, i], minlength=vertices.shape[1])
-            vertex_normal[n, :, 2] += np.bincount(faces[n, :, i], weights=face_normal[n, :, 2] * face_angle[n, :, i], minlength=vertices.shape[1])
-    vertex_normal_norm = np.linalg.norm(vertex_normal, axis=-1, keepdims=True)
-    vertex_normal_norm[vertex_normal_norm == 0] = 1
-    vertex_normal /= vertex_normal_norm
-    return vertex_normal
-    
+    face_corner_normals = compute_face_corner_normals(vertices, faces, normalized=False)
+    if weighted == 'uniform':
+        face_corner_normals /= np.linalg.norm(face_corner_normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
+    elif weighted == 'area':
+        pass
+    elif weighted == 'angle':
+        face_corner_angle = compute_face_corner_angles(vertices, faces)
+        face_corner_normals *= face_corner_angle[..., None]
+    vertex_normals = np.zeros_like(vertices, dtype=vertices.dtype)
+    np.add.at(
+        vertex_normals, 
+        (..., faces[..., None], np.arange(3)), 
+        face_corner_normals
+    )
+    vertex_normals /= np.linalg.norm(vertex_normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
+    return vertex_normals
+
+
 
 def remove_corrupted_faces(faces: np.ndarray) -> np.ndarray:
     """
@@ -401,17 +383,17 @@ def cube(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         faces (np.ndarray): shape (12, 3)
     """
     vertices = np.array([
-        [-0.5, 0.5, 0.5],   [0.5, 0.5, 0.5],   [0.5, -0.5, 0.5],   [-0.5, -0.5, 0.5], # v0-v1-v2-v3
-        [-0.5, 0.5, -0.5],  [0.5, 0.5, -0.5],  [0.5, -0.5, -0.5],  [-0.5, -0.5, -0.5] # v4-v5-v6-v7
+        [0.5, 0.5, 0.5],   [-0.5, 0.5, 0.5],   [-0.5, -0.5, 0.5],   [0.5, -0.5, 0.5], # v0-v1-v2-v3
+        [0.5, 0.5, -0.5],  [-0.5, 0.5, -0.5],  [-0.5, -0.5, -0.5],  [0.5, -0.5, -0.5] # v4-v5-v6-v7
     ], dtype=np.float32).reshape((-1, 3))
 
     faces = np.array([
-        [0, 1, 2, 3], # v0-v1-v2-v3 (front)
-        [4, 5, 1, 0], # v4-v5-v1-v0 (top)
-        [3, 2, 6, 7], # v3-v2-v6-v7 (bottom)
-        [5, 4, 7, 6], # v5-v4-v7-v6 (back)
-        [1, 5, 6, 2], # v1-v5-v6-v2 (right)
-        [4, 0, 3, 7]  # v4-v0-v3-v7 (left)
+        [0, 1, 2, 3], #  (front)
+        [5, 4, 7, 6], #  (back)
+        [4, 5, 1, 0], #  (top)
+        [2, 6, 7, 3], #  (bottom)
+        [1, 5, 6, 2], #  (left)
+        [4, 0, 3, 7], #  (right)
     ], dtype=np.int32)
 
     if tri:

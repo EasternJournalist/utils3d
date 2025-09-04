@@ -2,19 +2,19 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 from typing import *
-from ._helpers import batched
+from .transforms import angle_between
 
 
 __all__ = [
     'triangulate_mesh',
-    'compute_face_normal',
-    'compute_face_angles',
-    'compute_vertex_normal',
-    'compute_vertex_normal_weighted',
+    'compute_face_normals',
+    'compute_face_corner_normals',
+    'compute_face_corner_angles',
+    'compute_vertex_normals',
     'compute_edges',
     'compute_connected_components',
     'compute_edge_connected_components',
-    'compute_boundarys',
+    'compute_boundaries',
     'compute_dual_graph',
     'remove_unused_vertices',
     'remove_corrupted_faces',
@@ -117,114 +117,107 @@ def triangulate_mesh(
         return faces
 
 
-@batched(2, None)
-def compute_face_normal(
+def compute_face_corner_angles(
     vertices: Tensor,
-    faces: Tensor
+    faces: Tensor,
 ) -> Tensor:
     """
-    Compute face normals of a triangular mesh
+    Compute face corner angles of a polygon mesh
+
+    ## Parameters
+        vertices (Tensor): [..., N, 3] vertices
+        faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+
+    ## Returns
+        angles (Tensor): [..., T, P] face corner angles
+    """
+    loop = torch.arange(faces.shape[1])
+    edges = vertices[..., faces[:, torch.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    angles = angle_between(-torch.roll(edges, 1, dims=-2), edges)
+    return angles
+
+
+def compute_face_corner_normals(
+    vertices: Tensor,
+    faces: Tensor,
+    normalized: bool = True
+) -> Tensor:
+    """
+    Compute the face corner normals of a polygon mesh
+
+    ## Parameters
+        vertices (Tensor): [..., N, 3] vertices
+        faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+
+    ## Returns
+        angles (Tensor): [..., T, P, 3] face corner normals
+    """
+    loop = torch.arange(faces.shape[1])
+    edges = vertices[..., faces[:, torch.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    normals = torch.cross(torch.roll(edges, 1, dims=-2), edges)
+    if normalized:
+        normals = F.normalize(normals, p=2, dim=-1)
+    return normals
+
+
+def compute_face_normals(
+    vertices: Tensor,
+    faces: Tensor,
+) -> Tensor:
+    """
+    Compute face normals of a polygon mesh
 
     ## Parameters
         vertices (Tensor): [..., N, 3] 3-dimensional vertices
-        faces (Tensor): [..., T, 3] triangular face indices
+        faces (Tensor): [T, P] face indices
 
     ## Returns
         normals (Tensor): [..., T, 3] face normals
     """
-    N = vertices.shape[0]
-    index = torch.arange(N)[:, None]
-    normal = torch.cross(
-        vertices[index, faces[..., 1].long()] - vertices[index, faces[..., 0].long()],
-        vertices[index, faces[..., 2].long()] - vertices[index, faces[..., 0].long()],
-        dim=-1
+    if faces.shape[-1] == 3:
+        normals = torch.cross(
+            vertices[..., faces[:, 1], :] - vertices[..., faces[:, 0], :],
+            vertices[..., faces[:, 2], :] - vertices[..., faces[:, 0], :]
+        )
+    else:
+        normals = compute_face_corner_normals(vertices, faces, normalized=False)
+        normals = torch.mean(normals, axis=-2)
+    normal = F.normalize(normals, p=2, dim=-1)
+    return normal
+
+
+def compute_vertex_normals(
+    vertices: Tensor,
+    faces: Tensor,
+    weighted: Literal['uniform', 'area', 'angle'] = 'uniform'
+) -> Tensor:
+    """
+    Compute vertex normals of a polygon mesh by averaging neighboring face normals
+
+    ## Parameters
+        vertices (Tensor): [..., N, 3] 3-dimensional vertices
+        faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+
+    ## Returns
+        normals (Tensor): [..., N, 3] vertex normals (already normalized to unit vectors)
+    """
+    face_corner_normals = compute_face_corner_normals(vertices, faces, normalized=False)
+    if weighted == 'uniform':
+        face_corner_normals = F.normalize(face_corner_normals, p=2, dim=-1)
+    elif weighted == 'area':
+        pass
+    elif weighted == 'angle':
+        face_corner_angle = compute_face_corner_angles(vertices, faces)
+        face_corner_normals *= face_corner_angle[..., None]
+    vertex_normals = torch.index_put(
+        torch.zeros_like(vertices, dtype=vertices.dtype),
+        (..., faces[..., None], torch.arange(3)),
+        face_corner_normals
     )
-    return F.normalize(normal, p=2, dim=-1)
+    vertex_normals = F.normalize(vertex_normals, p=2, dim=-1)
+    return vertex_normals
 
-
-@batched(2, None)
-def compute_face_angles(
-    vertices: Tensor,
-    faces: Tensor
-) -> Tensor:
-    """
-    Compute face angles of a triangular mesh
-
-    ## Parameters
-        vertices (Tensor): [..., N, 3] 3-dimensional vertices
-        faces (Tensor): [T, 3] triangular face indices
-
-    ## Returns
-        angles (Tensor): [..., T, 3] face angles
-    """
-    face_angles = []
-    for i in range(3):
-        edge1 = torch.index_select(vertices, dim=-2, index=faces[:, (i + 1) % 3]) - torch.index_select(vertices, dim=-2, index=faces[:, i])
-        edge2 = torch.index_select(vertices, dim=-2, index=faces[:, (i + 2) % 3]) - torch.index_select(vertices, dim=-2, index=faces[:, i])
-        face_angle = torch.arccos(torch.sum(F.normalize(edge1, p=2, dim=-1) * F.normalize(edge2, p=2, dim=-1), dim=-1))
-        face_angles.append(face_angle)
-    face_angles = torch.stack(face_angles, dim=-1)
-    return face_angles
-
-
-@batched(2, None, 2)
-def compute_vertex_normal(
-    vertices: Tensor,
-    faces: Tensor,
-    face_normal: Tensor = None
-) -> Tensor:
-    """
-    Compute vertex normals of a triangular mesh by averaging neightboring face normals
-
-    ## Parameters
-        vertices (Tensor): [..., N, 3] 3-dimensional vertices
-        faces (Tensor): [T, 3] triangular face indices
-        face_normal (Tensor, optional): [..., T, 3] face normals.
-            None to compute face normals from vertices and faces. Defaults to None.
-
-    ## Returns
-        normals (Tensor): [..., N, 3] vertex normals
-    """
-    N = vertices.shape[0]
-    assert faces.shape[-1] == 3, "Only support triangular mesh"
-    if face_normal is None:
-        face_normal = compute_face_normal(vertices, faces)
-    face_normal = face_normal[:, :, None, :].expand(-1, -1, 3, -1).flatten(-3, -2)
-    faces = faces.flatten()
-    vertex_normal = torch.index_put(torch.zeros_like(vertices), (torch.arange(N)[:, None], faces[None, :]), face_normal, accumulate=True)
-    vertex_normal = F.normalize(vertex_normal, p=2, dim=-1)
-    return vertex_normal
-
-
-@batched(2, None, 2)
-def compute_vertex_normal_weighted(
-    vertices: Tensor,
-    faces: Tensor,
-    face_normal: Tensor = None
-) -> Tensor:
-    """
-    Compute vertex normals of a triangular mesh by weighted sum of neightboring face normals
-    according to the angles
-
-    ## Parameters
-        vertices (Tensor): [..., N, 3] 3-dimensional vertices
-        faces (Tensor): [T, 3] triangular face indices
-        face_normal (Tensor, optional): [..., T, 3] face normals.
-            None to compute face normals from vertices and faces. Defaults to None.
-
-    ## Returns
-        normals (Tensor): [..., N, 3] vertex normals
-    """
-    N = vertices.shape[0]
-    if face_normal is None:
-        face_normal = compute_face_normal(vertices, faces)
-    face_angle = compute_face_angles(vertices, faces)
-    face_normal = face_normal[:, :, None, :].expand(-1, -1, 3, -1) * face_angle[..., None]
-    vertex_normal = torch.index_put(torch.zeros_like(vertices), (torch.arange(N)[:, None], faces.view(N, -1)), face_normal.view(N, -1, 3), accumulate=True)
-    vertex_normal = F.normalize(vertex_normal, p=2, dim=-1)
-    return vertex_normal
-
-
+    
 def compute_edges(
     faces: Tensor
 ) -> Tuple[Tensor, Tensor, Tensor]:
@@ -328,7 +321,7 @@ def compute_edge_connected_components(
     return components
 
 
-def compute_boundarys(
+def compute_boundaries(
     faces: Tensor,
     edges: Tensor=None,
     face2edge: Tensor=None,

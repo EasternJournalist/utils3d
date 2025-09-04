@@ -1468,7 +1468,7 @@ def test_rasterization(ctx: RastContext):
     vertices, faces = cube(tri=True)
     attributes = np.random.rand(len(vertices), 3).astype(np.float32)
     projection = perspective_from_fov(fov_x=np.deg2rad(60), aspect_ratio=1, near=1e-8, far=100000)
-    view = view_look_at([2, 2, 2], [0, 0, 0], [0, 1, 0])
+    view = view_look_at([1, 2, 2], [0, 0, 0], [0, 1, 0])
     out = rasterize_triangles(
         ctx, 
         512, 512, 
@@ -1477,7 +1477,7 @@ def test_rasterization(ctx: RastContext):
         faces=faces, 
         view=view, 
         projection=projection,
-        cull_backface=False,
+        cull_backface=True,
         return_depth=True,
         return_interpolation=False,
     )
