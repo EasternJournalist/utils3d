@@ -143,8 +143,8 @@ def compute_face_normals(
     else:
         normals = compute_face_corner_normals(vertices, faces, normalized=False)
         normals = np.mean(normals, axis=-2)
-    normal /= np.linalg.norm(normal, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
-    return normal
+    normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
+    return normals
 
 
 def compute_vertex_normals(

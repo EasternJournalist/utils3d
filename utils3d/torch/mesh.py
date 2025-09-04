@@ -182,8 +182,8 @@ def compute_face_normals(
     else:
         normals = compute_face_corner_normals(vertices, faces, normalized=False)
         normals = torch.mean(normals, axis=-2)
-    normal = F.normalize(normals, p=2, dim=-1)
-    return normal
+    normals = F.normalize(normals, p=2, dim=-1)
+    return normals
 
 
 def compute_vertex_normals(
