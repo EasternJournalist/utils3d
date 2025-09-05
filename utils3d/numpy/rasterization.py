@@ -495,7 +495,6 @@ def rasterize_triangles(
         assert vertices.ndim == 3 and vertices.shape[1] == vertices.shape[2] == 3, "If faces is None, vertices must be an array with shape (T, 3, 3)"
     else:
         assert faces.ndim == 2 and faces.shape[1] == 3, f"Faces should be a 2D array with shape (T, 3), but got {faces.shape}"
-        assert faces.dtype == np.uint32 or faces.dtype == np.int32
         assert vertices.ndim == 2 and vertices.shape[1] == 3
 
     assert vertices.dtype == np.float32
@@ -727,7 +726,6 @@ def rasterize_triangles_peeling(
         assert vertices.ndim == 3 and vertices.shape[1] == vertices.shape[2] == 3, "If faces is None, vertices must be an array with shape (T, 3, 3)"
     else:
         assert faces.ndim == 2 and faces.shape[1] == 3, f"Faces should be a 2D array with shape (T, 3), but got {faces.shape}"
-        assert faces.dtype == np.uint32 or faces.dtype == np.int32
         assert vertices.ndim == 2 and vertices.shape[1] == 3
 
     assert vertices.dtype == np.float32

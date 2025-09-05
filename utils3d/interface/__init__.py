@@ -4,9 +4,7 @@ from typing import TYPE_CHECKING
 import utils3d
 from .._helpers import suppress_traceback
 
-__all__ = ["sliding_window_1d", 
-"sliding_window_nd", 
-"sliding_window_2d", 
+__all__ = ["sliding_window", 
 "max_pool_1d", 
 "max_pool_2d", 
 "max_pool_nd", 
@@ -154,22 +152,10 @@ def _call_based_on_args(fname, args, kwargs):
 
 
 @suppress_traceback
-def sliding_window_1d(*args, **kwargs):
+def sliding_window(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sliding_window_1d, utils3d.torch.sliding_window_1d
-    return _call_based_on_args('sliding_window_1d', args, kwargs)
-
-@suppress_traceback
-def sliding_window_nd(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sliding_window_nd, utils3d.torch.sliding_window_nd
-    return _call_based_on_args('sliding_window_nd', args, kwargs)
-
-@suppress_traceback
-def sliding_window_2d(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sliding_window_2d, utils3d.torch.sliding_window_2d
-    return _call_based_on_args('sliding_window_2d', args, kwargs)
+        utils3d.numpy.sliding_window, utils3d.torch.sliding_window
+    return _call_based_on_args('sliding_window', args, kwargs)
 
 @suppress_traceback
 def max_pool_1d(*args, **kwargs):

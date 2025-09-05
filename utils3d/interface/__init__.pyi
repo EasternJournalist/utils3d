@@ -7,9 +7,7 @@ import numbers
 from . import numpy, torch
 import utils3d.numpy, utils3d.torch
 
-__all__ = ["sliding_window_1d", 
-"sliding_window_nd", 
-"sliding_window_2d", 
+__all__ = ["sliding_window", 
 "max_pool_1d", 
 "max_pool_2d", 
 "max_pool_nd", 
@@ -133,27 +131,8 @@ __all__ = ["sliding_window_1d",
 "warp_image_by_forward_flow"]
 
 @overload
-def sliding_window_1d(x: numpy_.ndarray, window_size: int, stride: int, axis: int = -1):
-    """Return x view of the input array with x sliding window of the given kernel size and stride.
-The sliding window is performed over the given axis, and the window dimension is append to the end of the output array's shape.
-
-## Parameters
-    x (np.ndarray): input array with shape (..., axis_size, ...)
-    kernel_size (int): size of the sliding window
-    stride (int): stride of the sliding window
-    axis (int): axis to perform sliding window over
-
-## Returns
-    a_sliding (np.ndarray): view of the input array with shape (..., n_windows, ..., kernel_size), where n_windows = (axis_size - kernel_size + 1) // stride"""
-    utils3d.numpy.utils.sliding_window_1d
-
-@overload
-def sliding_window_nd(x: numpy_.ndarray, window_size: Tuple[int, ...], stride: Tuple[int, ...], axis: Tuple[int, ...]) -> numpy_.ndarray:
-    utils3d.numpy.utils.sliding_window_nd
-
-@overload
-def sliding_window_2d(x: numpy_.ndarray, window_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)) -> numpy_.ndarray:
-    utils3d.numpy.utils.sliding_window_2d
+def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Optional[Tuple[int, ...]] = None, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
+    utils3d.numpy.utils.sliding_window
 
 @overload
 def max_pool_1d(x: numpy_.ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
@@ -1385,18 +1364,9 @@ def test_rasterization(ctx: utils3d.numpy.rasterization.RastContext):
     utils3d.numpy.rasterization.test_rasterization
 
 @overload
-def sliding_window_1d(x: torch_.Tensor, window_size: int, stride: int = 1, dim: int = -1) -> torch_.Tensor:
-    """Sliding window view of the input tensor. The dimension of the sliding window is appended to the end of the input tensor's shape.
-NOTE: Since Pytorch has `unfold` function, 1D sliding window view is just a wrapper of it."""
-    utils3d.torch.utils.sliding_window_1d
-
-@overload
-def sliding_window_2d(x: torch_.Tensor, window_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], dim: Union[int, Tuple[int, int]] = (-2, -1)) -> torch_.Tensor:
-    utils3d.torch.utils.sliding_window_2d
-
-@overload
-def sliding_window_nd(x: torch_.Tensor, window_size: Tuple[int, ...], stride: Tuple[int, ...], dim: Tuple[int, ...]) -> torch_.Tensor:
-    utils3d.torch.utils.sliding_window_nd
+def sliding_window(x: torch_.Tensor, window_size: Tuple[int, ...], stride: Tuple[int, ...], dim: Tuple[int, ...]) -> torch_.Tensor:
+    """Create a sliding window view of the input tensor on specified dimensions."""
+    utils3d.torch.utils.sliding_window
 
 @overload
 def masked_min(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor]]:

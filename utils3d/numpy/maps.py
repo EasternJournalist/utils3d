@@ -3,7 +3,7 @@ from typing import *
 import numpy as np
 
 from .._helpers import no_warnings
-from .utils import max_pool_2d, sliding_window_2d
+from .utils import max_pool_2d, sliding_window
 from .transforms import angle_between, unproject_cv
 from .mesh import triangulate_mesh, remove_unused_vertices
 
@@ -96,7 +96,7 @@ def normal_map_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask:
     normals = normals / (np.linalg.norm(normals, axis=-1, keepdims=True) + 1e-12)
     
     padding = kernel_size // 2
-    normals_window = sliding_window_2d(
+    normals_window = sliding_window(
         np.pad(normals, (*([(0, 0)] * (normals.ndim - 3)), (padding, padding), (padding, padding), (0, 0)), mode='edge'), 
         window_size=kernel_size, 
         stride=1, 
@@ -105,7 +105,7 @@ def normal_map_edge(normals: np.ndarray, tol: float, kernel_size: int = 3, mask:
     if mask is None:
         angle_diff = np.arccos((normals[..., None, None] * normals_window).sum(axis=-3)).max(axis=(-2, -1))
     else:
-        mask_window = sliding_window_2d(
+        mask_window = sliding_window(
             np.pad(mask, (*([(0, 0)] * (mask.ndim - 3)), (padding, padding), (padding, padding)), mode='edge'), 
             window_size=kernel_size, 
             stride=1, 

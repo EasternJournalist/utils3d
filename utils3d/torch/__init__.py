@@ -5,9 +5,7 @@ from typing import TYPE_CHECKING
 
 __modules_all__ = {
     'utils': [
-        'sliding_window_1d',
-        'sliding_window_2d',
-        'sliding_window_nd',
+        'sliding_window',
         'masked_min',
         'masked_max',
         'lookup',

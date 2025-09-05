@@ -9,9 +9,7 @@ from typing import TYPE_CHECKING
 
 __modules_all__ = {
     'utils': [
-        'sliding_window_1d',
-        'sliding_window_nd',
-        'sliding_window_2d',
+        'sliding_window',
         'max_pool_1d',
         'max_pool_2d',
         'max_pool_nd',
