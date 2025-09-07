@@ -1,6 +1,9 @@
 from typing import *
+from numbers import Number
+from itertools import chain
 
 import torch
+from torch import Tensor
 import torch.nn.functional as F
 
 from ._helpers import batched
@@ -15,16 +18,79 @@ __all__ = [
 ]
 
 
-def sliding_window(x: torch.Tensor, window_size: Tuple[int, ...], stride: Tuple[int, ...], dim: Tuple[int, ...]) -> torch.Tensor:
-    "Create a sliding window view of the input tensor on specified dimensions."
+def sliding_window(
+    x: Tensor, 
+    window_size: Union[int, Tuple[int, ...]], 
+    stride: Optional[Union[int, Tuple[int, ...]]] = None, 
+    pad_size: Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]] = None, 
+    pad_mode: str = 'constant',
+    pad_value: Number = 0,
+    dim: Tuple[int, ...] = None
+) -> Tensor:
+    """
+    Get a sliding window of the input array.
+    This function is a wrapper of `torch.nn.functional.unfold` with additional support for padding and stride.
+
+    ## Parameters
+    - `x` (Tensor): Input tensor.
+    - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
+        is provided, the same size is used for all specified axes.
+    - `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+        no stride is applied. If int is provided, the same stride is used for all specified axes.
+    - `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
+        Corresponding to `axis`.
+        - General format is `((before_1, after_1), (before_2, after_2), ...)`.
+        - Shortcut formats: 
+            - `int` -> same padding before and after for all axes;
+            - `(int, int)` -> same padding before and after for each axis;
+            - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
+    - `pad_mode` (str): Padding mode to use. Refer to `numpy.pad` for more details.
+    - `pad_value` (Union[int, float]): Value to use for constant padding. Only used
+        when `pad_mode` is 'constant'.
+    - `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
+
+    ## Returns
+    - (Tensor): Sliding window of the input array. 
+        - If no padding, the output is a view of the input array with zero copy.
+        - Otherwise, the output is no longer a view but a copy of the padded array.
+    """
+    if dim is None:
+        dim = tuple(range(x.ndim))
+    if isinstance(dim, int):
+        dim = (dim,)
     dim = [dim[i] % x.ndim for i in range(len(dim))]
+    if isinstance(window_size, int):
+        window_size = (window_size,) * len(dim)
+    if stride is None:
+        stride = (1,) * len(dim)
+    if isinstance(stride, int):
+        stride = (stride,) * len(dim)
     assert len(window_size) == len(stride) == len(dim)
+
+    # Pad the input array if needed
+    if pad_size is not None:
+        if isinstance(pad_size, int):
+            pad_size = ((pad_size, pad_size),) * len(dim)
+        elif isinstance(pad_size, tuple) and len(pad_size) == 2 and all(isinstance(p, int) for p in pad_size):
+            pad_size = (pad_size,) * len(dim)
+        elif isinstance(pad_size, tuple) and all(isinstance(p, tuple) and 1 <= len(p) <= 2 for p in pad_size):
+            if len(pad_size) == 1:
+                pad_size = pad_size * len(dim)
+            else:
+                assert len(pad_size) == len(dim), f"pad_size {pad_size} must match the number of axes {len(dim)}"
+            pad_size = tuple(p * 2 if len(p) == 1 else p for p in pad_size)
+        else:
+            raise ValueError(f"Invalid pad_size {pad_size}")
+        full_pad = [(0, 0) if i not in dim else pad_size[dim.index(i)] for i in range(x.ndim)]
+        full_pad = chain(*reversed(full_pad))
+        x = F.pad(x, full_pad, mode=pad_mode, value=pad_value)
+    
     for i in range(len(window_size)):
         x = x.unfold(dim[i], window_size[i], stride[i])
     return x
 
 
-def masked_min(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+def masked_min(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[Tensor, Tuple[Tensor, Tensor]]:
     """Similar to torch.min, but with mask
     """
     if dim is None:
@@ -33,7 +99,7 @@ def masked_min(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, kee
         return torch.where(mask, input, torch.tensor(torch.inf, dtype=input.dtype, device=input.device)).min(dim=dim, keepdim=keepdim)
 
 
-def masked_max(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+def masked_max(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[Tensor, Tuple[Tensor, Tensor]]:
     """Similar to torch.max, but with mask
     """
     if dim is None:
@@ -42,16 +108,16 @@ def masked_max(input: torch.Tensor, mask: torch.BoolTensor, dim: int = None, kee
         return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max(dim=dim, keepdim=keepdim)
     
 
-def lookup(key: torch.Tensor, query: torch.Tensor) -> torch.LongTensor:
+def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
     """
     Find the indices of `query` in `key`.
 
     ### Parameters
-        key (torch.Tensor): shape (K, ...), the array to search in
-        query (torch.Tensor): shape (Q, ...), the array to search for
+        key (Tensor): shape (K, ...), the array to search in
+        query (Tensor): shape (Q, ...), the array to search for
 
     ### Returns
-        torch.Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+        Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
     """
     unique, inverse = torch.unique(
         torch.cat([key, query], dim=0),

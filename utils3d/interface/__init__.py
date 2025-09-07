@@ -80,18 +80,20 @@ __all__ = ["sliding_window",
 "solve_quad", 
 "solve_quad_qp", 
 "tri_to_quad", 
-"depth_map_edge", 
-"normal_map_edge", 
-"depth_map_aliasing", 
-"screen_coord_map", 
 "uv_map", 
 "pixel_coord_map", 
+"screen_coord_map", 
 "build_mesh_from_map", 
 "build_mesh_from_depth_map", 
+"depth_map_edge", 
+"depth_map_aliasing", 
+"normal_map_edge", 
 "point_map_to_normal_map", 
 "depth_map_to_point_map", 
 "depth_map_to_normal_map", 
 "chessboard", 
+"masked_nearest_resize", 
+"masked_area_resize", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -610,30 +612,6 @@ def tri_to_quad(*args, **kwargs):
     return _call_based_on_args('tri_to_quad', args, kwargs)
 
 @suppress_traceback
-def depth_map_edge(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_map_edge, utils3d.torch.depth_map_edge
-    return _call_based_on_args('depth_map_edge', args, kwargs)
-
-@suppress_traceback
-def normal_map_edge(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.normal_map_edge, None
-    return _call_based_on_args('normal_map_edge', args, kwargs)
-
-@suppress_traceback
-def depth_map_aliasing(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.depth_map_aliasing, utils3d.torch.depth_map_aliasing
-    return _call_based_on_args('depth_map_aliasing', args, kwargs)
-
-@suppress_traceback
-def screen_coord_map(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.screen_coord_map, None
-    return _call_based_on_args('screen_coord_map', args, kwargs)
-
-@suppress_traceback
 def uv_map(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.uv_map, utils3d.torch.uv_map
@@ -646,6 +624,12 @@ def pixel_coord_map(*args, **kwargs):
     return _call_based_on_args('pixel_coord_map', args, kwargs)
 
 @suppress_traceback
+def screen_coord_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.screen_coord_map, utils3d.torch.screen_coord_map
+    return _call_based_on_args('screen_coord_map', args, kwargs)
+
+@suppress_traceback
 def build_mesh_from_map(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.build_mesh_from_map, utils3d.torch.build_mesh_from_map
@@ -656,6 +640,24 @@ def build_mesh_from_depth_map(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.build_mesh_from_depth_map, utils3d.torch.build_mesh_from_depth_map
     return _call_based_on_args('build_mesh_from_depth_map', args, kwargs)
+
+@suppress_traceback
+def depth_map_edge(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_map_edge, utils3d.torch.depth_map_edge
+    return _call_based_on_args('depth_map_edge', args, kwargs)
+
+@suppress_traceback
+def depth_map_aliasing(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.depth_map_aliasing, utils3d.torch.depth_map_aliasing
+    return _call_based_on_args('depth_map_aliasing', args, kwargs)
+
+@suppress_traceback
+def normal_map_edge(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.normal_map_edge, None
+    return _call_based_on_args('normal_map_edge', args, kwargs)
 
 @suppress_traceback
 def point_map_to_normal_map(*args, **kwargs):
@@ -680,6 +682,18 @@ def chessboard(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.chessboard, utils3d.torch.chessboard
     return _call_based_on_args('chessboard', args, kwargs)
+
+@suppress_traceback
+def masked_nearest_resize(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.masked_nearest_resize, utils3d.torch.masked_nearest_resize
+    return _call_based_on_args('masked_nearest_resize', args, kwargs)
+
+@suppress_traceback
+def masked_area_resize(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.masked_area_resize, utils3d.torch.masked_area_resize
+    return _call_based_on_args('masked_area_resize', args, kwargs)
 
 @suppress_traceback
 def RastContext(*args, **kwargs):

@@ -316,9 +316,7 @@ def intrinsics_to_perspective(
     return perspective
 
 
-def extrinsics_to_view(
-        extrinsics: Tensor
-    ) -> Tensor:
+def extrinsics_to_view(extrinsics: Tensor) -> Tensor:
     """
     OpenCV camera extrinsics to OpenGL view matrix
 
@@ -344,40 +342,52 @@ def view_to_extrinsics(view: Tensor) -> Tensor:
     return view  * torch.tensor([1, -1, -1, 1], dtype=view.dtype, device=view.device)[:, None]
 
 
-@totensor(_others='intrinsics')
-@batched(2, 0, 0)
+@totensor(None, 'intrinsics')
+@batched(2, 1)
 def normalize_intrinsics(
     intrinsics: Tensor,
-    width: Union[Number, Tensor],
-    height: Union[Number, Tensor]
+    size: Union[Tuple[Number, Number], Tensor],
+    pixel_definition: Literal['corner', 'center'] = 'corner',
 ) -> Tensor:
     """
     Normalize camera intrinsics(s) to uv space
 
     ## Parameters
-        intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to normalize
-        width (int | Tensor): [...] image width(s)
-        height (int | Tensor): [...] image height(s)
+    - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics(s) to normalize
+    - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+        or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+        - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
         (Tensor): [..., 3, 3] normalized camera intrinsics(s)
     """
+    if isinstance(size, tuple):
+        size = torch.tensor(size, dtype=intrinsics.dtype, device=intrinsics.device)
+        size = size.expand(*intrinsics.shape[:-2], 2)
+    height, width = size.unbind(-1)
     zeros = torch.zeros_like(width)
     ones = torch.ones_like(width)
-    transform = torch.stack([
-        1 / width, zeros, 0.5 / width,
-        zeros, 1 / height, 0.5 / height,
-        zeros, zeros, ones
-    ]).reshape(*zeros.shape, 3, 3).to(intrinsics)
+    if pixel_definition == 'corner':
+        transform = torch.stack([
+            1 / width, zeros, 0.5 / width,
+            zeros, 1 / height, 0.5 / height,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
+    elif pixel_definition == 'center':
+        transform = torch.stack([
+            1 / width, zeros, zeros,
+            zeros, 1 / height, zeros,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 
-@totensor(_others='intrinsics')
-@batched(2, _others=0)
+@totensor(None, _others='intrinsics')
+@batched(2, 1, _others=0)
 def crop_intrinsics(
     intrinsics: Tensor,
-    height: Union[Number, Tensor],
-    width: Union[Number, Tensor],
+    size: Union[Tuple[Number, Number], Tensor],
     cropped_top: Union[Number, Tensor],
     cropped_left: Union[Number, Tensor],
     cropped_height: Union[Number, Tensor],
@@ -398,86 +408,88 @@ def crop_intrinsics(
     ## Returns
         (Tensor): (..., 3, 3) cropped camera intrinsics
     """
+    height, width = size.unbind(-1)
     zeros = torch.zeros_like(height)
     ones = torch.ones_like(height)
     transform = torch.stack([
         width / cropped_width, zeros, -cropped_left / cropped_width,
         zeros, height / cropped_height, -cropped_top / cropped_height,
         zeros, zeros, ones
-    ]).reshape(*zeros.shape, 3, 3).to(intrinsics)
+    ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 
-@totensor(_others='pixel')
-@batched(1, 0, 0)
 def pixel_to_uv(
     pixel: Tensor,
-    width: Union[Number, Tensor],
-    height: Union[Number, Tensor],
+    size: Union[Tuple[Number, Number], Tensor],
     pixel_definition: Literal['corner', 'center'] = 'corner'
 ) -> Tensor:
     """
     ## Parameters
-        pixel (Tensor): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-        width (int | Tensor): [...] image width(s)
-        height (int | Tensor): [...] image height(s)
+    - `pixel` (Tensor): `(..., 2)` pixel coordinrates 
+    - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+        or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+        - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
-        (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
+        (Tensor): `(..., 2)` uv coordinrates
     """
     if not torch.is_floating_point(pixel):
         pixel = pixel.float()
     if pixel_definition == 'corner':
         pixel = pixel + 0.5
-    uv = pixel / torch.stack([width, height], dim=-1).to(pixel)
+    uv = pixel / torch.as_tensor(size, device=pixel.device).flip(-1)
     return uv
 
 
-@totensor(_others='uv')
-@batched(1, 0, 0)
 def uv_to_pixel(
     uv: Tensor,
-    width: Union[int, Tensor],
-    height: Union[int, Tensor],
+    size: Union[Tuple[Number, Number], Tensor],
     pixel_definition: Literal['corner', 'center'] = 'corner'
 ) -> Tensor:
     """
+    Convert UV space coordinates to pixel space coordinates.
+
     ## Parameters
-        uv (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
-        width (int | Tensor): [...] image width(s)
-        height (int | Tensor): [...] image height(s)
+    - `uv` (Tensor): `(..., 2)` uv coordinrates.
+    - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+        or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+        - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
-        (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
+        (Tensor): `(..., 2)` pixel coordinrates
     """
-    pixel = uv * torch.stack([width, height], dim=-1).to(uv)
+    pixel = uv * torch.as_tensor(size, device=uv.device).flip(-1)
     if pixel_definition == 'corner':
         pixel = pixel - 0.5
     return pixel
 
 
-@totensor(_others='pixel')
-@batched(1, 0, 0)
 def pixel_to_ndc(
     pixel: Tensor,
-    width: Union[int, Tensor],
-    height: Union[int, Tensor],
+    size: Union[Tuple[Number, Number], Tensor],
     pixel_definition: Literal['corner', 'center'] = 'corner'
 ) -> Tensor:
     """
+    Convert pixel coordinates to NDC (Normalized Device Coordinates).
+
     ## Parameters
-        pixel (Tensor): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
-        width (int | Tensor): [...] image width(s)
-        height (int | Tensor): [...] image height(s)
+    - `pixel` (Tensor): `(..., 2)` pixel coordinrates.
+    - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+        or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+        - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
-        (Tensor): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)
+        (Tensor): `(..., 2)` ndc coordinrates, the range is (-1, 1)
     """
     if not torch.is_floating_point(pixel):
         pixel = pixel.float()
     if pixel_definition == 'corner':
         pixel = pixel + 0.5
-    ndc = pixel / (torch.stack([width, height], dim=-1).to(pixel) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device)) \
+    ndc = pixel / (torch.as_tensor(size, device=pixel.device).flip(-1) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device)) \
         + torch.tensor([-1, 1], dtype=pixel.dtype, device=pixel.device)
     return ndc
 

@@ -14,7 +14,43 @@ __all__ = [
 ]
 
 
-def sliding_window(x: np.ndarray, window_size: Union[int, Tuple[int,...]], stride: Optional[Tuple[int,...]] = None, axis: Optional[Tuple[int,...]] = None) -> np.ndarray:
+def sliding_window(
+    x: np.ndarray, 
+    window_size: Union[int, Tuple[int, ...]], 
+    stride: Optional[Union[int, Tuple[int, ...]]] = None, 
+    pad_size: Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]] = None, 
+    pad_mode: str = 'constant',
+    pad_value: Number = 0,
+    axis: Optional[Tuple[int,...]] = None
+) -> np.ndarray:
+    """
+    Get a sliding window of the input array.
+    This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
+
+    ## Parameters
+    - `x` (np.ndarray): Input array.
+    - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
+        is provided, the same size is used for all specified axes.
+    - `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+        no stride is applied. If int is provided, the same stride is used for all specified axes.
+    - `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
+        Corresponding to `axis`.
+        - General format is `((before_1, after_1), (before_2, after_2), ...)`.
+        - Shortcut formats: 
+            - `int` -> same padding before and after for all axes;
+            - `(int, int)` -> same padding before and after for each axis;
+            - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
+    - `pad_mode` (str): Padding mode to use. Refer to `numpy.pad` for more details.
+    - `pad_value` (Union[int, float]): Value to use for constant padding. Only used
+        when `pad_mode` is 'constant'.
+    - `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
+
+    ## Returns
+    - (np.ndarray): Sliding window of the input array. 
+        - If no padding, the output is a view of the input array with zero copy.
+        - Otherwise, the output is no longer a view but a copy of the padded array.
+    """
+    # Process axis
     if axis is None:
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
@@ -22,12 +58,36 @@ def sliding_window(x: np.ndarray, window_size: Union[int, Tuple[int,...]], strid
     axis = [axis[i] % x.ndim for i in range(len(axis))]
     if isinstance(window_size, int):
         window_size = (window_size,) * len(axis)
+    
+    # Pad the input array if needed
+    if pad_size is not None:
+        if isinstance(pad_size, int):
+            pad_size = ((pad_size, pad_size),) * len(axis)
+        elif isinstance(pad_size, tuple) and len(pad_size) == 2 and all(isinstance(p, int) for p in pad_size):
+            pad_size = (pad_size,) * len(axis)
+        elif isinstance(pad_size, tuple) and all(isinstance(p, tuple) and 1 <= len(p) <= 2 for p in pad_size):
+            if len(pad_size) == 1:
+                pad_size = pad_size * len(axis)
+            else:
+                assert len(pad_size) == len(axis), f"pad_size {pad_size} must match the number of axes {len(axis)}"
+        else:
+            raise ValueError(f"Invalid pad_size {pad_size}")
+        full_pad = [(0, 0) if i not in axis else pad_size[axis.index(i)] for i in range(x.ndim)]
+        if pad_mode == 'constant':
+            x = np.pad(x, full_pad, mode=pad_mode, constant_values=pad_value)
+        else:
+            x = np.pad(x, full_pad, mode=pad_mode)
+    
+    # Apply sliding window
     x = np.lib.stride_tricks.sliding_window_view(x, window_size, axis=axis)
+
+    # Apply stride if needed
     if stride is not None:
         if isinstance(stride, int):
             stride = (stride,) * len(axis)
         stride_slice = tuple(slice(None) if i not in axis else slice(None, None, stride[axis.index(i)]) for i in range(x.ndim))
         x = x[stride_slice]
+
     return x
 
 

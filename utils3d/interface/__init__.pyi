@@ -83,18 +83,20 @@ __all__ = ["sliding_window",
 "solve_quad", 
 "solve_quad_qp", 
 "tri_to_quad", 
-"depth_map_edge", 
-"normal_map_edge", 
-"depth_map_aliasing", 
-"screen_coord_map", 
 "uv_map", 
 "pixel_coord_map", 
+"screen_coord_map", 
 "build_mesh_from_map", 
 "build_mesh_from_depth_map", 
+"depth_map_edge", 
+"depth_map_aliasing", 
+"normal_map_edge", 
 "point_map_to_normal_map", 
 "depth_map_to_point_map", 
 "depth_map_to_normal_map", 
 "chessboard", 
+"masked_nearest_resize", 
+"masked_area_resize", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -133,7 +135,32 @@ __all__ = ["sliding_window",
 "warp_image_by_forward_flow"]
 
 @overload
-def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Optional[Tuple[int, ...]] = None, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
+def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
+    """Get a sliding window of the input array.
+This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
+
+## Parameters
+- `x` (np.ndarray): Input array.
+- `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
+    is provided, the same size is used for all specified axes.
+- `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+    no stride is applied. If int is provided, the same stride is used for all specified axes.
+- `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
+    Corresponding to `axis`.
+    - General format is `((before_1, after_1), (before_2, after_2), ...)`.
+    - Shortcut formats: 
+        - `int` -> same padding before and after for all axes;
+        - `(int, int)` -> same padding before and after for each axis;
+        - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
+- `pad_mode` (str): Padding mode to use. Refer to `numpy.pad` for more details.
+- `pad_value` (Union[int, float]): Value to use for constant padding. Only used
+    when `pad_mode` is 'constant'.
+- `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
+
+## Returns
+- (np.ndarray): Sliding window of the input array. 
+    - If no padding, the output is a view of the input array with zero copy.
+    - Otherwise, the output is no longer a view but a copy of the padded array."""
     utils3d.numpy.utils.sliding_window
 
 @overload
@@ -295,73 +322,80 @@ def view_to_extrinsics(view: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray], integer_pixel_centers: bool = True) -> numpy_.ndarray:
+def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: Literal['corner', 'center'] = 'corner') -> numpy_.ndarray:
     """Normalize intrinsics from pixel cooridnates to uv coordinates
 
 ## Parameters
-    intrinsics (ndarray): [..., 3, 3] camera intrinsics(s) to normalize
-    width (int | ndarray): [...] image width(s)
-    height (int | ndarray): [...] image height(s)
-    integer_pixel_centers (bool): whether the integer pixel coordinates are at the center of the pixel. If False, the integer coordinates are at the left-top corner of the pixel.
+- `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics(s) to normalize
+- `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (ndarray): [..., 3, 3] normalized camera intrinsics(s)"""
+    `(ndarray)`: `(..., 3, 3)` normalized camera intrinsics(s)"""
     utils3d.numpy.transforms.normalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: numpy_.ndarray, height: Union[numbers.Number, numpy_.ndarray], width: Union[numbers.Number, numpy_.ndarray], cropped_top: Union[numbers.Number, numpy_.ndarray], cropped_left: Union[numbers.Number, numpy_.ndarray], cropped_height: Union[numbers.Number, numpy_.ndarray], cropped_width: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
+def crop_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], cropped_top: Union[numbers.Number, numpy_.ndarray], cropped_left: Union[numbers.Number, numpy_.ndarray], cropped_height: Union[numbers.Number, numpy_.ndarray], cropped_width: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
     """Evaluate the new intrinsics after cropping the image
 
 ## Parameters
-    intrinsics (ndarray): (..., 3, 3) camera intrinsics(s) to crop
-    height (int | ndarray): (...) image height(s)
-    width (int | ndarray): (...) image width(s)
-    cropped_top (int | ndarray): (...) top pixel index of the cropped image(s)
-    cropped_left (int | ndarray): (...) left pixel index of the cropped image(s)
-    cropped_height (int | ndarray): (...) height of the cropped image(s)
-    cropped_width (int | ndarray): (...) width of the cropped image(s)
+- `intrinsics` (ndarray): (..., 3, 3) camera intrinsics(s) to crop
+- `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `cropped_top` (int | ndarray): (...) top pixel index of the cropped image(s)
+- `cropped_left` (int | ndarray): (...) left pixel index of the cropped image(s)
+- `cropped_height` (int | ndarray): (...) height of the cropped image(s)
+- `cropped_width` (int | ndarray): (...) width of the cropped image(s)
 
 ## Returns
     (ndarray): (..., 3, 3) cropped camera intrinsics"""
     utils3d.numpy.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
-    """Convert pixel coordiantes to UV coordinates.
+def pixel_to_uv(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
+    """Convert pixel space coordiantes to UV space coordinates.
 
 ## Parameters
-    pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-    width (Number | ndarray): [...] image width(s)
-    height (Number | ndarray): [...] image height(s)
+- `pixel` (ndarray): `(..., 2)` pixel coordinrates 
+- `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+    (ndarray): `(..., 2)` uv coordinrates"""
     utils3d.numpy.transforms.pixel_to_uv
 
 @overload
-def pixel_to_ndc(pixel: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
+def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
     """Convert pixel coordinates to NDC (Normalized Device Coordinates).
 
 ## Parameters
-    pixel (ndarray): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
-    width (int | ndarray): [...] image width(s)
-    height (int | ndarray): [...] image height(s)
+- `pixel` (ndarray): `(..., 2)` pixel coordinrates.
+- `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (ndarray): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)"""
+    (ndarray): `(..., 2)` ndc coordinrates, the range is (-1, 1)"""
     utils3d.numpy.transforms.pixel_to_ndc
 
 @overload
-def uv_to_pixel(uv: numpy_.ndarray, width: Union[int, numpy_.ndarray], height: Union[int, numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
-    """Convert UV coordinates to pixel coordinates.
+def uv_to_pixel(uv: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
+    """Convert UV space coordinates to pixel space coordinates.
 
 ## Parameters
-    pixel (ndarray): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-    width (int | ndarray): [...] image width(s)
-    height (int | ndarray): [...] image height(s)
+- `uv` (ndarray): `(..., 2)` uv coordinrates.
+- `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (ndarray): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+    (ndarray): `(..., 2)` pixel coordinrates"""
     utils3d.numpy.transforms.uv_to_pixel
 
 @overload
@@ -1033,76 +1067,20 @@ NOTE: The input mesh must be a manifold mesh.
     utils3d.numpy.mesh.tri_to_quad
 
 @overload
-def depth_map_edge(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
-    """Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
-
-## Parameters
-    depth (np.ndarray): shape (..., height, width), linear depth map
-    atol (float): absolute tolerance
-    rtol (float): relative tolerance
-
-## Returns
-    edge (np.ndarray): shape (..., height, width) of dtype torch.bool"""
-    utils3d.numpy.maps.depth_map_edge
-
-@overload
-def normal_map_edge(normals: numpy_.ndarray, tol: float, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
-    """Compute the edge mask from normal map.
-
-## Parameters
-    normal (np.ndarray): shape (..., height, width, 3), normal map
-    tol (float): tolerance in degrees
-
-## Returns
-    edge (np.ndarray): shape (..., height, width) of dtype torch.bool"""
-    utils3d.numpy.maps.normal_map_edge
-
-@overload
-def depth_map_aliasing(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
-    """Compute the map that indicates the aliasing of x depth map, identifying pixels which neither close to the maximum nor the minimum of its neighbors.
-## Parameters
-    depth (np.ndarray): shape (..., height, width), linear depth map
-    atol (float): absolute tolerance
-    rtol (float): relative tolerance
-
-## Returns
-    edge (np.ndarray): shape (..., height, width) of dtype torch.bool"""
-    utils3d.numpy.maps.depth_map_aliasing
-
-@overload
-def screen_coord_map(height: int, width: int, left: float = 0.0, top: float = 1.0, right: float = 1.0, bottom: float = 0.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
-    """Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
-This is commonly used in graphics APIs like OpenGL.
-
-## Parameters
-    - `height`: `int` map height
-    - `width`: `int` map width
-    - `left`: `float`, optional left boundary in the screen space. Defaults to 0.
-    - `top`: `float`, optional top boundary in the screen space. Defaults to 1.
-    - `right`: `float`, optional right boundary in the screen space. Defaults to 1.
-    - `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
-    - `dtype`: `np.dtype`, optional data type of the output map. Defaults to np.float32.
-
-## Returns
-    (np.ndarray): shape (height, width, 2)"""
-    utils3d.numpy.maps.screen_coord_map
-
-@overload
-def uv_map(height: int, width: int, left: float = 0.0, top: float = 0.0, right: float = 1.0, bottom: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
 This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
 
 ## Parameters
-    * `height`: `int` image height
-    * `width`: `int` image width
-    * `left`: `float`, optional left boundary in uv space. Defaults to 0.
-    * `top`: `float`, optional top boundary in uv space. Defaults to 0.
-    * `right`: `float`, optional right boundary in uv space. Defaults to 1.
-    * `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
-    * `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to np.float32.
+- `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+- `top`: `float`, optional top boundary in uv space. Defaults to 0.
+- `left`: `float`, optional left boundary in uv space. Defaults to 0.
+- `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
+- `right`: `float`, optional right boundary in uv space. Defaults to 1.
+- `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to np.float32.
 
 ## Returns
-    - `uv (np.ndarray)`: shape `(height, width, 2)`
+- `uv (ndarray)`: shape `(height, width, 2)`
 
 ## Example Usage
 
@@ -1114,21 +1092,20 @@ This is commonly used as normalized image coordinates in texture mapping (when i
     utils3d.numpy.maps.uv_map
 
 @overload
-def pixel_coord_map(height: int, width: int, left: int = 0, top: int = 0, definition: Literal['corner', 'center'] = 'corner', dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, definition: Literal['corner', 'center'] = 'corner', dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
 
 ## Parameters
-    - `height`: `int` image height
-    - `width`: `int` image width
-    - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
-    - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
-    - `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
-        - 'corner': coordinates range in [0, width - 1], [0, height - 1]
-        - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
-    - `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
+- `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+- `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
+- `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
+- `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
+    - 'corner': coordinates range in [0, width - 1], [0, height - 1]
+    - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
+- `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
 
 ## Returns
-    np.ndarray: shape (height, width, 2)
+    ndarray: shape (height, width, 2)
 
 >>> pixel_coord_map(10, 10, definition='center', dtype=np.float32):
 [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
@@ -1144,17 +1121,34 @@ def pixel_coord_map(height: int, width: int, left: int = 0, top: int = 0, defini
     utils3d.numpy.maps.pixel_coord_map
 
 @overload
+def screen_coord_map(*size: Union[int, Tuple[int, int]], top: float = 1.0, left: float = 0.0, bottom: float = 0.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+    """Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
+This is commonly used in graphics APIs like OpenGL.
+
+## Parameters
+    - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+    - `top`: `float`, optional top boundary in the screen space. Defaults to 1.
+    - `left`: `float`, optional left boundary in the screen space. Defaults to 0.
+    - `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
+    - `right`: `float`, optional right boundary in the screen space. Defaults to 1.
+    - `dtype`: `np.dtype`, optional data type of the output map. Defaults to np.float32.
+
+## Returns
+    (ndarray): shape (height, width, 2)"""
+    utils3d.numpy.maps.screen_coord_map
+
+@overload
 def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
 ## Parameters
-    *maps (np.ndarray): attribute maps in shape (height, width, [channels])
-    mask (np.ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+    *maps (ndarray): attribute maps in shape (height, width, [channels])
+    mask (ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
 
 ## Returns
-    faces (np.ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-    *attributes (np.ndarray): vertex attributes in corresponding order with input maps
-    indices (np.ndarray, optional): indices of vertices in the original mesh"""
+    faces (ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
+    *attributes (ndarray): vertex attributes in corresponding order with input maps
+    indices (ndarray, optional): indices of vertices in the original mesh"""
     utils3d.numpy.maps.build_mesh_from_map
 
 @overload
@@ -1162,10 +1156,10 @@ def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray
     """Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
 ## Parameters
-    depth (np.ndarray): [H, W] depth map
-    extrinsics (np.ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
-    intrinsics (np.ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
-    *other_maps (np.ndarray): [H, W, C] vertex attributes. Defaults to None.
+    depth (ndarray): [H, W] depth map
+    extrinsics (ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
+    intrinsics (ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
+    *other_maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
     atol (float, optional): absolute tolerance. Defaults to None.
     rtol (float, optional): relative tolerance. Defaults to None.
         triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
@@ -1174,22 +1168,59 @@ def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray
     return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
 
 ## Returns
-    faces (np.ndarray): [T, 3] faces
-    vertices (np.ndarray): [N, 3] vertices
-    *other_attrs (np.ndarray): [N, C] vertex attributes"""
+    faces (ndarray): [T, 3] faces
+    vertices (ndarray): [N, 3] vertices
+    *other_attrs (ndarray): [N, C] vertex attributes"""
     utils3d.numpy.maps.build_mesh_from_depth_map
+
+@overload
+def depth_map_edge(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+    """Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
+
+## Parameters
+    depth (ndarray): shape (..., height, width), linear depth map
+    atol (float): absolute tolerance
+    rtol (float): relative tolerance
+
+## Returns
+    edge (ndarray): shape (..., height, width) of dtype torch.bool"""
+    utils3d.numpy.maps.depth_map_edge
+
+@overload
+def depth_map_aliasing(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+    """Compute the map that indicates the aliasing of x depth map, identifying pixels which neither close to the maximum nor the minimum of its neighbors.
+## Parameters
+    depth (ndarray): shape (..., height, width), linear depth map
+    atol (float): absolute tolerance
+    rtol (float): relative tolerance
+
+## Returns
+    edge (ndarray): shape (..., height, width) of dtype torch.bool"""
+    utils3d.numpy.maps.depth_map_aliasing
+
+@overload
+def normal_map_edge(normals: numpy_.ndarray, tol: float, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+    """Compute the edge mask from normal map.
+
+## Parameters
+    normal (ndarray): shape (..., height, width, 3), normal map
+    tol (float): tolerance in degrees
+
+## Returns
+    edge (ndarray): shape (..., height, width) of dtype torch.bool"""
+    utils3d.numpy.maps.normal_map_edge
 
 @overload
 def point_map_to_normal_map(point: numpy_.ndarray, mask: numpy_.ndarray = None, edge_threshold: float = None) -> numpy_.ndarray:
     """Calculate normal map from point map. Value range is [-1, 1]. 
 
 ## Parameters
-    point (np.ndarray): shape (height, width, 3), point map
-    mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    point (ndarray): shape (height, width, 3), point map
+    mask (optional, ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
     edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
 
 ## Returns
-    normal (np.ndarray): shape (height, width, 3), normal map. """
+    normal (ndarray): shape (height, width, 3), normal map. """
     utils3d.numpy.maps.point_map_to_normal_map
 
 @overload
@@ -1197,12 +1228,12 @@ def depth_map_to_point_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, ex
     """Unproject depth map to 3D points.
 
 ## Parameters
-    depth (np.ndarray): [..., H, W] depth value
-    intrinsics ( np.ndarray): [..., 3, 3] intrinsics matrix
-    extrinsics (optional, np.ndarray): [..., 4, 4] extrinsics matrix
+    depth (ndarray): [..., H, W] depth value
+    intrinsics ( ndarray): [..., 3, 3] intrinsics matrix
+    extrinsics (optional, ndarray): [..., 4, 4] extrinsics matrix
 
 ## Returns
-    points (np.ndarray): [..., N, 3] 3d points"""
+    points (ndarray): [..., N, 3] 3d points"""
     utils3d.numpy.maps.depth_map_to_point_map
 
 @overload
@@ -1210,29 +1241,61 @@ def depth_map_to_normal_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, m
     """Calculate normal map from depth map. Value range is [-1, 1]. Normal direction in OpenCV identity camera's coordinate system.
 
 ## Parameters
-    depth (np.ndarray): shape (height, width), linear depth map
-    intrinsics (np.ndarray): shape (3, 3), intrinsics matrix
-    mask (optional, np.ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    depth (ndarray): shape (height, width), linear depth map
+    intrinsics (ndarray): shape (3, 3), intrinsics matrix
+    mask (optional, ndarray): shape (height, width), dtype=bool. Mask of valid depth pixels. Defaults to None.
     edge_threshold (optional, float): threshold for the angle (in degrees) between the normal and the view direction. Defaults to None.
 
 ## Returns
-    normal (np.ndarray): shape (height, width, 3), normal map. """
+    normal (ndarray): shape (height, width, 3), normal map. """
     utils3d.numpy.maps.depth_map_to_normal_map
 
 @overload
-def chessboard(height: int, width: int, grid_size: int, color_a: numpy_.ndarray, color_b: numpy_.ndarray) -> numpy_.ndarray:
-    """get x chessboard image
+def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: numpy_.ndarray, color_b: numpy_.ndarray) -> numpy_.ndarray:
+    """Get a chessboard image
 
 ## Parameters
-    height (int): image height
-    width (int): image width
-    grid_size (int): size of chessboard grid
-    color_a (np.ndarray): color of the grid at the top-left corner
-    color_b (np.ndarray): color in complementary grid cells
+    - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+    - `grid_size (int)`: size of chessboard grid
+    - `color_a (ndarray)`: color of the grid at the top-left corner
+    - `color_b (ndarray)`: color in complementary grid cells
 
 ## Returns
-    image (np.ndarray): shape (height, width, channels), chessboard image"""
+    image (ndarray): shape (height, width, channels), chessboard image"""
     utils3d.numpy.maps.chessboard
+
+@overload
+def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
+    """Resize image(s) by nearest sampling with mask awareness. 
+
+### Parameters
+- `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
+    - You can pass multiple images to be resized at the same time for efficiency.
+- `mask`: input mask of shape `(..., H, W)`, dtype=bool
+- `size`: target size `(H', W')`
+- `return_index`: whether to return the nearest neighbor indices in the original map for each pixel in the resized map.
+    Defaults to False.
+
+### Returns
+- `*resized_image`: resized image(s) of shape `(..., H', W', C)`. or `(..., H', W')`
+- `resized_mask`: mask of the resized map of shape `(..., H', W')`
+- `nearest_indices`: tuple of shape `(..., H', W')`. The nearest neighbor indices of the resized map of each dimension."""
+    utils3d.numpy.maps.masked_nearest_resize
+
+@overload
+def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
+    """Resize 2D map by area sampling with mask awareness.
+
+### Parameters
+- `*image`: Input image(s) of shape `(..., H, W, C)` or `(..., H, W)`
+    - You can pass multiple images to be resized at the same time for efficiency.
+- `mask`: Input mask of shape `(..., H, W)`
+- `size`: target image size `(H', W')`
+
+### Returns
+- `*resized_image`: resized image(s) of shape `(..., H', W', C)`. or `(..., H', W')`
+- `resized_mask`: mask of the resized map of shape `(..., H', W')`"""
+    utils3d.numpy.maps.masked_area_resize
 
 @overload
 def RastContext(*args, **kwargs):
@@ -1398,8 +1461,32 @@ def test_rasterization(ctx: utils3d.numpy.rasterization.RastContext):
     utils3d.numpy.rasterization.test_rasterization
 
 @overload
-def sliding_window(x: torch_.Tensor, window_size: Tuple[int, ...], stride: Tuple[int, ...], dim: Tuple[int, ...]) -> torch_.Tensor:
-    """Create a sliding window view of the input tensor on specified dimensions."""
+def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
+    """Get a sliding window of the input array.
+This function is a wrapper of `torch.nn.functional.unfold` with additional support for padding and stride.
+
+## Parameters
+- `x` (Tensor): Input tensor.
+- `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
+    is provided, the same size is used for all specified axes.
+- `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+    no stride is applied. If int is provided, the same stride is used for all specified axes.
+- `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
+    Corresponding to `axis`.
+    - General format is `((before_1, after_1), (before_2, after_2), ...)`.
+    - Shortcut formats: 
+        - `int` -> same padding before and after for all axes;
+        - `(int, int)` -> same padding before and after for each axis;
+        - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
+- `pad_mode` (str): Padding mode to use. Refer to `numpy.pad` for more details.
+- `pad_value` (Union[int, float]): Value to use for constant padding. Only used
+    when `pad_mode` is 'constant'.
+- `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
+
+## Returns
+- (Tensor): Sliding window of the input array. 
+    - If no padding, the output is a view of the input array with zero copy.
+    - Otherwise, the output is no longer a view but a copy of the padded array."""
     utils3d.torch.utils.sliding_window
 
 @overload
@@ -1419,11 +1506,11 @@ def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
     """Find the indices of `query` in `key`.
 
 ### Parameters
-    key (torch.Tensor): shape (K, ...), the array to search in
-    query (torch.Tensor): shape (Q, ...), the array to search for
+    key (Tensor): shape (K, ...), the array to search in
+    query (Tensor): shape (Q, ...), the array to search for
 
 ### Returns
-    torch.Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1."""
+    Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1."""
     utils3d.torch.utils.lookup
 
 @overload
@@ -1558,20 +1645,22 @@ def view_to_extrinsics(view: torch_.Tensor) -> torch_.Tensor:
     utils3d.torch.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: torch_.Tensor, width: Union[numbers.Number, torch_.Tensor], height: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
     """Normalize camera intrinsics(s) to uv space
 
 ## Parameters
-    intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to normalize
-    width (int | Tensor): [...] image width(s)
-    height (int | Tensor): [...] image height(s)
+- `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics(s) to normalize
+- `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
     (Tensor): [..., 3, 3] normalized camera intrinsics(s)"""
     utils3d.torch.transforms.normalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: torch_.Tensor, height: Union[numbers.Number, torch_.Tensor], width: Union[numbers.Number, torch_.Tensor], cropped_top: Union[numbers.Number, torch_.Tensor], cropped_left: Union[numbers.Number, torch_.Tensor], cropped_height: Union[numbers.Number, torch_.Tensor], cropped_width: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+def crop_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], cropped_top: Union[numbers.Number, torch_.Tensor], cropped_left: Union[numbers.Number, torch_.Tensor], cropped_height: Union[numbers.Number, torch_.Tensor], cropped_width: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
     """Evaluate the new intrinsics after cropping the image
 
 ## Parameters
@@ -1588,36 +1677,46 @@ def crop_intrinsics(intrinsics: torch_.Tensor, height: Union[numbers.Number, tor
     utils3d.torch.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: torch_.Tensor, width: Union[numbers.Number, torch_.Tensor], height: Union[numbers.Number, torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+def pixel_to_uv(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
     """## Parameters
-    pixel (Tensor): [..., 2] pixel coordinrates defined in image space,  x range is (0, W - 1), y range is (0, H - 1)
-    width (int | Tensor): [...] image width(s)
-    height (int | Tensor): [...] image height(s)
+- `pixel` (Tensor): `(..., 2)` pixel coordinrates 
+- `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+    (Tensor): `(..., 2)` uv coordinrates"""
     utils3d.torch.transforms.pixel_to_uv
 
 @overload
-def pixel_to_ndc(pixel: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
-    """## Parameters
-    pixel (Tensor): [..., 2] pixel coordinrates defined in image space, x range is (0, W - 1), y range is (0, H - 1)
-    width (int | Tensor): [...] image width(s)
-    height (int | Tensor): [...] image height(s)
+def pixel_to_ndc(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+    """Convert pixel coordinates to NDC (Normalized Device Coordinates).
+
+## Parameters
+- `pixel` (Tensor): `(..., 2)` pixel coordinrates.
+- `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (Tensor): [..., 2] pixel coordinrates defined in ndc space, the range is (-1, 1)"""
+    (Tensor): `(..., 2)` ndc coordinrates, the range is (-1, 1)"""
     utils3d.torch.transforms.pixel_to_ndc
 
 @overload
-def uv_to_pixel(uv: torch_.Tensor, width: Union[int, torch_.Tensor], height: Union[int, torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
-    """## Parameters
-    uv (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)
-    width (int | Tensor): [...] image width(s)
-    height (int | Tensor): [...] image height(s)
+def uv_to_pixel(uv: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+    """Convert UV space coordinates to pixel space coordinates.
+
+## Parameters
+- `uv` (Tensor): `(..., 2)` uv coordinrates.
+- `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (Tensor): [..., 2] pixel coordinrates defined in uv space, the range is (0, 1)"""
+    (Tensor): `(..., 2)` pixel coordinrates"""
     utils3d.torch.transforms.uv_to_pixel
 
 @overload
@@ -2306,21 +2405,21 @@ def laplacian_hc_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, time
     utils3d.torch.mesh.laplacian_hc_smooth_mesh
 
 @overload
-def uv_map(height: int, width: int, left: float = 0.0, top: float = 0.0, right: float = 1.0, bottom: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
     """Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
 This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
 
 ## Parameters
-    * `height`: `int` image height
-    * `width`: `int` image width
-    * `left`: `float`, optional left boundary in uv space. Defaults to 0.
-    * `top`: `float`, optional top boundary in uv space. Defaults to 0.
-    * `right`: `float`, optional right boundary in uv space. Defaults to 1.
-    * `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
-    * `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to np.float32.
+- `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+- `top`: `float`, optional top boundary in uv space. Defaults to 0.
+- `left`: `float`, optional left boundary in uv space. Defaults to 0.
+- `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
+- `right`: `float`, optional right boundary in uv space. Defaults to 1.
+- `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to torch.float32.
+- `device`: `torch.device`, optional device of the output uv map. Defaults to None.
 
 ## Returns
-    - `uv (Tensor)`: shape `(height, width, 2)`
+- `uv (Tensor)`: shape `(height, width, 2)`
 
 ## Example Usage
 
@@ -2332,34 +2431,50 @@ This is commonly used as normalized image coordinates in texture mapping (when i
     utils3d.torch.maps.uv_map
 
 @overload
-def pixel_coord_map(height: int, width: int, left: int = 0, top: int = 0, definition: Literal['corner', 'center'] = 'corner', dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, definition: Literal['corner', 'center'] = 'corner', dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
     """Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
 
 ## Parameters
-    - `height`: `int` image height
-    - `width`: `int` image width
-    - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
-    - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
-    - `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
-        - 'corner': coordinates range in [0, width - 1], [0, height - 1]
-        - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
-    - `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
+- `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+- `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
+- `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
+- `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
+    - 'corner': coordinates range in [0, width - 1], [0, height - 1]
+    - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
+- `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to torch.float32.
 
 ## Returns
     Tensor: shape (height, width, 2)
 
->>> pixel_coord_map(10, 10, definition='center', dtype=np.float32):
+>>> pixel_coord_map(10, 10, definition='center', dtype=torch.float32):
 [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
  [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
   ...             ...                  ...
 [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
 
->>> pixel_coord_map(10, 10, definition='corner', dtype=np.int32):
+>>> pixel_coord_map(10, 10, definition='corner', dtype=torch.long):
 [[[0, 0], [1, 0], ..., [9, 0]],
  [[0, 1], [1, 1], ..., [9, 1]],
     ...      ...         ...
  [[0, 9], [1, 9], ..., [9, 9]]]"""
     utils3d.torch.maps.pixel_coord_map
+
+@overload
+def screen_coord_map(*size: Union[int, Tuple[int, int]], top: float = 1.0, left: float = 0.0, bottom: float = 0.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+    """Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
+This is commonly used in graphics APIs like OpenGL.
+
+## Parameters
+- `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+- `top`: `float`, optional top boundary in the screen space. Defaults to 1.
+- `left`: `float`, optional left boundary in the screen space. Defaults to 0.
+- `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
+- `right`: `float`, optional right boundary in the screen space. Defaults to 1.
+- `dtype`: `np.dtype`, optional data type of the output map. Defaults to torch.float32.
+
+## Returns
+    (Tensor): shape (height, width, 2)"""
+    utils3d.torch.maps.screen_coord_map
 
 @overload
 def build_mesh_from_map(*maps: torch_.Tensor, mask: Optional[torch_.Tensor] = None, tri: bool = False) -> Tuple[torch_.Tensor, ...]:
@@ -2428,6 +2543,8 @@ def point_map_to_normal_map(point: torch_.Tensor, mask: torch_.Tensor = None) ->
 
 ## Parameters
     point (Tensor): shape (..., height, width, 3), point map
+    mask (Tensor): shape (..., height, width), binary mask. Defaults to None.
+
 ## Returns
     normal (Tensor): shape (..., height, width, 3), normal map. """
     utils3d.torch.maps.point_map_to_normal_map
@@ -2444,27 +2561,26 @@ def depth_map_to_normal_map(depth: torch_.Tensor, intrinsics: torch_.Tensor, mas
     depth (Tensor): shape (..., height, width), linear depth map
     intrinsics (Tensor): shape (..., 3, 3), intrinsics matrix
 ## Returns
-    normal (Tensor): shape (..., 3, height, width), normal map. """
+    normal (Tensor): shape (..., height, width, 3), normal map. """
     utils3d.torch.maps.depth_map_to_normal_map
 
 @overload
-def chessboard(width: int, height: int, grid_size: int, color_a: torch_.Tensor, color_b: torch_.Tensor) -> torch_.Tensor:
-    """get a chessboard image
+def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: torch_.Tensor, color_b: torch_.Tensor) -> torch_.Tensor:
+    """Get a chessboard image
 
 ## Parameters
-    width (int): image width
-    height (int): image height
-    grid_size (int): size of chessboard grid
-    color_a (Tensor): shape (chanenls,), color of the grid at the top-left corner
-    color_b (Tensor): shape (chanenls,), color in complementary grids
+- `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
+- `grid_size`: `int`, size of chessboard grid
+- `color_a`: `Tensor`, shape (channels,), color of the grid at the top-left corner
+- `color_b`: `Tensor`, shape (channels,), color in complementary grids
 
 ## Returns
-    image (Tensor): shape (height, width, channels), chessboard image"""
+- `image` (Tensor): shape (height, width, channels), chessboard image"""
     utils3d.torch.maps.chessboard
 
 @overload
 def bounding_rect_from_mask(mask: torch_.BoolTensor):
-    """get bounding rectangle of a mask
+    """Get bounding rectangle of a mask
 
 ## Parameters
     mask (Tensor): shape (..., height, width), mask
@@ -2472,6 +2588,39 @@ def bounding_rect_from_mask(mask: torch_.BoolTensor):
 ## Returns
     rect (Tensor): shape (..., 4), bounding rectangle (left, top, right, bottom)"""
     utils3d.torch.maps.bounding_rect_from_mask
+
+@overload
+def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+    """Resize image(s) by nearest sampling with mask awareness. 
+
+### Parameters
+- `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
+    - You can pass multiple images to be resized at the same time for efficiency.
+- `mask`: input mask of shape `(..., H, W)`, dtype=bool
+- `size`: target size `(H', W')`
+- `return_index`: whether to return the nearest neighbor indices in the original map for each pixel in the resized map.
+    Defaults to False.
+
+### Returns
+- `*resized_image`: resized image(s) of shape `(..., H', W', C)`. or `(..., H', W')`
+- `resized_mask`: mask of the resized map of shape `(..., H', W')`
+- `nearest_indices`: tuple of shape `(..., H', W')`. The nearest neighbor indices of the resized map of each dimension."""
+    utils3d.torch.maps.masked_nearest_resize
+
+@overload
+def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
+    """Resize 2D map by area sampling with mask awareness.
+
+### Parameters
+- `*image`: Input image(s) of shape `(..., H, W, C)` or `(..., H, W)`
+    - You can pass multiple images to be resized at the same time for efficiency.
+- `mask`: Input mask of shape `(..., H, W)`
+- `size`: target image size `(H', W')`
+
+### Returns
+- `*resized_image`: resized image(s) of shape `(..., H', W', C)`. or `(..., H', W')`
+- `resized_mask`: mask of the resized map of shape `(..., H', W')`"""
+    utils3d.torch.maps.masked_area_resize
 
 @overload
 def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiffrast.torch.ops.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'gl', device: Union[str, torch_.device] = None):
