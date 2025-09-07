@@ -24,6 +24,8 @@ __all__ = [
     'chessboard',
     'masked_nearest_resize',
     'masked_area_resize',
+    'colorize_depth_map',
+    'colorize_normal_map'
 ]
 
 
@@ -579,3 +581,52 @@ def masked_area_resize(
         outputs.append(x)
 
     return *outputs, target_mask
+
+
+def colorize_depth_map(depth: ndarray, mask: ndarray = None, normalize: bool = True, cmap: str = 'Spectral') -> ndarray:
+    """Colorize depth map for visualization.
+
+    ## Parameters
+        - `depth` (ndarray): shape (H, W), linear depth map
+        - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
+        - `normalize` (bool, optional): whether to normalize the disparity values to [0, 1]. Defaults to True.
+        - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'Spectral'.
+    
+    ## Returns
+        - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB [0, 255]
+    """
+    assert depth.ndim == 2, "depth should be of shape (H, W)"
+    import matplotlib
+    if mask is None:
+        depth = np.where(depth > 0, depth, np.nan)
+    else:
+        depth = np.where((depth > 0) & mask, depth, np.nan)
+    disp = 1 / depth
+    if normalize:
+        min_disp, max_disp = np.nanquantile(disp, 0.001), np.nanquantile(disp, 0.999)
+        disp = (disp - min_disp) / (max_disp - min_disp)
+    colored = np.nan_to_num(matplotlib.colormaps[cmap](1.0 - disp)[..., :3], 0)
+    colored = np.ascontiguousarray((colored.clip(0, 1) * 255).astype(np.uint8))
+    return colored
+
+
+def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = False) -> np.ndarray:
+    """Colorize normal map for visualization. Value range is [-1, 1].
+    
+    ## Parameters
+        - `normal` (ndarray): shape (H, W, 3), normal
+        - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
+        - `flip_yz` (bool, optional): whether to flip the y and z. 
+            - This is useful when converting between OpenCV and OpenGL camera coordinate systems. Defaults to False.
+
+    ## Returns
+        - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB in [0, 255]
+    """
+    if mask is not None:
+        normal = np.where(mask[..., None], normal, 0)
+    if flip_yz:
+        normal = normal * [0.5, -0.5, -0.5] + 0.5
+    else:
+        normal = normal * 0.5 + 0.5
+    normal = (normal.clip(0, 1) * 255).astype(np.uint8)
+    return normal

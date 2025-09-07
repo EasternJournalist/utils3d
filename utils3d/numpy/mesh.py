@@ -18,10 +18,10 @@ __all__ = [
     'subdivide_mesh',
     'mesh_relations',
     'flatten_mesh_indices',
-    'cube',
-    'icosahedron',
-    'square',
-    'camera_frustum',
+    'create_cube_mesh',
+    'create_icosahedron_mesh',
+    'create_square_mesh',
+    'create_camera_frustum_mesh',
     'merge_meshes',
     'calc_quad_candidates',
     'calc_quad_distortion',
@@ -438,9 +438,9 @@ def flatten_mesh_indices(*args: ndarray) -> Tuple[ndarray, ...]:
 
 
 
-def square(tri: bool = False) -> Tuple[ndarray, ndarray]: 
+def create_square_mesh(tri: bool = False) -> Tuple[ndarray, ndarray]: 
     """
-    Get a square mesh of area 1 centered at origin in the xy-plane.
+    Create a square mesh of area 1 centered at origin in the xy-plane.
 
     ## Returns
         vertices (ndarray): shape (4, 3)
@@ -456,9 +456,9 @@ def square(tri: bool = False) -> Tuple[ndarray, ndarray]:
     return vertices, faces  
 
 
-def cube(tri: bool = False) -> Tuple[ndarray, ndarray]:
+def create_cube_mesh(tri: bool = False) -> Tuple[ndarray, ndarray]:
     """
-    Get x cube mesh of size 1 centered at origin.
+    Create a cube mesh of size 1 centered at origin.
 
     ### Parameters
         tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
@@ -487,9 +487,9 @@ def cube(tri: bool = False) -> Tuple[ndarray, ndarray]:
     return vertices, faces
 
 
-def camera_frustum(extrinsics: ndarray, intrinsics: ndarray, depth: float = 1.0) -> Tuple[ndarray, ndarray, ndarray]:
+def create_camera_frustum_mesh(extrinsics: ndarray, intrinsics: ndarray, depth: float = 1.0) -> Tuple[ndarray, ndarray, ndarray]:
     """
-    Get x triangle mesh of camera frustum.
+    Create a triangle mesh of camera frustum.
     """
     assert extrinsics.shape == (4, 4) and intrinsics.shape == (3, 3)
     vertices = unproject_cv(
@@ -513,7 +513,10 @@ def camera_frustum(extrinsics: ndarray, intrinsics: ndarray, depth: float = 1.0)
     return vertices, edges, faces
 
 
-def icosahedron():
+def create_icosahedron_mesh():
+    """
+    Create an icosahedron mesh of centered at origin.
+    """
     A = (1 + 5 ** 0.5) / 2
     vertices = np.array([
         [0, 1, A], [0, -1, A], [0, 1, -A], [0, -1, -A],

@@ -77,10 +77,10 @@ __modules_all__ = {
         'subdivide_mesh',
         'mesh_relations',
         'flatten_mesh_indices',
-        'cube',
-        'icosahedron',
-        'square',
-        'camera_frustum',
+        'create_cube_mesh',
+        'create_icosahedron_mesh',
+        'create_square_mesh',
+        'create_camera_frustum_mesh',
         'merge_meshes',
         'calc_quad_candidates',
         'calc_quad_distortion',
@@ -105,6 +105,8 @@ __modules_all__ = {
         'chessboard',
         'masked_nearest_resize',
         'masked_area_resize',
+        'colorize_depth_map',
+        'colorize_normal_map'
     ],
     'rasterization': [
         'RastContext',

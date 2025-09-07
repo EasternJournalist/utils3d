@@ -185,7 +185,7 @@ class RastContext:
     uniform bool uIsPointSize3D;
     void main() {
         outAttr = gAttr;
-        outPointID = gPointID;
+        {return_point_id} outPointID = gPointID;
         gl_FragDepth = log2(-gViewPos.z) / 64.f + 0.5f;
         {circle_begin} 
         float distSquare;
@@ -237,10 +237,9 @@ class RastContext:
     #version 430
     uniform sampler2D linearDepthMap;
     in vec2 screenXY;
-    out float outBufferDepth;
     void main() {
         float d = texture(linearDepthMap, screenXY).r;
-        outBufferDepth = min(1.f, log2(d) / 64.f + 0.5f);
+        gl_FragDepth = min(1.f, log2(d) / 64.f + 0.5f);
     }
     """
 
@@ -260,7 +259,7 @@ class RastContext:
         Create a moderngl context.
 
         ## Parameters
-            See moderngl.create_context
+            Leave empty to create context with default settings. Or refer to moderngl.create_context() for other parameters.
         """
         if len(args) == 0 and len(kwargs) == 0:
             
@@ -396,7 +395,8 @@ def run_full_screen_program(
     ctx: RastContext, 
     prog: moderngl.Program, 
     in_tex: Union[moderngl.Texture, List[moderngl.Texture]], 
-    out_tex_or_rbo: Union[Union[moderngl.Texture, moderngl.Renderbuffer], List[Union[moderngl.Texture, moderngl.Renderbuffer]]],
+    out_tex_or_rbo: Union[Union[moderngl.Texture, moderngl.Renderbuffer], Sequence[Union[moderngl.Texture, moderngl.Renderbuffer]]] = None,
+    out_depth: Optional[moderngl.Texture] = None,
     **uniforms
 ) -> moderngl.Texture:
     vao = ctx.mgl_ctx.vertex_array(prog, [])
@@ -407,10 +407,9 @@ def run_full_screen_program(
         in_tex.use(location=0)
     for k, v in uniforms.items():   
         prog[k] = v
-    if isinstance(out_tex_or_rbo, list):
-        fbo = ctx.mgl_ctx.framebuffer(color_attachments=out_tex_or_rbo)
-    else:
-        fbo = ctx.mgl_ctx.framebuffer(color_attachments=[out_tex_or_rbo])
+    if not isinstance(out_tex_or_rbo, list):
+        out_tex_or_rbo = [out_tex_or_rbo] if out_tex_or_rbo is not None else []
+    fbo = ctx.mgl_ctx.framebuffer(color_attachments=out_tex_or_rbo, depth_attachment=out_depth)
     fbo.use()
     ctx.mgl_ctx.disable(ctx.mgl_ctx.DEPTH_TEST)
     ctx.mgl_ctx.disable(ctx.mgl_ctx.CULL_FACE)
@@ -442,8 +441,7 @@ def clear_texture(ctx: RastContext, tex: moderngl.Texture, value: Union[Tuple[fl
 
 def rasterize_triangles(
     ctx: RastContext,
-    width: int,
-    height: int,
+    size: Tuple[int, int],
     *,
     vertices: np.ndarray,
     attributes: Optional[np.ndarray] = None,
@@ -464,8 +462,7 @@ def rasterize_triangles(
 
     ## Parameters
         ctx (RastContext): rasterization context
-        width (int): width of rendered image
-        height (int): height of rendered image
+        size (Tuple[int, int]): (height, width) of the output image
         vertices (np.ndarray): (N, 3) or (T, 3, 3)
         faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
         attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
@@ -491,6 +488,7 @@ def rasterize_triangles(
         - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
         - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
+    height, width = size
     if faces is None:
         assert vertices.ndim == 3 and vertices.shape[1] == vertices.shape[2] == 3, "If faces is None, vertices must be an array with shape (T, 3, 3)"
     else:
@@ -539,6 +537,8 @@ def rasterize_triangles(
         view = np.eye(4, np.float32)
     if projection is None:
         projection = np.eye(4, np.float32) 
+    if background_image is not None:
+        background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
 
     # Get program
     prog = ctx.get_program_triangles(flat=attributes_domain == 'face', return_interpolation=return_interpolation)
@@ -563,24 +563,24 @@ def rasterize_triangles(
     # Create textures
     image_tex = ctx.mgl_ctx.texture((width, height), 4, dtype='f4', data=np.ascontiguousarray(background_image[::-1, :, :]) if background_image is not None else None)
     buffer_depth_tex = ctx.mgl_ctx.depth_texture((width, height))
-    if background_depth is not None:
+    if return_depth:
         linear_depth_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='f4', data=np.ascontiguousarray(background_depth[::-1, :]) if background_depth is not None else None)
-        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, buffer_depth_tex)
-    else:
-        if return_depth:
-            linear_depth_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='f4')
-        else:
-            linear_depth_tex = None
-        clear_texture(ctx, buffer_depth_tex, value=1.0)
-
     if return_interpolation:
         interpolation_id_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='i4', data=np.ascontiguousarray(background_interpolation_id[::-1, :]) if background_interpolation_id is not None else None)
         interpolation_uv_tex = ctx.mgl_ctx.texture((width, height), 2, dtype='f4', data=np.ascontiguousarray(background_interpolation_uv[::-1, :, :]) if background_interpolation_uv is not None else None)
     
-    clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
+    # Clear textures
+    if background_image is None:
+        clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
+    if background_depth is not None:
+        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, out_depth=buffer_depth_tex)
+    else:
+        clear_texture(ctx, buffer_depth_tex, value=1.0)
     if return_interpolation:
-        clear_texture(ctx, interpolation_id_tex, value=(-1,))
-        clear_texture(ctx, interpolation_uv_tex, value=(0.0, 0.0))
+        if background_interpolation_id is None:
+            clear_texture(ctx, interpolation_id_tex, value=(-1,))
+        if background_interpolation_uv is None:
+            clear_texture(ctx, interpolation_uv_tex, value=(0.0, 0.0))
 
     # Create framebuffer
     if return_interpolation:
@@ -665,8 +665,7 @@ def rasterize_triangles(
 @contextmanager
 def rasterize_triangles_peeling(
     ctx: RastContext,
-    width: int,
-    height: int,
+    size: Tuple[int, int],
     *,
     vertices: np.ndarray,
     attributes: np.ndarray,
@@ -683,8 +682,7 @@ def rasterize_triangles_peeling(
 
     ## Parameters
         ctx (RastContext): rasterization context
-        width (int): width of rendered image
-        height (int): height of rendered image
+        size (Tuple[int, int]): (height, width) of the output image
         vertices (np.ndarray): (N, 3) or (T, 3, 3)
         faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
         attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
@@ -722,6 +720,7 @@ def rasterize_triangles_peeling(
                 print(f"  {key}: {value.shape}")
     ```
     """
+    height, width = size
     if faces is None:
         assert vertices.ndim == 3 and vertices.shape[1] == vertices.shape[2] == 3, "If faces is None, vertices must be an array with shape (T, 3, 3)"
     else:
@@ -896,8 +895,7 @@ def rasterize_triangles_peeling(
 
 def rasterize_lines(
     ctx: RastContext,
-    width: int,
-    height: int,
+    size: Tuple[int, int],
     *,
     vertices: np.ndarray,
     lines: np.ndarray,
@@ -917,20 +915,19 @@ def rasterize_lines(
     Rasterize lines.
 
     ## Parameters
-        ctx (RastContext): rasterization context
-        width (int): width of rendered image
-        height (int): height of rendered image
-        vertices (np.ndarray): (N, 3) or (T, 3, 3)
-        faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-        attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
-        attributes_domain (Literal['vertex', 'face']): domain of the attributes
-        view (np.ndarray): (4, 4) View matrix (world to camera).
-        projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
-        cull_backface (bool): whether to cull backface
-        background_image (np.ndarray): (H, W, C) background image
-        background_depth (np.ndarray): (H, W) background depth
-        background_interpolation_id (np.ndarray): (H, W) background triangle ID map
-        background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+    - `ctx` (RastContext): rasterization context
+    - `size` (Tuple[int, int]): (height, width) of the output image
+    - `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
+    - `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
+    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `cull_backface` (bool): whether to cull backface
+    - `background_image` (np.ndarray): (H, W, C) background image
+    - `background_depth` (np.ndarray): (H, W) background depth
+    - `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
+    - `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
     ## Returns
         A dictionary containing
@@ -945,6 +942,7 @@ def rasterize_lines(
         - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
         - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
+    height, width = size
     if lines is None:
         assert vertices.ndim == 3 and vertices.shape[1] == 2 and vertices.shape[2] == 3, "If lines is None, vertices must be an array with shape (T, 2, 3)"
     else:
@@ -994,6 +992,8 @@ def rasterize_lines(
         view = np.eye(4, np.float32)
     if projection is None:
         projection = np.eye(4, np.float32) 
+    if background_image is not None:
+        background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
 
     # Get program
     prog = ctx.get_program_triangles(flat=attributes_domain == 'line', return_interpolation=return_interpolation)
@@ -1018,24 +1018,24 @@ def rasterize_lines(
     # Create textures
     image_tex = ctx.mgl_ctx.texture((width, height), 4, dtype='f4', data=np.ascontiguousarray(background_image[::-1, :, :]) if background_image is not None else None)
     buffer_depth_tex = ctx.mgl_ctx.depth_texture((width, height))
-    if background_depth is not None:
+    if return_depth is not None:
         linear_depth_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='f4', data=np.ascontiguousarray(background_depth[::-1, :]) if background_depth is not None else None)
-        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, buffer_depth_tex)
-    else:
-        if return_depth:
-            linear_depth_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='f4')
-        else:
-            linear_depth_tex = None
-        clear_texture(ctx, buffer_depth_tex, value=1.0)
 
     if return_interpolation:
         interpolation_id_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='i4', data=np.ascontiguousarray(background_interpolation_id[::-1, :]) if background_interpolation_id is not None else None)
         interpolation_uv_tex = ctx.mgl_ctx.texture((width, height), 2, dtype='f4', data=np.ascontiguousarray(background_interpolation_uv[::-1, :, :]) if background_interpolation_uv is not None else None)
     
-    clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
+    if background_image is None:
+        clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
+    if background_depth is None:
+        clear_texture(ctx, buffer_depth_tex, value=1.0)
+    else:
+        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, out_depth=buffer_depth_tex)
     if return_interpolation:
-        clear_texture(ctx, interpolation_id_tex, value=(-1,))
-        clear_texture(ctx, interpolation_uv_tex, value=(0.0, 0.0))
+        if background_interpolation_id is None:
+            clear_texture(ctx, interpolation_id_tex, value=(-1,))
+        if background_interpolation_uv is None:
+            clear_texture(ctx, interpolation_uv_tex, value=(0.0, 0.0))
 
     # Create framebuffer
     if return_interpolation:
@@ -1116,8 +1116,7 @@ def rasterize_lines(
 
 def rasterize_point_cloud(
     ctx: RastContext,
-    width: int,
-    height: int,
+    size: Tuple[int, int],
     *,
     points: np.ndarray,
     point_sizes: Union[float, np.ndarray] = 10,
@@ -1136,22 +1135,21 @@ def rasterize_point_cloud(
     Rasterize point cloud.
 
     ## Parameters
-        ctx (RastContext): rasterization context
-        width (int): width of rendered image
-        height (int): height of rendered image
-        points (np.ndarray): (N, 3)
-        point_sizes (np.ndarray): (N,) or float
-        point_size_in: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
-        point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
-        attributes (np.ndarray): (N, C)
-        view (np.ndarray): (4, 4) View matrix (world to camera).
-        projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
-        cull_backface (bool): whether to cull backface,
-        return_depth (bool): whether to return depth map
-        return_point_id (bool): whether to return point ID map
-        background_image (np.ndarray): (H, W, C) background image
-        background_depth (np.ndarray): (H, W) background depth
-        background_point_id (np.ndarray): (H, W) background point ID map
+    - `ctx` (RastContext): rasterization context
+    - `size` (Tuple[int, int]): (height, width) of the output image
+    - `points` (np.ndarray): (N, 3)
+    - `point_sizes` (np.ndarray): (N,) or float
+    - `point_size_in`: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
+    - `point_shape`: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
+    - `attributes` (np.ndarray): (N, C)
+    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `cull_backface` (bool): whether to cull backface,
+    - `return_depth` (bool): whether to return depth map
+    - `return_point_id` (bool): whether to return point ID map
+    - `background_image` (np.ndarray): (H, W, C) background image
+    - `background_depth` (np.ndarray): (H, W) background depth
+    - `background_point_id` (np.ndarray): (H, W) background point ID map
 
     ## Returns
         A dictionary containing
@@ -1165,6 +1163,7 @@ def rasterize_point_cloud(
         if return_point_id is True
         - `point_id` (np.ndarray): (H, W) int32 point ID map
     """
+    height, width = size
     assert points.ndim == 2 and points.shape[1] == 3 and points.dtype == np.float32, f"Points should be a float32 array with shape (N, 3), but got {points.shape} {points.dtype}"
 
     if attributes is not None:
@@ -1188,7 +1187,8 @@ def rasterize_point_cloud(
     if attributes is not None:
         num_channels = attributes.shape[-1]
         attributes = np.concatenate([attributes, np.zeros((*attributes.shape[:-1], 4 - num_channels,), dtype=attributes.dtype)], axis=-1) if num_channels < 4 else attributes
-
+    if background_image is not None:
+        background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
     if view is None:
         view = np.eye(4, np.float32)
     if projection is None:
@@ -1215,20 +1215,18 @@ def rasterize_point_cloud(
     # Create textures
     image_tex = ctx.mgl_ctx.texture((width, height), 4, dtype='f4', data=np.ascontiguousarray(background_image[::-1, :, :]) if background_image is not None else None)
     buffer_depth_tex = ctx.mgl_ctx.depth_texture((width, height))
-    if background_depth is not None:
+    if return_depth:
         linear_depth_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='f4', data=np.ascontiguousarray(background_depth[::-1, :]) if background_depth is not None else None)
-        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, buffer_depth_tex)
-    else:
-        if return_depth:
-            linear_depth_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='f4')
-        else:
-            linear_depth_tex = None
-        clear_texture(ctx, buffer_depth_tex, value=1.0)
 
     if return_point_id:
         point_id_tex = ctx.mgl_ctx.texture((width, height), 1, dtype='i4', data=np.ascontiguousarray(background_point_id[::-1, :]) if background_point_id is not None else None)
 
-    clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
+    if background_image is None:
+        clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
+    if background_depth is None:
+        clear_texture(ctx, buffer_depth_tex, value=1.0)
+    else:
+        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, out_depth=buffer_depth_tex)
     if return_point_id:
         clear_texture(ctx, point_id_tex, value=(-1,))
 
@@ -1460,10 +1458,10 @@ def test_rasterization(ctx: RastContext):
     """
     Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file.
     """
-    from .mesh import cube
+    from .mesh import create_cube_mesh
     from .transforms import perspective_from_fov, view_look_at
 
-    vertices, faces = cube(tri=True)
+    vertices, faces = create_cube_mesh(tri=True)
     attributes = np.random.rand(len(vertices), 3).astype(np.float32)
     projection = perspective_from_fov(fov_x=np.deg2rad(60), aspect_ratio=1, near=1e-8, far=100000)
     view = view_look_at([1, 2, 2], [0, 0, 0], [0, 1, 0])

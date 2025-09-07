@@ -71,10 +71,10 @@ __all__ = ["sliding_window",
 "subdivide_mesh", 
 "mesh_relations", 
 "flatten_mesh_indices", 
-"cube", 
-"icosahedron", 
-"square", 
-"camera_frustum", 
+"create_cube_mesh", 
+"create_icosahedron_mesh", 
+"create_square_mesh", 
+"create_camera_frustum_mesh", 
 "merge_meshes", 
 "calc_quad_candidates", 
 "calc_quad_distortion", 
@@ -97,6 +97,8 @@ __all__ = ["sliding_window",
 "chessboard", 
 "masked_nearest_resize", 
 "masked_area_resize", 
+"colorize_depth_map", 
+"colorize_normal_map", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -926,8 +928,8 @@ def flatten_mesh_indices(*args: numpy_.ndarray) -> Tuple[numpy_.ndarray, ...]:
     utils3d.numpy.mesh.flatten_mesh_indices
 
 @overload
-def cube(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Get x cube mesh of size 1 centered at origin.
+def create_cube_mesh(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Create a cube mesh of size 1 centered at origin.
 
 ### Parameters
     tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
@@ -935,25 +937,26 @@ def cube(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
 ### Returns
     vertices (ndarray): shape (8, 3) 
     faces (ndarray): shape (12, 3)"""
-    utils3d.numpy.mesh.cube
+    utils3d.numpy.mesh.create_cube_mesh
 
 @overload
-def icosahedron():
-    utils3d.numpy.mesh.icosahedron
+def create_icosahedron_mesh():
+    """Create an icosahedron mesh of centered at origin."""
+    utils3d.numpy.mesh.create_icosahedron_mesh
 
 @overload
-def square(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Get a square mesh of area 1 centered at origin in the xy-plane.
+def create_square_mesh(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Create a square mesh of area 1 centered at origin in the xy-plane.
 
 ## Returns
     vertices (ndarray): shape (4, 3)
     faces (ndarray): shape (1, 4)"""
-    utils3d.numpy.mesh.square
+    utils3d.numpy.mesh.create_square_mesh
 
 @overload
-def camera_frustum(extrinsics: numpy_.ndarray, intrinsics: numpy_.ndarray, depth: float = 1.0) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
-    """Get x triangle mesh of camera frustum."""
-    utils3d.numpy.mesh.camera_frustum
+def create_camera_frustum_mesh(extrinsics: numpy_.ndarray, intrinsics: numpy_.ndarray, depth: float = 1.0) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+    """Create a triangle mesh of camera frustum."""
+    utils3d.numpy.mesh.create_camera_frustum_mesh
 
 @overload
 def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarray, ...]:
@@ -1298,17 +1301,44 @@ def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple
     utils3d.numpy.maps.masked_area_resize
 
 @overload
+def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, normalize: bool = True, cmap: str = 'Spectral') -> numpy_.ndarray:
+    """Colorize depth map for visualization.
+
+## Parameters
+    - `depth` (ndarray): shape (H, W), linear depth map
+    - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    - `normalize` (bool, optional): whether to normalize the disparity values to [0, 1]. Defaults to True.
+    - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'Spectral'.
+
+## Returns
+    - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB [0, 255]"""
+    utils3d.numpy.maps.colorize_depth_map
+
+@overload
+def colorize_normal_map(normal: numpy_.ndarray, mask: numpy_.ndarray = None, flip_yz: bool = False) -> numpy_.ndarray:
+    """Colorize normal map for visualization. Value range is [-1, 1].
+
+## Parameters
+    - `normal` (ndarray): shape (H, W, 3), normal
+    - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    - `flip_yz` (bool, optional): whether to flip the y and z. 
+        - This is useful when converting between OpenCV and OpenGL camera coordinate systems. Defaults to False.
+
+## Returns
+    - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB in [0, 255]"""
+    utils3d.numpy.maps.colorize_normal_map
+
+@overload
 def RastContext(*args, **kwargs):
     utils3d.numpy.rasterization.RastContext
 
 @overload
-def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize triangles.
 
 ## Parameters
     ctx (RastContext): rasterization context
-    width (int): width of rendered image
-    height (int): height of rendered image
+    size (Tuple[int, int]): (height, width) of the output image
     vertices (np.ndarray): (N, 3) or (T, 3, 3)
     faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
     attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
@@ -1336,13 +1366,12 @@ def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, width: int
     utils3d.numpy.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
+def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
     """Rasterize triangles with depth peeling.
 
 ## Parameters
     ctx (RastContext): rasterization context
-    width (int): width of rendered image
-    height (int): height of rendered image
+    size (Tuple[int, int]): (height, width) of the output image
     vertices (np.ndarray): (N, 3) or (T, 3, 3)
     faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
     attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
@@ -1382,24 +1411,23 @@ with rasterize_triangles_peeling(
     utils3d.numpy.rasterization.rasterize_triangles_peeling
 
 @overload
-def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, ...]:
+def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, ...]:
     """Rasterize lines.
 
 ## Parameters
-    ctx (RastContext): rasterization context
-    width (int): width of rendered image
-    height (int): height of rendered image
-    vertices (np.ndarray): (N, 3) or (T, 3, 3)
-    faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-    attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
-    attributes_domain (Literal['vertex', 'face']): domain of the attributes
-    view (np.ndarray): (4, 4) View matrix (world to camera).
-    projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
-    cull_backface (bool): whether to cull backface
-    background_image (np.ndarray): (H, W, C) background image
-    background_depth (np.ndarray): (H, W) background depth
-    background_interpolation_id (np.ndarray): (H, W) background triangle ID map
-    background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `ctx` (RastContext): rasterization context
+- `size` (Tuple[int, int]): (height, width) of the output image
+- `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
+- `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+- `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+- `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
+- `view` (np.ndarray): (4, 4) View matrix (world to camera).
+- `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+- `cull_backface` (bool): whether to cull backface
+- `background_image` (np.ndarray): (H, W, C) background image
+- `background_depth` (np.ndarray): (H, W) background depth
+- `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
+- `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
 ## Returns
     A dictionary containing
@@ -1416,26 +1444,25 @@ def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, width: int, he
     utils3d.numpy.rasterization.rasterize_lines
 
 @overload
-def rasterize_point_cloud(ctx: utils3d.numpy.rasterization.RastContext, width: int, height: int, *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_point_cloud(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize point cloud.
 
 ## Parameters
-    ctx (RastContext): rasterization context
-    width (int): width of rendered image
-    height (int): height of rendered image
-    points (np.ndarray): (N, 3)
-    point_sizes (np.ndarray): (N,) or float
-    point_size_in: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
-    point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
-    attributes (np.ndarray): (N, C)
-    view (np.ndarray): (4, 4) View matrix (world to camera).
-    projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
-    cull_backface (bool): whether to cull backface,
-    return_depth (bool): whether to return depth map
-    return_point_id (bool): whether to return point ID map
-    background_image (np.ndarray): (H, W, C) background image
-    background_depth (np.ndarray): (H, W) background depth
-    background_point_id (np.ndarray): (H, W) background point ID map
+- `ctx` (RastContext): rasterization context
+- `size` (Tuple[int, int]): (height, width) of the output image
+- `points` (np.ndarray): (N, 3)
+- `point_sizes` (np.ndarray): (N,) or float
+- `point_size_in`: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
+- `point_shape`: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
+- `attributes` (np.ndarray): (N, C)
+- `view` (np.ndarray): (4, 4) View matrix (world to camera).
+- `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+- `cull_backface` (bool): whether to cull backface,
+- `return_depth` (bool): whether to return depth map
+- `return_point_id` (bool): whether to return point ID map
+- `background_image` (np.ndarray): (H, W, C) background image
+- `background_depth` (np.ndarray): (H, W) background depth
+- `background_point_id` (np.ndarray): (H, W) background point ID map
 
 ## Returns
     A dictionary containing

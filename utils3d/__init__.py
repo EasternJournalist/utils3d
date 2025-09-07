@@ -10,7 +10,7 @@ try:
 except ImportError:
     pass
 
-__all__ = ['numpy', 'torch', 'io']
+__all__ = ['numpy', 'torch', 'io', 'np', 'pt']
 
 def __getattr__(name: str):
     if (module := globals().get(name, None)):
@@ -18,9 +18,9 @@ def __getattr__(name: str):
     if name == 'numpy' or name == 'np':
         module = importlib.import_module(f'.numpy', __package__)
         globals()['numpy'] = globals()['np'] = module
-    if name == 'torch' or name == 'th':
+    if name == 'torch' or name == 'pt':
         module = importlib.import_module(f'.torch', __package__)
-        globals()['torch'] = globals()['th'] = module
+        globals()['torch'] = globals()['pt'] = module
     if name == 'io':
         module = importlib.import_module(f'.io', __package__)
         globals()['io'] = module
@@ -31,5 +31,5 @@ if TYPE_CHECKING:
     from . import numpy
     from . import numpy as np   # short alias
     from . import torch
-    from . import torch as th   # short alias
+    from . import torch as pt   # short alias
     from . import io

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "utils3d"
-version = "1.1"
-description = "A small package for 3D graphics"
+version = "1.2"
+description = "A collection of useful functions for 3D computer vision and graphics researchers in Python"
 readme = "README.md"
 authors = [
     {name = "EasternJournalist", email = "wangrc2081cs@mail.ustc.edu.cn"}
@@ -19,7 +19,8 @@ classifiers = [
 dependencies = [
     "moderngl",
     "numpy",
-    "scipy"
+    "scipy",
+    "matplotlib"
 ]
 requires-python = ">=3.7"
 

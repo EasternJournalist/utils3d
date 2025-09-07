@@ -68,10 +68,10 @@ __all__ = ["sliding_window",
 "subdivide_mesh", 
 "mesh_relations", 
 "flatten_mesh_indices", 
-"cube", 
-"icosahedron", 
-"square", 
-"camera_frustum", 
+"create_cube_mesh", 
+"create_icosahedron_mesh", 
+"create_square_mesh", 
+"create_camera_frustum_mesh", 
 "merge_meshes", 
 "calc_quad_candidates", 
 "calc_quad_distortion", 
@@ -94,6 +94,8 @@ __all__ = ["sliding_window",
 "chessboard", 
 "masked_nearest_resize", 
 "masked_area_resize", 
+"colorize_depth_map", 
+"colorize_normal_map", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -540,28 +542,28 @@ def flatten_mesh_indices(*args, **kwargs):
     return _call_based_on_args('flatten_mesh_indices', args, kwargs)
 
 @suppress_traceback
-def cube(*args, **kwargs):
+def create_cube_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.cube, None
-    return _call_based_on_args('cube', args, kwargs)
+        utils3d.numpy.create_cube_mesh, None
+    return _call_based_on_args('create_cube_mesh', args, kwargs)
 
 @suppress_traceback
-def icosahedron(*args, **kwargs):
+def create_icosahedron_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.icosahedron, None
-    return _call_based_on_args('icosahedron', args, kwargs)
+        utils3d.numpy.create_icosahedron_mesh, None
+    return _call_based_on_args('create_icosahedron_mesh', args, kwargs)
 
 @suppress_traceback
-def square(*args, **kwargs):
+def create_square_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.square, None
-    return _call_based_on_args('square', args, kwargs)
+        utils3d.numpy.create_square_mesh, None
+    return _call_based_on_args('create_square_mesh', args, kwargs)
 
 @suppress_traceback
-def camera_frustum(*args, **kwargs):
+def create_camera_frustum_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.camera_frustum, None
-    return _call_based_on_args('camera_frustum', args, kwargs)
+        utils3d.numpy.create_camera_frustum_mesh, None
+    return _call_based_on_args('create_camera_frustum_mesh', args, kwargs)
 
 @suppress_traceback
 def merge_meshes(*args, **kwargs):
@@ -694,6 +696,18 @@ def masked_area_resize(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.masked_area_resize, utils3d.torch.masked_area_resize
     return _call_based_on_args('masked_area_resize', args, kwargs)
+
+@suppress_traceback
+def colorize_depth_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.colorize_depth_map, None
+    return _call_based_on_args('colorize_depth_map', args, kwargs)
+
+@suppress_traceback
+def colorize_normal_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.colorize_normal_map, None
+    return _call_based_on_args('colorize_normal_map', args, kwargs)
 
 @suppress_traceback
 def RastContext(*args, **kwargs):

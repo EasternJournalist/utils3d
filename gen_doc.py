@@ -84,7 +84,7 @@ if __name__ == "__main__":
                     signature =  get_simple_signature(fn)
                     if doc_column_description is None and fn.__doc__ is not None:
                         doc_column_description = get_description(fn)
-                    doc_column_torch = f'[`utils3d.th.{signature}`]({filepath}#L{start_line})'
+                    doc_column_torch = f'[`utils3d.pt.{signature}`]({filepath}#L{start_line})'
                 else:
                     doc_column_torch = "-"
 
