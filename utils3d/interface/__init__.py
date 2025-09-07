@@ -46,7 +46,7 @@ __all__ = ["sliding_window",
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
-"make_se3_matrix", 
+"make_affine_matrix", 
 "slerp_quaternion", 
 "slerp_vector", 
 "lerp", 
@@ -56,9 +56,11 @@ __all__ = ["sliding_window",
 "transform", 
 "angle_between", 
 "triangulate_mesh", 
-"compute_face_normals", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
+"compute_face_corner_tangents", 
+"compute_face_normals", 
+"compute_face_tangents", 
 "compute_vertex_normals", 
 "remove_corrupted_faces", 
 "merge_duplicate_vertices", 
@@ -404,10 +406,10 @@ def ray_intersection(*args, **kwargs):
     return _call_based_on_args('ray_intersection', args, kwargs)
 
 @suppress_traceback
-def make_se3_matrix(*args, **kwargs):
+def make_affine_matrix(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.make_se3_matrix, utils3d.torch.make_se3_matrix
-    return _call_based_on_args('make_se3_matrix', args, kwargs)
+        utils3d.numpy.make_affine_matrix, utils3d.torch.make_affine_matrix
+    return _call_based_on_args('make_affine_matrix', args, kwargs)
 
 @suppress_traceback
 def slerp_quaternion(*args, **kwargs):
@@ -464,12 +466,6 @@ def triangulate_mesh(*args, **kwargs):
     return _call_based_on_args('triangulate_mesh', args, kwargs)
 
 @suppress_traceback
-def compute_face_normals(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_face_normals, utils3d.torch.compute_face_normals
-    return _call_based_on_args('compute_face_normals', args, kwargs)
-
-@suppress_traceback
 def compute_face_corner_angles(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.compute_face_corner_angles, utils3d.torch.compute_face_corner_angles
@@ -482,9 +478,27 @@ def compute_face_corner_normals(*args, **kwargs):
     return _call_based_on_args('compute_face_corner_normals', args, kwargs)
 
 @suppress_traceback
+def compute_face_corner_tangents(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_face_corner_tangents, utils3d.torch.compute_face_corner_tangents
+    return _call_based_on_args('compute_face_corner_tangents', args, kwargs)
+
+@suppress_traceback
+def compute_face_normals(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_face_normals, utils3d.torch.compute_face_normals
+    return _call_based_on_args('compute_face_normals', args, kwargs)
+
+@suppress_traceback
+def compute_face_tangents(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.compute_face_tangents, utils3d.torch.compute_face_tangents
+    return _call_based_on_args('compute_face_tangents', args, kwargs)
+
+@suppress_traceback
 def compute_vertex_normals(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.compute_vertex_normals, utils3d.torch.compute_vertex_normals
+        utils3d.numpy.compute_vertex_normals, None
     return _call_based_on_args('compute_vertex_normals', args, kwargs)
 
 @suppress_traceback

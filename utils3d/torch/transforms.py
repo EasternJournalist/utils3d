@@ -50,7 +50,7 @@ __all__ = [
     'interpolate_extrinsics',
     'interpolate_view',
     'extrinsics_to_essential',
-    'make_se3_matrix',
+    'make_affine_matrix',
     'rotation_matrix_2d',
     'rotate_2d',
     'translate_2d',
@@ -245,7 +245,7 @@ def view_look_at(
     R = torch.stack([x, y, z], dim=-2)
     R = F.normalize(R, dim=-1)
     t = -torch.matmul(R, eye[..., None])
-    return make_se3_matrix(R, t.squeeze(-1))
+    return make_affine_matrix(R, t.squeeze(-1))
 
 
 @totensor(_others=torch.float32)
@@ -1074,7 +1074,7 @@ def interpolate_transform(transform1: Tensor, transform2: Tensor, t: Union[Numbe
         t = torch.tensor(t, dtype=transform1.dtype, device=transform1.device)
     pos = (1 - t[..., None]) * transform1[..., :3, 3] + t[..., None] * transform2[..., :3, 3]
     rot = slerp(transform1[..., :3, :3], transform2[..., :3, :3], t)
-    transform = make_se3_matrix(rot, pos)
+    transform = make_affine_matrix(rot, pos)
     return transform
 
 
@@ -1101,20 +1101,20 @@ def extrinsics_to_essential(extrinsics: Tensor):
 
 
 @batched(2, 1)
-def make_se3_matrix(R: Tensor, t: Tensor):
+def make_affine_matrix(M: Tensor, t: Tensor):
     """
-    Compose rotation matrix and translation vector to 4x4 transformation matrix
+    Make an affine transformation matrix from a linear matrix and a translation vector.
 
     ## Parameters
-        R (Tensor): [..., 3, 3] rotation matrix
-        t (Tensor): [..., 3] translation vector
+        M (Tensor): [..., D, D] linear matrix (rotation, scaling or general deformation)
+        t (Tensor): [..., D] translation vector
 
     ## Returns
-        (Tensor): [..., 4, 4] transformation matrix
+        Tensor: [..., D + 1, D + 1] affine transformation matrix
     """
     return torch.cat([
-        torch.cat([R, t[..., None]], dim=-1),
-        torch.tensor([0, 0, 0, 1], dtype=R.dtype, device=R.device).expand(*R.shape[:-2], 1, 4)
+        torch.cat([M, t[..., None]], dim=-1),
+        torch.tensor([0, 0, 0, 1], dtype=M.dtype, device=M.device).expand(*M.shape[:-2], 1, 4)
     ], dim=-2)
 
 

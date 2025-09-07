@@ -1,13 +1,16 @@
 import numpy as np
+from numpy import ndarray
 from typing import *
 
 from .transforms import unproject_cv, angle_between
 
 __all__ = [
     'triangulate_mesh',
-    'compute_face_normals',
     'compute_face_corner_angles',
     'compute_face_corner_normals',
+    'compute_face_corner_tangents',
+    'compute_face_normals',
+    'compute_face_tangents',
     'compute_vertex_normals',
     'remove_corrupted_faces',
     'merge_duplicate_vertices',
@@ -31,23 +34,23 @@ __all__ = [
 
 
 def triangulate_mesh(
-    faces: np.ndarray,
-    vertices: np.ndarray = None,
+    faces: ndarray,
+    vertices: ndarray = None,
     method: Literal['fan', 'strip', 'diagonal'] = 'fan'
-) -> np.ndarray:
+) -> ndarray:
     """
     Triangulate a polygonal mesh.
 
     ## Parameters
-        faces (np.ndarray): [L, P] polygonal faces
-        vertices (np.ndarray, optional): [N, 3] 3-dimensional vertices.
+        faces (ndarray): [L, P] polygonal faces
+        vertices (ndarray, optional): [N, 3] 3-dimensional vertices.
             If given, the triangulation is performed according to the distance
             between vertices. Defaults to None.
-        backslash (np.ndarray, optional): [L] boolean array indicating
+        backslash (ndarray, optional): [L] boolean array indicating
             how to triangulate the quad faces. Defaults to None.
 
     ## Returns
-        (np.ndarray): [L * (P - 2), 3] triangular faces
+        (ndarray): [L * (P - 2), 3] triangular faces
     """
     if faces.shape[-1] == 3:
         return faces
@@ -79,88 +82,165 @@ def triangulate_mesh(
 
 
 def compute_face_corner_angles(
-    vertices: np.ndarray,
-    faces: np.ndarray,
-) -> np.ndarray:
+    vertices: ndarray,
+    faces: Optional[ndarray] = None,
+) -> ndarray:
     """
     Compute face corner angles of a mesh
 
     ## Parameters
-        vertices (np.ndarray): [..., N, 3] vertices
-        faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+    - `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
     ## Returns
-        angles (np.ndarray): [..., T, P] face corner angles
+    - `angles` (ndarray): `(..., F, P)` face corner angles
     """
-    loop = np.arange(faces.shape[1])
-    edges = vertices[..., faces[:, np.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    if faces is not None:
+        vertices = vertices[..., faces, :]              # (..., T, P, 3)
+    edges = np.roll(vertices, -1, axis=-2) - vertices   # (..., T, P, 3)
     angles = angle_between(-np.roll(edges, 1, axis=-2), edges)
     return angles
 
 
 def compute_face_corner_normals(
-    vertices: np.ndarray,
-    faces: np.ndarray,
+    vertices: ndarray,
+    faces: Optional[ndarray] = None,
     normalized: bool = True
-) -> np.ndarray:
+) -> ndarray:
     """
     Compute the face corner normals of a mesh
 
     ## Parameters
-        vertices (np.ndarray): [..., N, 3] vertices
-        faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+    - `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+    - `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
     ## Returns
-        angles (np.ndarray): [..., T, P, 3] face corner normals
+    - `normals` (ndarray): (..., F, P, 3) face corner normals
     """
-    loop = np.arange(faces.shape[1])
-    edges = vertices[..., faces[:, np.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    if faces is not None:
+        vertices = vertices[..., faces, :]  # (..., T, P, 3)
+    edges = np.roll(vertices, -1, axis=-2) - vertices  # (..., T, P, 3)
     normals = np.cross(np.roll(edges, 1, axis=-2), edges)
     if normalized:
         normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
     return normals
 
 
+def compute_face_corner_tangents(
+    vertices: ndarray,
+    uv: ndarray,
+    faces_vertices: Optional[ndarray] = None,
+    faces_uv: Optional[ndarray] = None,
+    normalize: bool = True
+) -> ndarray:
+    """
+    Compute the face corner tangent (and bitangent) vectors of a mesh
+
+    ## Parameters
+    - `vertices` (ndarray): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+    - `uv` (ndarray): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+    - `faces_vertices` (ndarray, optional): `(F, P)` face vertex indices
+    - `faces_uv` (ndarray, optional): `(F, P)` face UV indices
+    - `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+
+    ## Returns
+    - `tangents` (ndarray): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
+        where the last dimension represents the tangent and bitangent vectors.
+    """
+    if faces_vertices is not None:
+        vertices = vertices[..., faces_vertices, :]
+    if faces_uv is not None:
+        uv = uv[..., faces_uv, :]
+    
+    edge_xyz = np.roll(vertices, -1, axis=-2) - vertices  # (..., F, P, 3)
+    edge_uv = np.roll(uv, -1, axis=-2) - uv  # (..., F, P, 2)
+    
+    tangents = np.stack([np.roll(edge_xyz, 1, axis=-2), edge_xyz], axis=-1) \
+        @ np.linalg.inv(np.stack([np.roll(edge_uv, 1, axis=-2), edge_uv], axis=-1))
+    if normalize:
+        tangents /= np.linalg.norm(tangents, axis=-1, keepdims=True) + np.finfo(tangents.dtype).eps
+    return tangents
+
+
 def compute_face_normals(
-    vertices: np.ndarray,
-    faces: np.ndarray,
-) -> np.ndarray:
+    vertices: ndarray,
+    faces: Optional[ndarray] = None,
+) -> ndarray:
     """
     Compute face normals of a mesh
 
     ## Parameters
-        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, P] face indices
+    - `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
     ## Returns
-        normals (np.ndarray): [..., T, 3] face normals
+    - `normals` (ndarray): `(..., F, 3)` face normals. Always normalized.
     """
-    if faces.shape[-1] == 3:
+    if faces is not None:
+        vertices = vertices[..., faces, :]  # (..., F, P, 3)
+    if vertices.shape[-2] == 3:
         normals = np.cross(
-            vertices[..., faces[:, 1], :] - vertices[..., faces[:, 0], :],
-            vertices[..., faces[:, 2], :] - vertices[..., faces[:, 0], :]
+            vertices[..., 1, :] - vertices[..., 0, :],
+            vertices[..., 2, :] - vertices[..., 0, :]
         )
     else:
-        normals = compute_face_corner_normals(vertices, faces, normalized=False)
+        normals = compute_face_corner_normals(vertices, normalized=False)
         normals = np.mean(normals, axis=-2)
     normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
     return normals
 
 
+def compute_face_tangents(
+    vertices: ndarray,
+    uv: ndarray,
+    faces_vertices: Optional[ndarray] = None,
+    faces_uv: Optional[ndarray] = None,
+    normalize: bool = True
+) -> ndarray:
+    """
+    Compute the face corner tangent (and bitangent) vectors of a mesh
+
+    ## Parameters
+    - `vertices` (ndarray): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+    - `uv` (ndarray): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+    - `faces_vertices` (ndarray, optional): `(F, P)` face vertex indices
+    - `faces_uv` (ndarray, optional): `(F, P)` face UV indices
+
+    ## Returns
+    - `tangents` (ndarray): `(..., F, 3, 2)` face corner tangents (and bitangents), 
+        where the last dimension represents the tangent and bitangent vectors.
+    """
+    if faces_vertices is not None:
+        vertices = vertices[..., faces_vertices, :]  # (..., F, P, 3)
+    if faces_uv is not None:
+        uv = uv[..., faces_uv, :]  # (..., F, P, 2)
+    if vertices.shape[-2] == 3:
+        tangents = np.stack([vertices[..., 1, :] - vertices[..., 0, :], vertices[..., 2, :] - vertices[..., 0, :]], axis=-1) \
+            @ np.linalg.inv(np.stack([uv[..., 1, :] - uv[..., 0, :], uv[..., 2, :] - uv[..., 0, :]], axis=-1))
+    else:
+        tangents = compute_face_corner_tangents(vertices, uv, normalized=False)
+        tangents = np.mean(tangents, axis=-2)
+    if normalize:
+        tangents /= np.linalg.norm(tangents, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
+    return tangents
+
+
+
 def compute_vertex_normals(
-    vertices: np.ndarray,
-    faces: np.ndarray,
+    vertices: ndarray,
+    faces: ndarray,
     weighted: Literal['uniform', 'area', 'angle'] = 'uniform'
-) -> np.ndarray:
+) -> ndarray:
     """
     Compute vertex normals of a triangular mesh by averaging neighboring face normals
 
     ## Parameters
-        vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+        vertices (ndarray): [..., N, 3] 3-dimensional vertices
+        faces (ndarray): [T, P] face vertex indices, where P is the number of vertices per face
 
     ## Returns
-        normals (np.ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)
+        normals (ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)
     """
     face_corner_normals = compute_face_corner_normals(vertices, faces, normalized=False)
     if weighted == 'uniform':
@@ -181,37 +261,37 @@ def compute_vertex_normals(
 
 
 
-def remove_corrupted_faces(faces: np.ndarray) -> np.ndarray:
+def remove_corrupted_faces(faces: ndarray) -> ndarray:
     """
     Remove corrupted faces (faces with duplicated vertices)
 
     ## Parameters
-        faces (np.ndarray): [T, 3] triangular face indices
+        faces (ndarray): [T, 3] triangular face indices
 
     ## Returns
-        np.ndarray: [T_, 3] triangular face indices
+        ndarray: [T_, 3] triangular face indices
     """
     corrupted = (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
     return faces[~corrupted]
 
 
 def merge_duplicate_vertices(
-    vertices: np.ndarray, 
-    faces: np.ndarray,
+    vertices: ndarray, 
+    faces: ndarray,
     tol: float = 1e-6
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[ndarray, ndarray]:
     """
     Merge duplicate vertices of a triangular mesh. 
     Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
     ## Parameters
-        vertices (np.ndarray): [N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
+        vertices (ndarray): [N, 3] 3-dimensional vertices
+        faces (ndarray): [T, 3] triangular face indices
         tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
     ## Returns
-        vertices (np.ndarray): [N_, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
+        vertices (ndarray): [N_, 3] 3-dimensional vertices
+        faces (ndarray): [T, 3] triangular face indices
     """
     vertices_round = np.round(vertices / tol)
     _, uni_i, uni_inv = np.unique(vertices_round, return_index=True, return_inverse=True, axis=0)
@@ -221,22 +301,22 @@ def merge_duplicate_vertices(
 
 
 def remove_unused_vertices(
-    faces: np.ndarray,
+    faces: ndarray,
     *vertice_attrs,
     return_indices: bool = False
-) -> Tuple[np.ndarray, ...]:
+) -> Tuple[ndarray, ...]:
     """
     Remove unreferenced vertices of a mesh. 
     Unreferenced vertices are removed, and the face indices are updated accordingly.
 
     ## Parameters
-        faces (np.ndarray): [T, P] face indices
+        faces (ndarray): [T, P] face indices
         *vertice_attrs: vertex attributes
 
     ## Returns
-        faces (np.ndarray): [T, P] face indices
+        faces (ndarray): [T, P] face indices
         *vertice_attrs: vertex attributes
-        indices (np.ndarray, optional): [N] indices of vertices that are kept. Defaults to None.
+        indices (ndarray, optional): [N] indices of vertices that are kept. Defaults to None.
     """
     P = faces.shape[-1]
     fewer_indices, inv_map = np.unique(faces, return_inverse=True)
@@ -250,24 +330,24 @@ def remove_unused_vertices(
 
 
 def subdivide_mesh(
-    vertices: np.ndarray,
-    faces: np.ndarray, 
-    n: int = 1
-) -> Tuple[np.ndarray, np.ndarray]:
+    vertices: ndarray,
+    faces: ndarray, 
+    level: int = 1
+) -> Tuple[ndarray, ndarray]:
     """
     Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
     NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
     
     ## Parameters
-        vertices (np.ndarray): [N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
-        n (int, optional): number of subdivisions. Defaults to 1.
+        vertices (ndarray): [N, 3] 3-dimensional vertices
+        faces (ndarray): [T, 3] triangular face indices
+        level (int, optional): level of subdivisions. Defaults to 1.
 
     ## Returns
-        vertices (np.ndarray): [N_, 3] subdivided 3-dimensional vertices
-        faces (np.ndarray): [4 * T, 3] subdivided triangular face indices
+        vertices (ndarray): [N_, 3] subdivided 3-dimensional vertices
+        faces (ndarray): [(4 ** level) * T, 3] subdivided triangular face indices
     """
-    for _ in range(n):
+    for _ in range(level):
         edges = np.stack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=0)
         edges = np.sort(edges, axis=2)
         uni_edges, uni_inv = np.unique(edges.reshape(-1, 2), return_inverse=True, axis=0)
@@ -286,20 +366,20 @@ def subdivide_mesh(
 
 
 def mesh_relations(
-    faces: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
+    faces: ndarray,
+) -> Tuple[ndarray, ndarray]:
     """
     Calculate the relation between vertices and faces.
     NOTE: The input mesh must be a manifold triangle mesh.
 
     ## Parameters
-        faces (np.ndarray): [T, 3] triangular face indices
+        faces (ndarray): [T, 3] triangular face indices
 
     ## Returns
-        edges (np.ndarray): [E, 2] edge indices
-        edge2face (np.ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
-        face2edge (np.ndarray): [T, 3] face to edge relation
-        face2face (np.ndarray): [T, 3] face to face relation
+        edges (ndarray): [E, 2] edge indices
+        edge2face (ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
+        face2edge (ndarray): [T, 3] face to edge relation
+        face2face (ndarray): [T, 3] face to face relation
     """
     T = faces.shape[0]
     edges = np.stack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=1).reshape(-1, 2)  # [3T, 2]
@@ -326,7 +406,7 @@ def mesh_relations(
 
 
 @overload
-def flatten_mesh_indices(faces1: np.ndarray, attr1: np.ndarray, *more_faces_attrs_pairs: np.ndarray) -> Tuple[np.ndarray, ...]: 
+def flatten_mesh_indices(faces1: ndarray, attr1: ndarray, *more_faces_attrs_pairs: ndarray) -> Tuple[ndarray, ...]: 
     """
     Rearrange the indices of a mesh to a flattened version. Vertices will be no longer shared.
 
@@ -345,7 +425,7 @@ def flatten_mesh_indices(faces1: np.ndarray, attr1: np.ndarray, *more_faces_attr
     - `attr2`: ...
     - ...
     """
-def flatten_mesh_indices(*args: np.ndarray) -> Tuple[np.ndarray, ...]:
+def flatten_mesh_indices(*args: ndarray) -> Tuple[ndarray, ...]:
     assert len(args) % 2 == 0, "The number of arguments must be even."
     T, P = args[0].shape
     assert all(arg.shape[0] == T and arg.shape[1] == P for arg in args[::2]), "The faces must have the same shape."
@@ -358,13 +438,13 @@ def flatten_mesh_indices(*args: np.ndarray) -> Tuple[np.ndarray, ...]:
 
 
 
-def square(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]: 
+def square(tri: bool = False) -> Tuple[ndarray, ndarray]: 
     """
     Get a square mesh of area 1 centered at origin in the xy-plane.
 
     ## Returns
-        vertices (np.ndarray): shape (4, 3)
-        faces (np.ndarray): shape (1, 4)
+        vertices (ndarray): shape (4, 3)
+        faces (ndarray): shape (1, 4)
     """
     vertices = np.array([
         [0.5, 0.5, 0],   [-0.5, 0.5, 0],   [-0.5, -0.5, 0],   [0.5, -0.5, 0] # v0-v1-v2-v3
@@ -376,7 +456,7 @@ def square(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     return vertices, faces  
 
 
-def cube(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+def cube(tri: bool = False) -> Tuple[ndarray, ndarray]:
     """
     Get x cube mesh of size 1 centered at origin.
 
@@ -384,8 +464,8 @@ def cube(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
 
     ### Returns
-        vertices (np.ndarray): shape (8, 3) 
-        faces (np.ndarray): shape (12, 3)
+        vertices (ndarray): shape (8, 3) 
+        faces (ndarray): shape (12, 3)
     """
     vertices = np.array([
         [0.5, 0.5, 0.5],   [-0.5, 0.5, 0.5],   [-0.5, -0.5, 0.5],   [0.5, -0.5, 0.5], # v0-v1-v2-v3
@@ -407,7 +487,7 @@ def cube(tri: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     return vertices, faces
 
 
-def camera_frustum(extrinsics: np.ndarray, intrinsics: np.ndarray, depth: float = 1.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def camera_frustum(extrinsics: ndarray, intrinsics: ndarray, depth: float = 1.0) -> Tuple[ndarray, ndarray, ndarray]:
     """
     Get x triangle mesh of camera frustum.
     """
@@ -449,7 +529,7 @@ def icosahedron():
     return vertices, faces
 
 
-def merge_meshes(meshes: List[Tuple[np.ndarray, ...]]) -> Tuple[np.ndarray, ...]:
+def merge_meshes(meshes: List[Tuple[ndarray, ...]]) -> Tuple[ndarray, ...]:
     """
     Merge multiple meshes into one mesh. Vertices will be no longer shared.
 
@@ -475,23 +555,23 @@ def merge_meshes(meshes: List[Tuple[np.ndarray, ...]]) -> Tuple[np.ndarray, ...]
 
 
 def calc_quad_candidates(
-    edges: np.ndarray,
-    face2edge: np.ndarray,
-    edge2face: np.ndarray,
+    edges: ndarray,
+    face2edge: ndarray,
+    edge2face: ndarray,
 ):
     """
     Calculate the candidate quad faces.
 
     ## Parameters
-        edges (np.ndarray): [E, 2] edge indices
-        face2edge (np.ndarray): [T, 3] face to edge relation
-        edge2face (np.ndarray): [E, 2] edge to face relation
+        edges (ndarray): [E, 2] edge indices
+        face2edge (ndarray): [T, 3] face to edge relation
+        edge2face (ndarray): [E, 2] edge to face relation
 
     ## Returns
-        quads (np.ndarray): [Q, 4] quad candidate indices
-        quad2edge (np.ndarray): [Q, 4] edge to quad candidate relation
-        quad2adj (np.ndarray): [Q, 8] adjacent quad candidates of each quad candidate
-        quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
+        quads (ndarray): [Q, 4] quad candidate indices
+        quad2edge (ndarray): [Q, 4] edge to quad candidate relation
+        quad2adj (ndarray): [Q, 8] adjacent quad candidates of each quad candidate
+        quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
     """
     E = edges.shape[0]
     T = face2edge.shape[0]
@@ -536,18 +616,18 @@ def calc_quad_candidates(
 
 
 def calc_quad_distortion(
-    vertices: np.ndarray,
-    quads: np.ndarray,
+    vertices: ndarray,
+    quads: ndarray,
 ):
     """
     Calculate the distortion of each candidate quad face.
 
     ## Parameters
-        vertices (np.ndarray): [N, 3] 3-dimensional vertices
-        quads (np.ndarray): [Q, 4] quad face indices
+        vertices (ndarray): [N, 3] 3-dimensional vertices
+        quads (ndarray): [Q, 4] quad face indices
 
     ## Returns
-        distortion (np.ndarray): [Q] distortion of each quad face
+        distortion (ndarray): [Q] distortion of each quad face
     """
     edge0 = vertices[quads[:, 1]] - vertices[quads[:, 0]]  # [Q, 3]
     edge1 = vertices[quads[:, 2]] - vertices[quads[:, 1]]  # [Q, 3]
@@ -586,16 +666,16 @@ def calc_quad_distortion(
     return eng
 
 
-def calc_quad_direction(vertices: np.ndarray, quads: np.ndarray):
+def calc_quad_direction(vertices: ndarray, quads: ndarray):
     """
     Calculate the direction of each candidate quad face.
 
     ## Parameters
-        vertices (np.ndarray): [N, 3] 3-dimensional vertices
-        quads (np.ndarray): [Q, 4] quad face indices
+        vertices (ndarray): [N, 3] 3-dimensional vertices
+        quads (ndarray): [Q, 4] quad face indices
 
     ## Returns
-        direction (np.ndarray): [Q, 4] direction of each quad face.
+        direction (ndarray): [Q, 4] direction of each quad face.
             Represented by the angle between the crossing and each edge.
     """
     mid0 = (vertices[quads[:, 0]] + vertices[quads[:, 1]]) / 2  # [Q, 3]
@@ -628,19 +708,19 @@ def calc_quad_direction(vertices: np.ndarray, quads: np.ndarray):
 
 
 def calc_quad_smoothness(
-    quad2edge: np.ndarray,
-    quad2adj: np.ndarray,
-    quads_direction: np.ndarray,
+    quad2edge: ndarray,
+    quad2adj: ndarray,
+    quads_direction: ndarray,
 ):
     """
     Calculate the smoothness of each candidate quad face connection.
 
     ## Parameters
-        quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
-        quads_direction (np.ndarray): [Q, 4] direction of each quad face
+        quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
+        quads_direction (ndarray): [Q, 4] direction of each quad face
 
     ## Returns
-        smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
+        smoothness (ndarray): [Q, 8] smoothness of each quad face connection
     """
     Q = quad2adj.shape[0]
     quad2adj_valid = quad2adj != -1
@@ -657,26 +737,26 @@ def calc_quad_smoothness(
 
 
 def solve_quad(
-    face2edge: np.ndarray,
-    edge2face: np.ndarray,
-    quad2adj: np.ndarray,
-    quads_distortion: np.ndarray,
-    quads_smoothness: np.ndarray,
-    quads_valid: np.ndarray,
+    face2edge: ndarray,
+    edge2face: ndarray,
+    quad2adj: ndarray,
+    quads_distortion: ndarray,
+    quads_smoothness: ndarray,
+    quads_valid: ndarray,
 ):
     """
     Solve the quad mesh from the candidate quad faces.
 
     ## Parameters
-        face2edge (np.ndarray): [T, 3] face to edge relation
-        edge2face (np.ndarray): [E, 2] edge to face relation
-        quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
-        quads_distortion (np.ndarray): [Q] distortion of each quad face
-        quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
-        quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
+        face2edge (ndarray): [T, 3] face to edge relation
+        edge2face (ndarray): [E, 2] edge to face relation
+        quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
+        quads_distortion (ndarray): [Q] distortion of each quad face
+        quads_smoothness (ndarray): [Q, 8] smoothness of each quad face connection
+        quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
 
     ## Returns
-        weights (np.ndarray): [Q] weight of each valid quad face
+        weights (ndarray): [Q] weight of each valid quad face
     """
     import scipy.sparse as sp
     import scipy.optimize as opt
@@ -770,26 +850,26 @@ def solve_quad(
 
 
 def solve_quad_qp(
-    face2edge: np.ndarray,
-    edge2face: np.ndarray,
-    quad2adj: np.ndarray,
-    quads_distortion: np.ndarray,
-    quads_smoothness: np.ndarray,
-    quads_valid: np.ndarray,
+    face2edge: ndarray,
+    edge2face: ndarray,
+    quad2adj: ndarray,
+    quads_distortion: ndarray,
+    quads_smoothness: ndarray,
+    quads_valid: ndarray,
 ):
     """
     Solve the quad mesh from the candidate quad faces.
 
     ## Parameters
-        face2edge (np.ndarray): [T, 3] face to edge relation
-        edge2face (np.ndarray): [E, 2] edge to face relation
-        quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
-        quads_distortion (np.ndarray): [Q] distortion of each quad face
-        quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
-        quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
+        face2edge (ndarray): [T, 3] face to edge relation
+        edge2face (ndarray): [E, 2] edge to face relation
+        quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
+        quads_distortion (ndarray): [Q] distortion of each quad face
+        quads_smoothness (ndarray): [Q, 8] smoothness of each quad face connection
+        quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
 
     ## Returns
-        weights (np.ndarray): [Q] weight of each valid quad face
+        weights (ndarray): [Q] weight of each valid quad face
     """
     import scipy.sparse as sp
     import piqp
@@ -856,19 +936,19 @@ def solve_quad_qp(
 
 
 def tri_to_quad(
-    vertices: np.ndarray,
-    faces: np.ndarray, 
-) -> Tuple[np.ndarray, np.ndarray]:
+    vertices: ndarray,
+    faces: ndarray, 
+) -> Tuple[ndarray, ndarray]:
     """
     Convert a triangle mesh to a quad mesh.
     NOTE: The input mesh must be a manifold mesh.
 
     ## Parameters
-        vertices (np.ndarray): [N, 3] 3-dimensional vertices
-        faces (np.ndarray): [T, 3] triangular face indices
+        vertices (ndarray): [N, 3] 3-dimensional vertices
+        faces (ndarray): [T, 3] triangular face indices
 
     ## Returns
-        vertices (np.ndarray): [N_, 3] 3-dimensional vertices
-        faces (np.ndarray): [Q, 4] quad face indices
+        vertices (ndarray): [N_, 3] 3-dimensional vertices
+        faces (ndarray): [Q, 4] quad face indices
     """
     raise NotImplementedError

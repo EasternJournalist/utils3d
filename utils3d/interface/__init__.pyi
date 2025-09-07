@@ -49,7 +49,7 @@ __all__ = ["sliding_window",
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
-"make_se3_matrix", 
+"make_affine_matrix", 
 "slerp_quaternion", 
 "slerp_vector", 
 "lerp", 
@@ -59,9 +59,11 @@ __all__ = ["sliding_window",
 "transform", 
 "angle_between", 
 "triangulate_mesh", 
-"compute_face_normals", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
+"compute_face_corner_tangents", 
+"compute_face_normals", 
+"compute_face_tangents", 
 "compute_vertex_normals", 
 "remove_corrupted_faces", 
 "merge_duplicate_vertices", 
@@ -605,16 +607,16 @@ If the rays are intersecting, the closest point is the intersection point.
     utils3d.numpy.transforms.ray_intersection
 
 @overload
-def make_se3_matrix(R: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
-    """Convert rotation matrix and translation vector to 4x4 transformation matrix.
+def make_affine_matrix(M: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
+    """Make an affine transformation matrix from a linear matrix and a translation vector.
 
 ## Parameters
-    R (ndarray): [..., 3, 3] rotation matrix
-    t (ndarray): [..., 3] translation vector
+    M (ndarray): [..., D, D] linear matrix (rotation, scaling or general deformation)
+    t (ndarray): [..., D] translation vector
 
 ## Returns
-    ndarray: [..., 4, 4] transformation matrix"""
-    utils3d.numpy.transforms.make_se3_matrix
+    ndarray: [..., D + 1, D + 1] affine transformation matrix"""
+    utils3d.numpy.transforms.make_affine_matrix
 
 @overload
 def slerp_quaternion(q1: numpy_.ndarray, q2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
@@ -723,63 +725,95 @@ def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, met
     """Triangulate a polygonal mesh.
 
 ## Parameters
-    faces (np.ndarray): [L, P] polygonal faces
-    vertices (np.ndarray, optional): [N, 3] 3-dimensional vertices.
+    faces (ndarray): [L, P] polygonal faces
+    vertices (ndarray, optional): [N, 3] 3-dimensional vertices.
         If given, the triangulation is performed according to the distance
         between vertices. Defaults to None.
-    backslash (np.ndarray, optional): [L] boolean array indicating
+    backslash (ndarray, optional): [L] boolean array indicating
         how to triangulate the quad faces. Defaults to None.
 
 ## Returns
-    (np.ndarray): [L * (P - 2), 3] triangular faces"""
+    (ndarray): [L * (P - 2), 3] triangular faces"""
     utils3d.numpy.mesh.triangulate_mesh
 
 @overload
-def compute_face_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
-    """Compute face normals of a mesh
-
-## Parameters
-    vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, P] face indices
-
-## Returns
-    normals (np.ndarray): [..., T, 3] face normals"""
-    utils3d.numpy.mesh.compute_face_normals
-
-@overload
-def compute_face_corner_angles(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> numpy_.ndarray:
+def compute_face_corner_angles(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
     """Compute face corner angles of a mesh
 
 ## Parameters
-    vertices (np.ndarray): [..., N, 3] vertices
-    faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+- `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+- `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
 ## Returns
-    angles (np.ndarray): [..., T, P] face corner angles"""
+- `angles` (ndarray): `(..., F, P)` face corner angles"""
     utils3d.numpy.mesh.compute_face_corner_angles
 
 @overload
-def compute_face_corner_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray, normalized: bool = True) -> numpy_.ndarray:
+def compute_face_corner_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None, normalized: bool = True) -> numpy_.ndarray:
     """Compute the face corner normals of a mesh
 
 ## Parameters
-    vertices (np.ndarray): [..., N, 3] vertices
-    faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+- `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+- `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+- `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
 ## Returns
-    angles (np.ndarray): [..., T, P, 3] face corner normals"""
+- `normals` (ndarray): (..., F, P, 3) face corner normals"""
     utils3d.numpy.mesh.compute_face_corner_normals
+
+@overload
+def compute_face_corner_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, faces_vertices: Optional[numpy_.ndarray] = None, faces_uv: Optional[numpy_.ndarray] = None, normalize: bool = True) -> numpy_.ndarray:
+    """Compute the face corner tangent (and bitangent) vectors of a mesh
+
+## Parameters
+- `vertices` (ndarray): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+- `uv` (ndarray): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+- `faces_vertices` (ndarray, optional): `(F, P)` face vertex indices
+- `faces_uv` (ndarray, optional): `(F, P)` face UV indices
+- `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+
+## Returns
+- `tangents` (ndarray): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
+    where the last dimension represents the tangent and bitangent vectors."""
+    utils3d.numpy.mesh.compute_face_corner_tangents
+
+@overload
+def compute_face_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+    """Compute face normals of a mesh
+
+## Parameters
+- `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+- `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+
+## Returns
+- `normals` (ndarray): `(..., F, 3)` face normals. Always normalized."""
+    utils3d.numpy.mesh.compute_face_normals
+
+@overload
+def compute_face_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, faces_vertices: Optional[numpy_.ndarray] = None, faces_uv: Optional[numpy_.ndarray] = None, normalize: bool = True) -> numpy_.ndarray:
+    """Compute the face corner tangent (and bitangent) vectors of a mesh
+
+## Parameters
+- `vertices` (ndarray): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+- `uv` (ndarray): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+- `faces_vertices` (ndarray, optional): `(F, P)` face vertex indices
+- `faces_uv` (ndarray, optional): `(F, P)` face UV indices
+
+## Returns
+- `tangents` (ndarray): `(..., F, 3, 2)` face corner tangents (and bitangents), 
+    where the last dimension represents the tangent and bitangent vectors."""
+    utils3d.numpy.mesh.compute_face_tangents
 
 @overload
 def compute_vertex_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray, weighted: Literal['uniform', 'area', 'angle'] = 'uniform') -> numpy_.ndarray:
     """Compute vertex normals of a triangular mesh by averaging neighboring face normals
 
 ## Parameters
-    vertices (np.ndarray): [..., N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, P] face vertex indices, where P is the number of vertices per face
+    vertices (ndarray): [..., N, 3] 3-dimensional vertices
+    faces (ndarray): [T, P] face vertex indices, where P is the number of vertices per face
 
 ## Returns
-    normals (np.ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)"""
+    normals (ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)"""
     utils3d.numpy.mesh.compute_vertex_normals
 
 @overload
@@ -787,10 +821,10 @@ def remove_corrupted_faces(faces: numpy_.ndarray) -> numpy_.ndarray:
     """Remove corrupted faces (faces with duplicated vertices)
 
 ## Parameters
-    faces (np.ndarray): [T, 3] triangular face indices
+    faces (ndarray): [T, 3] triangular face indices
 
 ## Returns
-    np.ndarray: [T_, 3] triangular face indices"""
+    ndarray: [T_, 3] triangular face indices"""
     utils3d.numpy.mesh.remove_corrupted_faces
 
 @overload
@@ -799,13 +833,13 @@ def merge_duplicate_vertices(vertices: numpy_.ndarray, faces: numpy_.ndarray, to
 Duplicate vertices are merged by selecte one of them, and the face indices are updated accordingly.
 
 ## Parameters
-    vertices (np.ndarray): [N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices
+    vertices (ndarray): [N, 3] 3-dimensional vertices
+    faces (ndarray): [T, 3] triangular face indices
     tol (float, optional): tolerance for merging. Defaults to 1e-6.
 
 ## Returns
-    vertices (np.ndarray): [N_, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices"""
+    vertices (ndarray): [N_, 3] 3-dimensional vertices
+    faces (ndarray): [T, 3] triangular face indices"""
     utils3d.numpy.mesh.merge_duplicate_vertices
 
 @overload
@@ -814,28 +848,28 @@ def remove_unused_vertices(faces: numpy_.ndarray, *vertice_attrs, return_indices
 Unreferenced vertices are removed, and the face indices are updated accordingly.
 
 ## Parameters
-    faces (np.ndarray): [T, P] face indices
+    faces (ndarray): [T, P] face indices
     *vertice_attrs: vertex attributes
 
 ## Returns
-    faces (np.ndarray): [T, P] face indices
+    faces (ndarray): [T, P] face indices
     *vertice_attrs: vertex attributes
-    indices (np.ndarray, optional): [N] indices of vertices that are kept. Defaults to None."""
+    indices (ndarray, optional): [N] indices of vertices that are kept. Defaults to None."""
     utils3d.numpy.mesh.remove_unused_vertices
 
 @overload
-def subdivide_mesh(vertices: numpy_.ndarray, faces: numpy_.ndarray, n: int = 1) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def subdivide_mesh(vertices: numpy_.ndarray, faces: numpy_.ndarray, level: int = 1) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles.
 NOTE: All original vertices are kept, and new vertices are appended to the end of the vertex list.
 
 ## Parameters
-    vertices (np.ndarray): [N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices
-    n (int, optional): number of subdivisions. Defaults to 1.
+    vertices (ndarray): [N, 3] 3-dimensional vertices
+    faces (ndarray): [T, 3] triangular face indices
+    level (int, optional): level of subdivisions. Defaults to 1.
 
 ## Returns
-    vertices (np.ndarray): [N_, 3] subdivided 3-dimensional vertices
-    faces (np.ndarray): [4 * T, 3] subdivided triangular face indices"""
+    vertices (ndarray): [N_, 3] subdivided 3-dimensional vertices
+    faces (ndarray): [(4 ** level) * T, 3] subdivided triangular face indices"""
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
@@ -844,13 +878,13 @@ def mesh_relations(faces: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarra
 NOTE: The input mesh must be a manifold triangle mesh.
 
 ## Parameters
-    faces (np.ndarray): [T, 3] triangular face indices
+    faces (ndarray): [T, 3] triangular face indices
 
 ## Returns
-    edges (np.ndarray): [E, 2] edge indices
-    edge2face (np.ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
-    face2edge (np.ndarray): [T, 3] face to edge relation
-    face2face (np.ndarray): [T, 3] face to face relation"""
+    edges (ndarray): [E, 2] edge indices
+    edge2face (ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
+    face2edge (ndarray): [T, 3] face to edge relation
+    face2face (ndarray): [T, 3] face to face relation"""
     utils3d.numpy.mesh.mesh_relations
 
 @overload
@@ -865,8 +899,8 @@ def cube(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
 
 ### Returns
-    vertices (np.ndarray): shape (8, 3) 
-    faces (np.ndarray): shape (12, 3)"""
+    vertices (ndarray): shape (8, 3) 
+    faces (ndarray): shape (12, 3)"""
     utils3d.numpy.mesh.cube
 
 @overload
@@ -878,8 +912,8 @@ def square(tri: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Get a square mesh of area 1 centered at origin in the xy-plane.
 
 ## Returns
-    vertices (np.ndarray): shape (4, 3)
-    faces (np.ndarray): shape (1, 4)"""
+    vertices (ndarray): shape (4, 3)
+    faces (ndarray): shape (1, 4)"""
     utils3d.numpy.mesh.square
 
 @overload
@@ -904,15 +938,15 @@ def calc_quad_candidates(edges: numpy_.ndarray, face2edge: numpy_.ndarray, edge2
     """Calculate the candidate quad faces.
 
 ## Parameters
-    edges (np.ndarray): [E, 2] edge indices
-    face2edge (np.ndarray): [T, 3] face to edge relation
-    edge2face (np.ndarray): [E, 2] edge to face relation
+    edges (ndarray): [E, 2] edge indices
+    face2edge (ndarray): [T, 3] face to edge relation
+    edge2face (ndarray): [E, 2] edge to face relation
 
 ## Returns
-    quads (np.ndarray): [Q, 4] quad candidate indices
-    quad2edge (np.ndarray): [Q, 4] edge to quad candidate relation
-    quad2adj (np.ndarray): [Q, 8] adjacent quad candidates of each quad candidate
-    quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid"""
+    quads (ndarray): [Q, 4] quad candidate indices
+    quad2edge (ndarray): [Q, 4] edge to quad candidate relation
+    quad2adj (ndarray): [Q, 8] adjacent quad candidates of each quad candidate
+    quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid"""
     utils3d.numpy.mesh.calc_quad_candidates
 
 @overload
@@ -920,11 +954,11 @@ def calc_quad_distortion(vertices: numpy_.ndarray, quads: numpy_.ndarray):
     """Calculate the distortion of each candidate quad face.
 
 ## Parameters
-    vertices (np.ndarray): [N, 3] 3-dimensional vertices
-    quads (np.ndarray): [Q, 4] quad face indices
+    vertices (ndarray): [N, 3] 3-dimensional vertices
+    quads (ndarray): [Q, 4] quad face indices
 
 ## Returns
-    distortion (np.ndarray): [Q] distortion of each quad face"""
+    distortion (ndarray): [Q] distortion of each quad face"""
     utils3d.numpy.mesh.calc_quad_distortion
 
 @overload
@@ -932,11 +966,11 @@ def calc_quad_direction(vertices: numpy_.ndarray, quads: numpy_.ndarray):
     """Calculate the direction of each candidate quad face.
 
 ## Parameters
-    vertices (np.ndarray): [N, 3] 3-dimensional vertices
-    quads (np.ndarray): [Q, 4] quad face indices
+    vertices (ndarray): [N, 3] 3-dimensional vertices
+    quads (ndarray): [Q, 4] quad face indices
 
 ## Returns
-    direction (np.ndarray): [Q, 4] direction of each quad face.
+    direction (ndarray): [Q, 4] direction of each quad face.
         Represented by the angle between the crossing and each edge."""
     utils3d.numpy.mesh.calc_quad_direction
 
@@ -945,11 +979,11 @@ def calc_quad_smoothness(quad2edge: numpy_.ndarray, quad2adj: numpy_.ndarray, qu
     """Calculate the smoothness of each candidate quad face connection.
 
 ## Parameters
-    quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
-    quads_direction (np.ndarray): [Q, 4] direction of each quad face
+    quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
+    quads_direction (ndarray): [Q, 4] direction of each quad face
 
 ## Returns
-    smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection"""
+    smoothness (ndarray): [Q, 8] smoothness of each quad face connection"""
     utils3d.numpy.mesh.calc_quad_smoothness
 
 @overload
@@ -957,15 +991,15 @@ def solve_quad(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: n
     """Solve the quad mesh from the candidate quad faces.
 
 ## Parameters
-    face2edge (np.ndarray): [T, 3] face to edge relation
-    edge2face (np.ndarray): [E, 2] edge to face relation
-    quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
-    quads_distortion (np.ndarray): [Q] distortion of each quad face
-    quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
-    quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
+    face2edge (ndarray): [T, 3] face to edge relation
+    edge2face (ndarray): [E, 2] edge to face relation
+    quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
+    quads_distortion (ndarray): [Q] distortion of each quad face
+    quads_smoothness (ndarray): [Q, 8] smoothness of each quad face connection
+    quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
 
 ## Returns
-    weights (np.ndarray): [Q] weight of each valid quad face"""
+    weights (ndarray): [Q] weight of each valid quad face"""
     utils3d.numpy.mesh.solve_quad
 
 @overload
@@ -973,15 +1007,15 @@ def solve_quad_qp(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj
     """Solve the quad mesh from the candidate quad faces.
 
 ## Parameters
-    face2edge (np.ndarray): [T, 3] face to edge relation
-    edge2face (np.ndarray): [E, 2] edge to face relation
-    quad2adj (np.ndarray): [Q, 8] adjacent quad faces of each quad face
-    quads_distortion (np.ndarray): [Q] distortion of each quad face
-    quads_smoothness (np.ndarray): [Q, 8] smoothness of each quad face connection
-    quads_valid (np.ndarray): [E] whether the quad corresponding to the edge is valid
+    face2edge (ndarray): [T, 3] face to edge relation
+    edge2face (ndarray): [E, 2] edge to face relation
+    quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
+    quads_distortion (ndarray): [Q] distortion of each quad face
+    quads_smoothness (ndarray): [Q, 8] smoothness of each quad face connection
+    quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
 
 ## Returns
-    weights (np.ndarray): [Q] weight of each valid quad face"""
+    weights (ndarray): [Q] weight of each valid quad face"""
     utils3d.numpy.mesh.solve_quad_qp
 
 @overload
@@ -990,12 +1024,12 @@ def tri_to_quad(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> Tuple[numpy_
 NOTE: The input mesh must be a manifold mesh.
 
 ## Parameters
-    vertices (np.ndarray): [N, 3] 3-dimensional vertices
-    faces (np.ndarray): [T, 3] triangular face indices
+    vertices (ndarray): [N, 3] 3-dimensional vertices
+    faces (ndarray): [T, 3] triangular face indices
 
 ## Returns
-    vertices (np.ndarray): [N_, 3] 3-dimensional vertices
-    faces (np.ndarray): [Q, 4] quad face indices"""
+    vertices (ndarray): [N_, 3] 3-dimensional vertices
+    faces (ndarray): [Q, 4] quad face indices"""
     utils3d.numpy.mesh.tri_to_quad
 
 @overload
@@ -1886,16 +1920,16 @@ def extrinsics_to_essential(extrinsics: torch_.Tensor):
     utils3d.torch.transforms.extrinsics_to_essential
 
 @overload
-def make_se3_matrix(R: torch_.Tensor, t: torch_.Tensor):
-    """Compose rotation matrix and translation vector to 4x4 transformation matrix
+def make_affine_matrix(M: torch_.Tensor, t: torch_.Tensor):
+    """Make an affine transformation matrix from a linear matrix and a translation vector.
 
 ## Parameters
-    R (Tensor): [..., 3, 3] rotation matrix
-    t (Tensor): [..., 3] translation vector
+    M (Tensor): [..., D, D] linear matrix (rotation, scaling or general deformation)
+    t (Tensor): [..., D] translation vector
 
 ## Returns
-    (Tensor): [..., 4, 4] transformation matrix"""
-    utils3d.torch.transforms.make_se3_matrix
+    Tensor: [..., D + 1, D + 1] affine transformation matrix"""
+    utils3d.torch.transforms.make_affine_matrix
 
 @overload
 def rotation_matrix_2d(theta: Union[float, torch_.Tensor]):
@@ -1996,52 +2030,73 @@ def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, metho
     utils3d.torch.mesh.triangulate_mesh
 
 @overload
-def compute_face_normals(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
-    """Compute face normals of a polygon mesh
+def compute_face_corner_angles(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+    """Compute face corner angles of a mesh
 
 ## Parameters
-    vertices (Tensor): [..., N, 3] 3-dimensional vertices
-    faces (Tensor): [T, P] face indices
+- `vertices` (np.Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+- `faces` (np.Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
 ## Returns
-    normals (Tensor): [..., T, 3] face normals"""
-    utils3d.torch.mesh.compute_face_normals
-
-@overload
-def compute_face_corner_normals(vertices: torch_.Tensor, faces: torch_.Tensor, normalized: bool = True) -> torch_.Tensor:
-    """Compute the face corner normals of a polygon mesh
-
-## Parameters
-    vertices (Tensor): [..., N, 3] vertices
-    faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
-
-## Returns
-    angles (Tensor): [..., T, P, 3] face corner normals"""
-    utils3d.torch.mesh.compute_face_corner_normals
-
-@overload
-def compute_face_corner_angles(vertices: torch_.Tensor, faces: torch_.Tensor) -> torch_.Tensor:
-    """Compute face corner angles of a polygon mesh
-
-## Parameters
-    vertices (Tensor): [..., N, 3] vertices
-    faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
-
-## Returns
-    angles (Tensor): [..., T, P] face corner angles"""
+- `angles` (np.Tensor): `(..., F, P)` face corner angles"""
     utils3d.torch.mesh.compute_face_corner_angles
 
 @overload
-def compute_vertex_normals(vertices: torch_.Tensor, faces: torch_.Tensor, weighted: Literal['uniform', 'area', 'angle'] = 'uniform') -> torch_.Tensor:
-    """Compute vertex normals of a polygon mesh by averaging neighboring face normals
+def compute_face_corner_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None, normalized: bool = True) -> torch_.Tensor:
+    """Compute the face corner normals of a mesh
 
 ## Parameters
-    vertices (Tensor): [..., N, 3] 3-dimensional vertices
-    faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+- `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+- `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+- `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
 ## Returns
-    normals (Tensor): [..., N, 3] vertex normals (already normalized to unit vectors)"""
-    utils3d.torch.mesh.compute_vertex_normals
+- `normals` (Tensor): (..., F, P, 3) face corner normals"""
+    utils3d.torch.mesh.compute_face_corner_normals
+
+@overload
+def compute_face_corner_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vertices: Optional[torch_.Tensor] = None, faces_uv: Optional[torch_.Tensor] = None, normalize: bool = True) -> torch_.Tensor:
+    """    Compute the face corner tangent (and bitangent) vectors of a mesh
+
+    ## Parameters
+    - `vertices` (Tensor): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+    - `uv` (Tensor): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+    - `faces_vertices` (Tensor, optional): `(F, P)` face vertex indices
+    - `faces_uv` (Tensor, optional): `(F, P)` face UV indices
+    - `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+s
+    ## Returns
+    - `tangents` (Tensor): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
+        where the last dimension represents the tangent and bitangent vectors.
+    """
+    utils3d.torch.mesh.compute_face_corner_tangents
+
+@overload
+def compute_face_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+    """Compute face normals of a mesh
+
+## Parameters
+- `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+- `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+
+## Returns
+- `normals` (Tensor): `(..., F, 3)` face normals. Always normalized."""
+    utils3d.torch.mesh.compute_face_normals
+
+@overload
+def compute_face_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vertices: Optional[torch_.Tensor] = None, faces_uv: Optional[torch_.Tensor] = None, normalize: bool = True) -> torch_.Tensor:
+    """Compute the face corner tangent (and bitangent) vectors of a mesh
+
+## Parameters
+- `vertices` (Tensor): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+- `uv` (Tensor): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+- `faces_vertices` (Tensor, optional): `(F, P)` face vertex indices
+- `faces_uv` (Tensor, optional): `(F, P)` face UV indices
+
+## Returns
+- `tangents` (Tensor): `(..., F, 3, 2)` face corner tangents (and bitangents), 
+    where the last dimension represents the tangent and bitangent vectors."""
+    utils3d.torch.mesh.compute_face_tangents
 
 @overload
 def compute_edges(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
@@ -2184,21 +2239,19 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.torch.mesh.subdivide_mesh
 
 @overload
-def compute_face_tbn(pos: torch_.Tensor, faces_pos: torch_.Tensor, uv: torch_.Tensor, faces_uv: torch_.Tensor, eps: float = 1e-07) -> torch_.Tensor:
-    """compute TBN matrix for each face
+def compute_face_tbn(tri_vertices: torch_.Tensor, tri_uvs: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
+    """compute TBN matrix for each triangle faces
 
 ## Parameters
-    pos (Tensor): shape (..., N_pos, 3), positions
-    faces_pos (Tensor): shape(T, 3) 
-    uv (Tensor): shape (..., N_uv, 3) uv coordinates, 
-    faces_uv (Tensor): shape(T, 3) 
+    - `tri_vertices` (Tensor): shape (..., T, 3, 3), positions
+    - `tri_uvs` (Tensor): shape (..., T, 3, 3) uv coordinates
     
 ## Returns
-    Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
+    `tbn` (Tensor): (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
     utils3d.torch.mesh.compute_face_tbn
 
 @overload
-def compute_vertex_tbn(faces_topo: torch_.Tensor, pos: torch_.Tensor, faces_pos: torch_.Tensor, uv: torch_.Tensor, faces_uv: torch_.Tensor) -> torch_.Tensor:
+def compute_vertex_tbn(faces_topo: torch_.Tensor, tri_vertices: torch_.Tensor, tri_uvs: torch_.Tensor) -> torch_.Tensor:
     """compute TBN matrix for each face
 
 ## Parameters

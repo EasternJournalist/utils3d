@@ -119,18 +119,20 @@ def triangulate_mesh(
 
 def compute_face_corner_angles(
     vertices: Tensor,
-    faces: Tensor,
+    faces: Optional[Tensor] = None,
 ) -> Tensor:
     """
-    Compute face corner angles of a polygon mesh
+    Compute face corner angles of a mesh
 
     ## Parameters
-        vertices (Tensor): [..., N, 3] vertices
-        faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+    - `vertices` (np.Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (np.Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
     ## Returns
-        angles (Tensor): [..., T, P] face corner angles
+    - `angles` (np.Tensor): `(..., F, P)` face corner angles
     """
+    if faces is not None:
+        vertices = vertices.index_select(-2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., F, P, 3)
     loop = torch.arange(faces.shape[1])
     edges = vertices[..., faces[:, torch.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
     angles = angle_between(-torch.roll(edges, 1, dims=-2), edges)
@@ -139,51 +141,125 @@ def compute_face_corner_angles(
 
 def compute_face_corner_normals(
     vertices: Tensor,
-    faces: Tensor,
+    faces: Optional[Tensor] = None,
     normalized: bool = True
 ) -> Tensor:
     """
-    Compute the face corner normals of a polygon mesh
+    Compute the face corner normals of a mesh
 
     ## Parameters
-        vertices (Tensor): [..., N, 3] vertices
-        faces (Tensor): [T, P] face vertex indices, where P is the number of vertices per face
+    - `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+    - `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
     ## Returns
-        angles (Tensor): [..., T, P, 3] face corner normals
+    - `normals` (Tensor): (..., F, P, 3) face corner normals
     """
-    loop = torch.arange(faces.shape[1])
-    edges = vertices[..., faces[:, torch.roll(loop, -1)], :] - vertices[..., faces[:, loop], :]
+    if faces is not None:
+        vertices = vertices.index_select(-2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., F, P, 3)
+    edges = torch.roll(vertices, -1, dim=-2) - vertices  # (..., T, P, 3)
     normals = torch.cross(torch.roll(edges, 1, dims=-2), edges)
     if normalized:
-        normals = F.normalize(normals, p=2, dim=-1)
+        normals /= torch.linalg.norm(normals, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
     return normals
+
+def compute_face_corner_tangents(
+    vertices: Tensor,
+    uv: Tensor,
+    faces_vertices: Optional[Tensor] = None,
+    faces_uv: Optional[Tensor] = None,
+    normalize: bool = True
+) -> Tensor:
+    """
+    Compute the face corner tangent (and bitangent) vectors of a mesh
+
+    ## Parameters
+    - `vertices` (Tensor): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+    - `uv` (Tensor): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+    - `faces_vertices` (Tensor, optional): `(F, P)` face vertex indices
+    - `faces_uv` (Tensor, optional): `(F, P)` face UV indices
+    - `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+s
+    ## Returns
+    - `tangents` (Tensor): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
+        where the last dimension represents the tangent and bitangent vectors.
+    """
+    if faces_vertices is not None:
+        vertices = vertices.index_select(-2, faces_vertices.view(-1)).view(*vertices.shape[:-2], *faces_vertices.shape, vertices.shape[-1])   # (..., F, P, 3)
+    if faces_uv is not None:
+        uv = uv.index_select(-2, faces_uv.view(-1)).view(*uv.shape[:-2], *faces_uv.shape, uv.shape[-1])   # (..., F, P, 2)
+    
+    edge_xyz = torch.roll(vertices, -1, dim=-2) - vertices  # (..., F, P, 3)
+    edge_uv = torch.roll(uv, -1, dim=-2) - uv  # (..., F, P, 2)
+
+    tangents = torch.stack([torch.roll(edge_xyz, 1, dim=-2), edge_xyz], dim=-1) \
+        @ torch.linalg.inv(torch.stack([torch.roll(edge_uv, 1, dim=-2), edge_uv], dim=-1))
+    if normalize:
+        tangents /= torch.linalg.norm(tangents, dim=-1, keepdim=True) + torch.finfo(tangents.dtype).eps
+    return tangents
 
 
 def compute_face_normals(
     vertices: Tensor,
-    faces: Tensor,
+    faces: Optional[Tensor] = None,
 ) -> Tensor:
     """
-    Compute face normals of a polygon mesh
+    Compute face normals of a mesh
 
     ## Parameters
-        vertices (Tensor): [..., N, 3] 3-dimensional vertices
-        faces (Tensor): [T, P] face indices
+    - `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
     ## Returns
-        normals (Tensor): [..., T, 3] face normals
+    - `normals` (Tensor): `(..., F, 3)` face normals. Always normalized.
     """
-    if faces.shape[-1] == 3:
+    if faces is not None:
+        vertices = vertices.index_select(-2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., F, P, 3)
+    if vertices.shape[-2] == 3:
         normals = torch.cross(
-            vertices[..., faces[:, 1], :] - vertices[..., faces[:, 0], :],
-            vertices[..., faces[:, 2], :] - vertices[..., faces[:, 0], :]
+            vertices[..., 1, :] - vertices[..., 0, :],
+            vertices[..., 2, :] - vertices[..., 0, :]
         )
     else:
-        normals = compute_face_corner_normals(vertices, faces, normalized=False)
-        normals = torch.mean(normals, axis=-2)
-    normals = F.normalize(normals, p=2, dim=-1)
+        normals = compute_face_corner_normals(vertices, normalized=False)
+        normals = torch.mean(normals, dim=-2)
+    normals /= torch.linalg.norm(normals, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
     return normals
+
+
+def compute_face_tangents(
+    vertices: Tensor,
+    uv: Tensor,
+    faces_vertices: Optional[Tensor] = None,
+    faces_uv: Optional[Tensor] = None,
+    normalize: bool = True
+) -> Tensor:
+    """
+    Compute the face corner tangent (and bitangent) vectors of a mesh
+
+    ## Parameters
+    - `vertices` (Tensor): `(..., N, 3)` if `faces` is provided, or `(..., F, P, 3)` if `faces_vertices` is None
+    - `uv` (Tensor): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
+    - `faces_vertices` (Tensor, optional): `(F, P)` face vertex indices
+    - `faces_uv` (Tensor, optional): `(F, P)` face UV indices
+
+    ## Returns
+    - `tangents` (Tensor): `(..., F, 3, 2)` face corner tangents (and bitangents), 
+        where the last dimension represents the tangent and bitangent vectors.
+    """
+    if faces_vertices is not None:
+        vertices = vertices.index_select(-2, faces_vertices.view(-1)).view(*vertices.shape[:-2], *faces_vertices.shape, vertices.shape[-1])   # (..., F, P, 3)
+    if faces_uv is not None:
+        uv = uv.index_select(-2, faces_uv.view(-1)).view(*uv.shape[:-2], *faces_uv.shape, uv.shape[-1])   # (..., F, P, 2)
+    if vertices.shape[-2] == 3:
+        tangents = torch.stack([vertices[..., 1, :] - vertices[..., 0, :], vertices[..., 2, :] - vertices[..., 0, :]], dim=-1) \
+            @ torch.linalg.inv(torch.stack([uv[..., 1, :] - uv[..., 0, :], uv[..., 2, :] - uv[..., 0, :]], dim=-1))
+    else:
+        tangents = compute_face_corner_tangents(vertices, uv, normalized=False)
+        tangents = torch.mean(tangents, dim=-2)
+    if normalize:
+        tangents /= torch.linalg.norm(tangents, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
+    return tangents
 
 
 def compute_vertex_normals(
@@ -212,7 +288,8 @@ def compute_vertex_normals(
     vertex_normals = torch.index_put(
         torch.zeros_like(vertices, dtype=vertices.dtype),
         (..., faces[..., None], torch.arange(3)),
-        face_corner_normals
+        face_corner_normals,
+        accumulate=True
     )
     vertex_normals = F.normalize(vertex_normals, p=2, dim=-1)
     return vertex_normals
@@ -555,38 +632,36 @@ def subdivide_mesh(vertices: Tensor, faces: Tensor, n: int = 1) -> Tuple[Tensor,
         n_vertices = vertices.shape[0]
         vertices = torch.cat([vertices, midpoints], dim=0)
         faces = torch.cat([
-            torch.stack([faces[:, 0], n_vertices + uni_inv[0], n_vertices + uni_inv[2]], axis=1),
-            torch.stack([faces[:, 1], n_vertices + uni_inv[1], n_vertices + uni_inv[0]], axis=1),
-            torch.stack([faces[:, 2], n_vertices + uni_inv[2], n_vertices + uni_inv[1]], axis=1),
-            torch.stack([n_vertices + uni_inv[0], n_vertices + uni_inv[1], n_vertices + uni_inv[2]], axis=1),
+            torch.stack([faces[:, 0], n_vertices + uni_inv[0], n_vertices + uni_inv[2]], dim=1),
+            torch.stack([faces[:, 1], n_vertices + uni_inv[1], n_vertices + uni_inv[0]], dim=1),
+            torch.stack([faces[:, 2], n_vertices + uni_inv[2], n_vertices + uni_inv[1]], dim=1),
+            torch.stack([n_vertices + uni_inv[0], n_vertices + uni_inv[1], n_vertices + uni_inv[2]], dim=1),
         ], dim=0)
     return vertices, faces
 
 
-def compute_face_tbn(pos: Tensor, faces_pos: Tensor, uv: Tensor, faces_uv: Tensor, eps: float = 1e-7) -> Tensor:
-    """compute TBN matrix for each face
+def compute_face_tbn(tri_vertices: Tensor, tri_uvs: Tensor, eps: float = 1e-12) -> Tensor:
+    """compute TBN matrix for each triangle faces
 
     ## Parameters
-        pos (Tensor): shape (..., N_pos, 3), positions
-        faces_pos (Tensor): shape(T, 3) 
-        uv (Tensor): shape (..., N_uv, 3) uv coordinates, 
-        faces_uv (Tensor): shape(T, 3) 
+        - `tri_vertices` (Tensor): shape (..., T, 3, 3), positions
+        - `tri_uvs` (Tensor): shape (..., T, 3, 3) uv coordinates
         
     ## Returns
-        Tensor: (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal
+        `tbn` (Tensor): (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal
     """
-    e01 = torch.index_select(pos, dim=-2, index=faces_pos[:, 1]) - torch.index_select(pos, dim=-2, index=faces_pos[:, 0])
-    e02 = torch.index_select(pos, dim=-2, index=faces_pos[:, 2]) - torch.index_select(pos, dim=-2, index=faces_pos[:, 0])
-    uv01 = torch.index_select(uv, dim=-2, index=faces_uv[:, 1]) - torch.index_select(uv, dim=-2, index=faces_uv[:, 0])
-    uv02 = torch.index_select(uv, dim=-2, index=faces_uv[:, 2]) - torch.index_select(uv, dim=-2, index=faces_uv[:, 0])
+    e01 = tri_vertices[..., 1, :] - tri_vertices[..., 0, :]
+    e02 = tri_vertices[..., 2, :] - tri_vertices[..., 0, :]
+    uv01 = tri_uvs[..., 1, :] - tri_uvs[..., 0, :]
+    uv02 = tri_uvs[..., 2, :] - tri_uvs[..., 0, :]
     normal = torch.cross(e01, e02)
     tangent_bitangent = torch.stack([e01, e02], dim=-1) @ torch.inverse(torch.stack([uv01, uv02], dim=-1))
     tbn = torch.cat([tangent_bitangent, normal.unsqueeze(-1)], dim=-1)
-    tbn = tbn / (torch.norm(tbn, p=2, dim=-2, keepdim=True) + eps)
+    tbn = F.normalize(tbn, p=2, dim=-2, eps=eps)
     return tbn
 
 
-def compute_vertex_tbn(faces_topo: Tensor, pos: Tensor, faces_pos: Tensor, uv: Tensor, faces_uv: Tensor) -> Tensor:
+def compute_vertex_tbn(faces_topo: Tensor, tri_vertices: Tensor, tri_uvs: Tensor) -> Tensor:
     """compute TBN matrix for each face
 
     ## Parameters
@@ -602,10 +677,10 @@ def compute_vertex_tbn(faces_topo: Tensor, pos: Tensor, faces_pos: Tensor, uv: T
     n_vertices = faces_topo.max().item() + 1
     n_tri = faces_topo.shape[-2]
     batch_shape = pos.shape[:-2]
-    face_tbn = compute_face_tbn(pos, faces_pos, uv, faces_uv)    # (..., T, 3, 3)
+    face_tbn = compute_face_tbn(pos[faces_pos], uv, faces_uv)    # (..., T, 3, 3)
     face_tbn = face_tbn[..., :, None, :, :].repeat(*[1] * len(batch_shape), 1, 3, 1, 1).view(*batch_shape, n_tri * 3, 3, 3)   # (..., T * 3, 3, 3)
     vertex_tbn = torch.index_add(torch.zeros(*batch_shape, n_vertices, 3, 3).to(face_tbn), dim=-3, index=faces_topo.view(-1), source=face_tbn)
-    vertex_tbn = vertex_tbn / (torch.norm(vertex_tbn, p=2, dim=-2, keepdim=True) + 1e-7)
+    vertex_tbn = F.normalize(vertex_tbn, p=2, dim=-2)
     return vertex_tbn
 
 

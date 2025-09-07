@@ -44,7 +44,7 @@ __all__ = [
     'skew_symmetric',
     'rotation_matrix_from_vectors',
     'ray_intersection',
-    'make_se3_matrix',
+    'make_affine_matrix',
     'slerp_quaternion',
     'slerp_vector',
     'lerp',
@@ -233,7 +233,7 @@ def view_look_at(
     R = np.stack([x, y, z], axis=-2)
     R = R / np.linalg.norm(R, axis=-1, keepdims=True)
     t = (-R @ eye[..., None]).squeeze(-1)
-    return make_se3_matrix(R, t)
+    return make_affine_matrix(R, t)
 
 
 @toarray(_others=np.float32)
@@ -500,7 +500,7 @@ def pixel_to_ndc(
     dtype = pixel.dtype
     if pixel_definition == 'corner':
         pixel = pixel + 0.5
-    ndc = pixel / (np.stack([width, height], dim=-1) * np.array([2, -2], dtype=dtype)) \
+    ndc = pixel / (np.stack([width, height], axis=-1) * np.array([2, -2], dtype=dtype)) \
         + np.array([-1, 1], dtype=dtype)
     return ndc
 
@@ -682,8 +682,8 @@ def unproject_cv(
         [np.broadcast_to(np.array([0, 0, 0, 1], dtype=intrinsics.dtype), (*intrinsics.shape[:-2], 1, 4))]
     ])
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
-    points = np.concatenate([uv, np.ones((*uv.shape[:-1], 1), dtype=uv.dtype)], dim=-1) * depth[..., None]
-    points = np.concatenate([points, np.ones((*points.shape[:-1], 1), dtype=uv.dtype)], dim=-1)
+    points = np.concatenate([uv, np.ones((*uv.shape[:-1], 1), dtype=uv.dtype)], axis=-1) * depth[..., None]
+    points = np.concatenate([points, np.ones((*points.shape[:-1], 1), dtype=uv.dtype)], axis=-1)
     points = points @ np.linalg.inv(transform).mT
     points = points[..., :3]
     return points
@@ -1003,20 +1003,20 @@ def ray_intersection(p1: ndarray, d1: ndarray, p2: ndarray, d2: ndarray):
 
 
 @batched(2, 1)
-def make_se3_matrix(R: ndarray, t: ndarray) -> ndarray:
+def make_affine_matrix(M: ndarray, t: ndarray) -> ndarray:
     """
-    Convert rotation matrix and translation vector to 4x4 transformation matrix.
+    Make an affine transformation matrix from a linear matrix and a translation vector.
 
     ## Parameters
-        R (ndarray): [..., 3, 3] rotation matrix
-        t (ndarray): [..., 3] translation vector
+        M (ndarray): [..., D, D] linear matrix (rotation, scaling or general deformation)
+        t (ndarray): [..., D] translation vector
 
     ## Returns
-        ndarray: [..., 4, 4] transformation matrix
+        ndarray: [..., D + 1, D + 1] affine transformation matrix
     """
     x = np.block([
-        [R, t[..., None]], 
-        [np.zeros((*R.shape[:-2], 1, R.shape[-1]), dtype=R.dtype), np.ones((*R.shape[:-2], 1, 1), dtype=R.dtype)]
+        [M, t[..., None]], 
+        [np.zeros((*M.shape[:-2], 1, M.shape[-1]), dtype=M.dtype), np.ones((*M.shape[:-2], 1, 1), dtype=M.dtype)]
     ])
     return x
 
@@ -1122,7 +1122,7 @@ def lerp_se3_matrix(T1: ndarray, T2: ndarray, t: ndarray) -> ndarray:
     trans2 = T2[..., :3, 3]
     R = slerp_rotation_matrix(R1, R2, t)
     trans = lerp(trans1, trans2, t)
-    return make_se3_matrix(R, trans)
+    return make_affine_matrix(R, trans)
 
 
 def piecewise_lerp(x: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> ndarray:
