@@ -309,20 +309,20 @@ def normalize_intrinsics(intrinsics: numpy_.ndarray, width: Union[numbers.Number
     utils3d.numpy.transforms.normalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: numpy_.ndarray, width: Union[numbers.Number, numpy_.ndarray], height: Union[numbers.Number, numpy_.ndarray], left: Union[numbers.Number, numpy_.ndarray], top: Union[numbers.Number, numpy_.ndarray], crop_width: Union[numbers.Number, numpy_.ndarray], crop_height: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
-    """Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
+def crop_intrinsics(intrinsics: numpy_.ndarray, height: Union[numbers.Number, numpy_.ndarray], width: Union[numbers.Number, numpy_.ndarray], cropped_top: Union[numbers.Number, numpy_.ndarray], cropped_left: Union[numbers.Number, numpy_.ndarray], cropped_height: Union[numbers.Number, numpy_.ndarray], cropped_width: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
+    """Evaluate the new intrinsics after cropping the image
 
 ## Parameters
-    intrinsics (ndarray): [..., 3, 3] camera intrinsics(s) to crop
-    width (int | ndarray): [...] image width(s)
-    height (int | ndarray): [...] image height(s)
-    left (int | ndarray): [...] left crop boundary
-    top (int | ndarray): [...] top crop boundary
-    crop_width (int | ndarray): [...] crop width
-    crop_height (int | ndarray): [...] crop height
+    intrinsics (ndarray): (..., 3, 3) camera intrinsics(s) to crop
+    height (int | ndarray): (...) image height(s)
+    width (int | ndarray): (...) image width(s)
+    cropped_top (int | ndarray): (...) top pixel index of the cropped image(s)
+    cropped_left (int | ndarray): (...) left pixel index of the cropped image(s)
+    cropped_height (int | ndarray): (...) height of the cropped image(s)
+    cropped_width (int | ndarray): (...) width of the cropped image(s)
 
 ## Returns
-    (ndarray): [..., 3, 3] cropped camera intrinsics(s)"""
+    (ndarray): (..., 3, 3) cropped camera intrinsics"""
     utils3d.numpy.transforms.crop_intrinsics
 
 @overload
@@ -1571,20 +1571,20 @@ def normalize_intrinsics(intrinsics: torch_.Tensor, width: Union[numbers.Number,
     utils3d.torch.transforms.normalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: torch_.Tensor, original_height: Union[numbers.Number, torch_.Tensor], original_width: Union[numbers.Number, torch_.Tensor], cropped_left: Union[numbers.Number, torch_.Tensor], cropped_top: Union[numbers.Number, torch_.Tensor], cropped_height: Union[numbers.Number, torch_.Tensor], cropped_width: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
-    """Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
+def crop_intrinsics(intrinsics: torch_.Tensor, height: Union[numbers.Number, torch_.Tensor], width: Union[numbers.Number, torch_.Tensor], cropped_top: Union[numbers.Number, torch_.Tensor], cropped_left: Union[numbers.Number, torch_.Tensor], cropped_height: Union[numbers.Number, torch_.Tensor], cropped_width: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+    """Evaluate the new intrinsics after cropping the image
 
 ## Parameters
-    intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to crop
-    original_height (int | Tensor): [...] original image height(s)
-    original_width (int | Tensor): [...] original image width(s)
-    cropped_left (int | Tensor): [...] left pixel index of the cropped image(s)
-    cropped_top (int | Tensor): [...] top pixel index of the cropped image(s)
-    cropped_height (int | Tensor): [...] cropped image height(s)
-    cropped_width (int | Tensor): [...] cropped image width(s)
+    intrinsics (Tensor): (..., 3, 3) camera intrinsics(s) to crop
+    height (int | Tensor): (...) image height(s)
+    width (int | Tensor): (...) image width(s)
+    cropped_top (int | Tensor): (...) top pixel index of the cropped image(s)
+    cropped_left (int | Tensor): (...) left pixel index of the cropped image(s)
+    cropped_height (int | Tensor): (...) height of the cropped image(s)
+    cropped_width (int | Tensor): (...) width of the cropped image(s)
 
 ## Returns
-    (Tensor): [..., 3, 3] cropped camera intrinsics(s)"""
+    (Tensor): (..., 3, 3) cropped camera intrinsics"""
     utils3d.torch.transforms.crop_intrinsics
 
 @overload

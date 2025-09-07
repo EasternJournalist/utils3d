@@ -392,33 +392,33 @@ def normalize_intrinsics(
 @batched(2, _others=0)
 def crop_intrinsics(
     intrinsics: ndarray,
-    width: Union[Number, ndarray],
     height: Union[Number, ndarray],
-    left: Union[Number, ndarray],
-    top: Union[Number, ndarray],
-    crop_width: Union[Number, ndarray],
-    crop_height: Union[Number, ndarray]
+    width: Union[Number, ndarray],
+    cropped_top: Union[Number, ndarray],
+    cropped_left: Union[Number, ndarray],
+    cropped_height: Union[Number, ndarray],
+    cropped_width: Union[Number, ndarray],
 ) -> ndarray:
     """
-    Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
+    Evaluate the new intrinsics after cropping the image
 
     ## Parameters
-        intrinsics (ndarray): [..., 3, 3] camera intrinsics(s) to crop
-        width (int | ndarray): [...] image width(s)
-        height (int | ndarray): [...] image height(s)
-        left (int | ndarray): [...] left crop boundary
-        top (int | ndarray): [...] top crop boundary
-        crop_width (int | ndarray): [...] crop width
-        crop_height (int | ndarray): [...] crop height
+        intrinsics (ndarray): (..., 3, 3) camera intrinsics(s) to crop
+        height (int | ndarray): (...) image height(s)
+        width (int | ndarray): (...) image width(s)
+        cropped_top (int | ndarray): (...) top pixel index of the cropped image(s)
+        cropped_left (int | ndarray): (...) left pixel index of the cropped image(s)
+        cropped_height (int | ndarray): (...) height of the cropped image(s)
+        cropped_width (int | ndarray): (...) width of the cropped image(s)
 
     ## Returns
-        (ndarray): [..., 3, 3] cropped camera intrinsics(s)
+        (ndarray): (..., 3, 3) cropped camera intrinsics
     """
     zeros = np.zeros_like(width)
     ones = np.ones_like(width)
     transform = np.stack([
-        width / crop_width, zeros, -left / crop_width,
-        zeros, height / crop_height, -top / crop_height,
+        width / cropped_width, zeros, -cropped_left / cropped_width,
+        zeros, height / cropped_height, -cropped_top / cropped_height,
         zeros, zeros, ones
     ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics

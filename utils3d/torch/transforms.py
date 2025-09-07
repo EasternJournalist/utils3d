@@ -376,33 +376,33 @@ def normalize_intrinsics(
 @batched(2, _others=0)
 def crop_intrinsics(
     intrinsics: Tensor,
-    original_height: Union[Number, Tensor],
-    original_width: Union[Number, Tensor],
-    cropped_left: Union[Number, Tensor],
+    height: Union[Number, Tensor],
+    width: Union[Number, Tensor],
     cropped_top: Union[Number, Tensor],
+    cropped_left: Union[Number, Tensor],
     cropped_height: Union[Number, Tensor],
     cropped_width: Union[Number, Tensor],
 ) -> Tensor:
     """
-    Evaluate the new intrinsics(s) after crop the image: cropped_img = img[top:top+crop_height, left:left+crop_width]
+    Evaluate the new intrinsics after cropping the image
 
     ## Parameters
-        intrinsics (Tensor): [..., 3, 3] camera intrinsics(s) to crop
-        original_height (int | Tensor): [...] original image height(s)
-        original_width (int | Tensor): [...] original image width(s)
-        cropped_left (int | Tensor): [...] left pixel index of the cropped image(s)
-        cropped_top (int | Tensor): [...] top pixel index of the cropped image(s)
-        cropped_height (int | Tensor): [...] cropped image height(s)
-        cropped_width (int | Tensor): [...] cropped image width(s)
+        intrinsics (Tensor): (..., 3, 3) camera intrinsics(s) to crop
+        height (int | Tensor): (...) image height(s)
+        width (int | Tensor): (...) image width(s)
+        cropped_top (int | Tensor): (...) top pixel index of the cropped image(s)
+        cropped_left (int | Tensor): (...) left pixel index of the cropped image(s)
+        cropped_height (int | Tensor): (...) height of the cropped image(s)
+        cropped_width (int | Tensor): (...) width of the cropped image(s)
 
     ## Returns
-        (Tensor): [..., 3, 3] cropped camera intrinsics(s)
+        (Tensor): (..., 3, 3) cropped camera intrinsics
     """
-    zeros = torch.zeros_like(original_height)
-    ones = torch.ones_like(original_height)
+    zeros = torch.zeros_like(height)
+    ones = torch.ones_like(height)
     transform = torch.stack([
-        original_width / cropped_width, zeros, -cropped_left / cropped_width,
-        zeros, original_height / cropped_height, -cropped_top / cropped_height,
+        width / cropped_width, zeros, -cropped_left / cropped_width,
+        zeros, height / cropped_height, -cropped_top / cropped_height,
         zeros, zeros, ones
     ]).reshape(*zeros.shape, 3, 3).to(intrinsics)
     return transform @ intrinsics
