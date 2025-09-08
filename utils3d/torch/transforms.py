@@ -46,11 +46,12 @@ __all__ = [
     'axis_angle_to_matrix',
     'axis_angle_to_quaternion',
     'quaternion_to_axis_angle',
-    'slerp',
-    'interpolate_extrinsics',
-    'interpolate_view',
-    'extrinsics_to_essential',
     'make_affine_matrix',
+    'lerp',
+    'slerp',
+    'slerp_rotation_matrix',
+    'interpolate_se3_matrix',
+    'extrinsics_to_essential',
     'rotation_matrix_2d',
     'rotate_2d',
     'translate_2d',
@@ -1031,61 +1032,87 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
     return rot_mat
 
 
-def slerp(rot_mat_1: Tensor, rot_mat_2: Tensor, t: Union[Number, Tensor]) -> Tensor:
-    """Spherical linear interpolation between two rotation matrices
+@totensor(_others=torch.float32)
+@batched(1, 1, 1)
+def lerp(v1: torch.Tensor, v2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """
+    Linear interpolation between two vectors.
 
     ## Parameters
-        rot_mat_1 (Tensor): shape (..., 3, 3), the first rotation matrix
-        rot_mat_2 (Tensor): shape (..., 3, 3), the second rotation matrix
-        t (Tensor): scalar or shape (...,), the interpolation factor
+    - `v1` (Tensor): `(..., D)` vector 1
+    - `v2` (Tensor): `(..., D)` vector 2
+    - `t` (Tensor): `(..., N)` interpolation parameter in [0, 1]
 
     ## Returns
-        Tensor: shape (..., 3, 3), the interpolated rotation matrix
+        Tensor: `(..., N, D)` interpolated vector
     """
-    assert rot_mat_1.shape[-2:] == (3, 3)
-    rot_vec_1 = matrix_to_axis_angle(rot_mat_1)
-    rot_vec_2 = matrix_to_axis_angle(rot_mat_2)
-    if isinstance(t, Number):
-        t = torch.tensor(t, dtype=rot_mat_1.dtype, device=rot_mat_1.device)
-    rot_vec = (1 - t[..., None]) * rot_vec_1 + t[..., None] * rot_vec_2
-    rot_mat = axis_angle_to_matrix(rot_vec)
-    return rot_mat
+    return v1[..., None, :] + t[..., None] * (v2 - v1)[..., None, :]
 
 
-def interpolate_extrinsics(ext1: Tensor, ext2: Tensor, t: Union[Number, Tensor]) -> Tensor:
-    """Interpolate extrinsics between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
+@totensor(_others=torch.float32)
+@batched(1, 1, 1)
+def slerp(v1: Tensor, v2: Tensor, t: Tensor, eps: float = 1e-12) -> Tensor:
+    """
+    Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
 
     ## Parameters
-        ext1 (Tensor): shape (..., 4, 4), the first camera pose
-        ext2 (Tensor): shape (..., 4, 4), the second camera pose
-        t (Tensor): scalar or shape (...,), the interpolation factor
+        `v1` (Tensor): `(..., D)` (unit) vector 1
+        `v2` (Tensor): `(..., D)` (unit) vector 2
+        `t` (Tensor): `(..., N)` interpolation parameter in [0, 1]
 
     ## Returns
-        Tensor: shape (..., 4, 4), the interpolated camera pose
+        Tensor: `(..., N, D)` interpolated unit vector
     """
-    return torch.inverse(interpolate_transform(torch.inverse(ext1), torch.inverse(ext2), t))
+    v1 = F.normalize(v1, dim=-1, eps=eps)
+    v2 = F.normalize(v2, dim=-1, eps=eps)
+    cos = torch.sum(v1 * v2, dim=-1)
+    v_ortho1 = v2 - v1 * cos[..., None]
+    v_ortho2 = v1 - v2 * cos[..., None]
+    sin = torch.minimum(v_ortho1.norm(dim=-1), v_ortho2.norm(dim=-1))
+    theta = torch.atan2(sin + eps, cos) * t
+    v_ortho1 = F.normalize(v_ortho1, dim=-1, eps=eps)
+    v = v1[..., None, :] * torch.cos(theta)[..., None] + v_ortho1[..., None, :] * torch.sin(theta)[..., None]
+    return v
 
 
-def interpolate_view(view1: Tensor, view2: Tensor, t: Union[Number, Tensor]):
-    """Interpolate view matrices between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
+@totensor(_others=torch.float32)
+@batched(2, 2, 1)
+def slerp_rotation_matrix(R1: Tensor, R2: Tensor, t: Union[Number, Tensor]) -> Tensor:
+    """Spherical linear interpolation between two 3D rotation matrices
 
     ## Parameters
-        ext1 (Tensor): shape (..., 4, 4), the first camera pose
-        ext2 (Tensor): shape (..., 4, 4), the second camera pose
-        t (Tensor): scalar or shape (...,), the interpolation factor
+        R1 (Tensor): shape (..., 3, 3), the first rotation matrix
+        R2 (Tensor): shape (..., 3, 3), the second rotation matrix
+        t (Tensor): scalar or shape (..., N), the interpolation factor
 
     ## Returns
-        Tensor: shape (..., 4, 4), the interpolated camera pose
+        Tensor: shape (..., N, 3, 3), the interpolated rotation matrix
     """
-    return interpolate_extrinsics(view1, view2, t)
+    assert R1.shape[-2:] == (3, 3) and R2.shape[-2:] == (3, 3)
+    quat1 = matrix_to_quaternion(R1)
+    quat2 = matrix_to_quaternion(R2)
+    slerped_quat = slerp(quat1, quat2, t)
+    return quaternion_to_matrix(slerped_quat)
 
 
-def interpolate_transform(transform1: Tensor, transform2: Tensor, t: Union[Number, Tensor]):
-    assert transform1.shape[-2:] == (4, 4) and transform2.shape[-2:] == (4, 4)
-    if isinstance(t, Number):
-        t = torch.tensor(t, dtype=transform1.dtype, device=transform1.device)
-    pos = (1 - t[..., None]) * transform1[..., :3, 3] + t[..., None] * transform2[..., :3, 3]
-    rot = slerp(transform1[..., :3, :3], transform2[..., :3, :3], t)
+@totensor(_others=torch.float32)
+@batched(2, 2, 1)
+def interpolate_se3_matrix(T1: Tensor, T2: Tensor, t: Tensor):
+    """Interpolate between two SE(3) transformation matrices.
+    - Spherical linear interpolation (SLERP) is used for the rotational part.
+    - Linear interpolation is used for the translational part.
+
+    ## Parameters
+    - `T1` (Tensor): (..., 4, 4) SE(3) matrix 1
+    - `T2` (Tensor): (..., 4, 4) SE(3) matrix 2
+    - `t` (Tensor): (..., N) interpolation parameter in [0, 1]
+
+    ## Returns
+        Tensor: (..., N, 4, 4) interpolated SE(3) matrix
+    """
+    assert T1.shape[-2:] == (4, 4) and T2.shape[-2:] == (4, 4)
+    pos = lerp(T1[..., :3, 3], T2[..., :3, 3], t)
+    rot = slerp_rotation_matrix(T1[..., :3, :3], T2[..., :3, :3], t)
     transform = make_affine_matrix(rot, pos)
     return transform
 

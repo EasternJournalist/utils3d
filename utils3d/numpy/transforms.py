@@ -45,12 +45,12 @@ __all__ = [
     'rotation_matrix_from_vectors',
     'ray_intersection',
     'make_affine_matrix',
-    'slerp_quaternion',
-    'slerp_vector',
     'lerp',
-    'lerp_se3_matrix',
+    'slerp',
+    'slerp_rotation_matrix',
+    'interpolate_se3_matrix',
     'piecewise_lerp',
-    'piecewise_lerp_se3_matrix',
+    'piecewise_interpolate_se3_matrix',
     'transform',
     'angle_between'
 ]
@@ -874,10 +874,10 @@ def euler_axis_angle_rotation(axis: str, angle: ndarray) -> ndarray:
 
     ## Parameters
         axis: Axis label "X" or "Y or "Z".
-        angle: any shape tensor of Euler angles in radians
+        angle: any shape ndarray of Euler angles in radians
 
     ## Returns
-        Rotation matrices as tensor of shape (..., 3, 3).
+        Rotation matrices as ndarray of shape (..., 3, 3).
     """
 
     cos = np.cos(angle)
@@ -1022,6 +1022,23 @@ def make_affine_matrix(M: ndarray, t: ndarray) -> ndarray:
     return x
 
 
+@toarray(_others=np.float32)
+@batched(1, 1, 1)
+def lerp(x1: ndarray, x2: ndarray, t: ndarray) -> ndarray:
+    """
+    Linear interpolation between two vectors.
+
+    ## Parameters
+        x1 (ndarray): [..., D] vector 1
+        x2 (ndarray): [..., D] vector 2
+        t (ndarray): [..., N] interpolation parameter. [0, 1] for interpolation between x1 and x2, otherwise for extrapolation.
+
+    ## Returns
+        ndarray: [..., N, D] interpolated vector
+    """
+    return x1[..., None, :] + t[..., None] * (x2 - x1)[..., None, :]
+
+
 def slerp_quaternion(q1: ndarray, q2: ndarray, t: ndarray) -> ndarray:
     """
     Spherical linear interpolation between two unit quaternions.
@@ -1049,17 +1066,45 @@ def slerp_quaternion(q1: ndarray, q2: ndarray, t: ndarray) -> ndarray:
     return q
 
 
+@toarray(_others=np.float32)
+@batched(1, 1, 1)
+def slerp(v1: ndarray, v2: ndarray, t: ndarray) -> ndarray:
+    """
+    Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+
+    ## Parameters
+    - `v1` (ndarray): `(..., D)` (unit) vector 1
+    - `v2` (ndarray): `(..., D)` (unit) vector 2
+    - `t` (ndarray): `(..., N)` interpolation parameter in [0, 1]
+
+    ## Returns
+        ndarray: `(..., N, D)` interpolated unit vector
+    """
+    v1 = v1 / np.maximum(np.linalg.norm(v1, axis=-1, keepdims=True), np.finfo(v1.dtype).eps)
+    v2 = v2 / np.maximum(np.linalg.norm(v2, axis=-1, keepdims=True), np.finfo(v2.dtype).eps)
+    cos = np.sum(v1 * v2, axis=-1)
+    v_ortho1 = v2 - v1 * cos[..., None]
+    v_ortho2 = v1 - v2 * cos[..., None]
+    sin = np.minimum(np.linalg.norm(v_ortho1, axis=-1), np.linalg.norm(v_ortho2, axis=-1))
+    theta = np.atan2(sin, cos)[..., None] * t
+    v_ortho1 = v_ortho1 / np.maximum(np.linalg.norm(v_ortho1, axis=-1, keepdims=True), np.finfo(v1.dtype).eps)
+    v = v1[..., None, :] * np.cos(theta)[..., None] + v_ortho1[..., None, :] * np.sin(theta)[..., None]
+    return v
+
+
+@toarray(_others=np.float32)
+@batched(2, 2, 1)
 def slerp_rotation_matrix(R1: ndarray, R2: ndarray, t: ndarray) -> ndarray:
     """
     Spherical linear interpolation between two rotation matrices.
 
     ## Parameters
-        R1 (ndarray): [..., 3, 3] rotation matrix 1
-        R2 (ndarray): [..., 3, 3] rotation matrix 2
-        t (ndarray): [...] interpolation parameter in [0, 1]
+    - `R1` (ndarray): [..., 3, 3] rotation matrix 1
+    - `R2` (ndarray): [..., 3, 3] rotation matrix 2
+    - `t` (ndarray): [..., N] interpolation parameter in [0, 1]
 
     ## Returns
-        ndarray: [..., 3, 3] interpolated rotation matrix
+        ndarray: [...,N, 3, 3] interpolated rotation matrix
     """
     quat1 = matrix_to_quaternion(R1)
     quat2 = matrix_to_quaternion(R2)
@@ -1067,63 +1112,24 @@ def slerp_rotation_matrix(R1: ndarray, R2: ndarray, t: ndarray) -> ndarray:
     return quaternion_to_matrix(quat)
 
 
-def slerp_vector(v1: ndarray, v2: ndarray, t: ndarray) -> ndarray:
-    """
-    Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
-
-    ## Parameters
-        v1 (ndarray): [..., d] unit vector 1
-        v2 (ndarray): [..., d] unit vector 2
-        t (ndarray): [...] interpolation parameter in [0, 1]
-
-    ## Returns
-        ndarray: [..., d] interpolated unit vector
-    """
-    dot = np.sum(v1 * v2, axis=-1, keepdims=True)
-
-    dot = np.minimum(dot, 1.)
-    theta = np.arccos(dot) * t
-
-    v_ortho = v2 - v1 * dot
-    v_ortho = v_ortho / np.maximum(np.linalg.norm(v_ortho, axis=-1, keepdims=True), 1e-12)
-    v = v1 * np.cos(theta) + v_ortho * np.sin(theta)
-    return v
-
-
-def lerp(x1: ndarray, x2: ndarray, t: ndarray) -> ndarray:
-    """
-    Linear interpolation between two vectors.
-
-    ## Parameters
-        x1 (ndarray): [..., d] vector 1
-        x2 (ndarray): [..., d] vector 2
-        t (ndarray): [...] interpolation parameter. [0, 1] for interpolation between x1 and x2, otherwise for extrapolation.
-
-    ## Returns
-        ndarray: [..., d] interpolated vector
-    """
-    return x1 + np.asarray(t)[..., None] * (x2 - x1)
-
-
-def lerp_se3_matrix(T1: ndarray, T2: ndarray, t: ndarray) -> ndarray:
+@toarray(_others=np.float32)
+@batched(2, 2, 1)
+def interpolate_se3_matrix(T1: ndarray, T2: ndarray, t: ndarray) -> ndarray:
     """
     Linear interpolation between two SE(3) matrices.
 
     ## Parameters
-        T1 (ndarray): [..., 4, 4] SE(3) matrix 1
-        T2 (ndarray): [..., 4, 4] SE(3) matrix 2
-        t (ndarray): [...] interpolation parameter in [0, 1]
+    - `T1` (ndarray): [..., 4, 4] SE(3) matrix 1
+    - `T2` (ndarray): [..., 4, 4] SE(3) matrix 2
+    - `t` (ndarray): [..., N] interpolation parameter in [0, 1]
 
     ## Returns
-        ndarray: [..., 4, 4] interpolated SE(3) matrix
+        ndarray: [..., N, 4, 4] interpolated SE(3) matrix
     """
-    R1 = T1[..., :3, :3]
-    R2 = T2[..., :3, :3]
-    trans1 = T1[..., :3, 3]
-    trans2 = T2[..., :3, 3]
-    R = slerp_rotation_matrix(R1, R2, t)
-    trans = lerp(trans1, trans2, t)
-    return make_affine_matrix(R, trans)
+    assert T1.shape[-2:] == (4, 4) and T2.shape[-2:] == (4, 4)
+    rot = slerp_rotation_matrix(T1[..., :3, :3], T2[..., :3, :3], t)
+    pos = lerp(T1[..., :3, 3], T2[..., :3, 3], t)
+    return make_affine_matrix(rot, pos)
 
 
 def piecewise_lerp(x: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> ndarray:
@@ -1155,7 +1161,7 @@ def piecewise_lerp(x: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Liter
     return y
 
 
-def piecewise_lerp_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> ndarray:
+def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> ndarray:
     """
     Linear spline interpolation for SE(3) matrices.
 
@@ -1179,7 +1185,7 @@ def piecewise_lerp_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapolation_
         raise ValueError(f'Invalid extrapolation_mode: {extrapolation_mode}')
     
     u = (s - t[prev]) / np.maximum(t[suc] - t[prev], 1e-12)
-    T = lerp_se3_matrix(T[prev], T[suc], u)
+    T = interpolate_se3_matrix(T[prev], T[suc], u)
 
     return T
 

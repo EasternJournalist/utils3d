@@ -11,8 +11,8 @@ __all__ = ["sliding_window",
 "lookup", 
 "perspective_from_fov", 
 "perspective_from_window", 
-"intrinsics_from_focal_center", 
 "intrinsics_from_fov", 
+"intrinsics_from_focal_center", 
 "fov_to_focal", 
 "focal_to_fov", 
 "intrinsics_to_fov", 
@@ -47,12 +47,12 @@ __all__ = ["sliding_window",
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
 "make_affine_matrix", 
-"slerp_quaternion", 
-"slerp_vector", 
 "lerp", 
-"lerp_se3_matrix", 
+"slerp", 
+"slerp_rotation_matrix", 
+"interpolate_se3_matrix", 
 "piecewise_lerp", 
-"piecewise_lerp_se3_matrix", 
+"piecewise_interpolate_se3_matrix", 
 "transform", 
 "angle_between", 
 "triangulate_mesh", 
@@ -109,9 +109,6 @@ __all__ = ["sliding_window",
 "matrix_to_axis_angle", 
 "axis_angle_to_quaternion", 
 "quaternion_to_axis_angle", 
-"slerp", 
-"interpolate_extrinsics", 
-"interpolate_view", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -200,16 +197,16 @@ def perspective_from_window(*args, **kwargs):
     return _call_based_on_args('perspective_from_window', args, kwargs)
 
 @suppress_traceback
-def intrinsics_from_focal_center(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.intrinsics_from_focal_center, utils3d.torch.intrinsics_from_focal_center
-    return _call_based_on_args('intrinsics_from_focal_center', args, kwargs)
-
-@suppress_traceback
 def intrinsics_from_fov(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.intrinsics_from_fov, utils3d.torch.intrinsics_from_fov
     return _call_based_on_args('intrinsics_from_fov', args, kwargs)
+
+@suppress_traceback
+def intrinsics_from_focal_center(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.intrinsics_from_focal_center, utils3d.torch.intrinsics_from_focal_center
+    return _call_based_on_args('intrinsics_from_focal_center', args, kwargs)
 
 @suppress_traceback
 def fov_to_focal(*args, **kwargs):
@@ -416,28 +413,28 @@ def make_affine_matrix(*args, **kwargs):
     return _call_based_on_args('make_affine_matrix', args, kwargs)
 
 @suppress_traceback
-def slerp_quaternion(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.slerp_quaternion, None
-    return _call_based_on_args('slerp_quaternion', args, kwargs)
-
-@suppress_traceback
-def slerp_vector(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.slerp_vector, None
-    return _call_based_on_args('slerp_vector', args, kwargs)
-
-@suppress_traceback
 def lerp(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.lerp, None
+        utils3d.numpy.lerp, utils3d.torch.lerp
     return _call_based_on_args('lerp', args, kwargs)
 
 @suppress_traceback
-def lerp_se3_matrix(*args, **kwargs):
+def slerp(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.lerp_se3_matrix, None
-    return _call_based_on_args('lerp_se3_matrix', args, kwargs)
+        utils3d.numpy.slerp, utils3d.torch.slerp
+    return _call_based_on_args('slerp', args, kwargs)
+
+@suppress_traceback
+def slerp_rotation_matrix(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.slerp_rotation_matrix, utils3d.torch.slerp_rotation_matrix
+    return _call_based_on_args('slerp_rotation_matrix', args, kwargs)
+
+@suppress_traceback
+def interpolate_se3_matrix(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.interpolate_se3_matrix, utils3d.torch.interpolate_se3_matrix
+    return _call_based_on_args('interpolate_se3_matrix', args, kwargs)
 
 @suppress_traceback
 def piecewise_lerp(*args, **kwargs):
@@ -446,10 +443,10 @@ def piecewise_lerp(*args, **kwargs):
     return _call_based_on_args('piecewise_lerp', args, kwargs)
 
 @suppress_traceback
-def piecewise_lerp_se3_matrix(*args, **kwargs):
+def piecewise_interpolate_se3_matrix(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.piecewise_lerp_se3_matrix, None
-    return _call_based_on_args('piecewise_lerp_se3_matrix', args, kwargs)
+        utils3d.numpy.piecewise_interpolate_se3_matrix, None
+    return _call_based_on_args('piecewise_interpolate_se3_matrix', args, kwargs)
 
 @suppress_traceback
 def transform(*args, **kwargs):
@@ -786,24 +783,6 @@ def quaternion_to_axis_angle(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.quaternion_to_axis_angle
     return _call_based_on_args('quaternion_to_axis_angle', args, kwargs)
-
-@suppress_traceback
-def slerp(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.slerp
-    return _call_based_on_args('slerp', args, kwargs)
-
-@suppress_traceback
-def interpolate_extrinsics(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.interpolate_extrinsics
-    return _call_based_on_args('interpolate_extrinsics', args, kwargs)
-
-@suppress_traceback
-def interpolate_view(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.interpolate_view
-    return _call_based_on_args('interpolate_view', args, kwargs)
 
 @suppress_traceback
 def rotation_matrix_2d(*args, **kwargs):

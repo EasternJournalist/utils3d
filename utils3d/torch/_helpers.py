@@ -16,19 +16,19 @@ __all__ = [
 P = ParamSpec("P")  
 R = TypeVar("R")
 
-def totensor(*args_dtypes_devices: Union[torch.dtype, str, None], _others: Union[torch.dtype, str] = None, **kwargs_dtypes_devices: Union[torch.dtype, str]) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def totensor(
+    *args_dtypes: Union[torch.dtype, Tuple[torch.dtype, torch.device], str, None], 
+    _others: Union[torch.dtype, str] = None, 
+    **kwargs_dtypes: Union[torch.dtype, Tuple[torch.dtype, torch.device], str]
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator generator that converts non-array arguments to array of specified default dtype.
     """
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         argnames = list(inspect.signature(func).parameters.keys())
-        dtypes_devices_dict = {
-            **dict(zip(argnames, args_dtypes_devices)),
-            **kwargs_dtypes_devices
-        }
-        dtypes_devices_dict = {
-            k: (v,) if v is not None and not isinstance(v, str) else v 
-            for k, v in dtypes_devices_dict.items()
+        dtypes_dict = {
+            **dict(zip(argnames, args_dtypes)),
+            **kwargs_dtypes
         }
         @wraps(func)
         @suppress_traceback
@@ -38,16 +38,16 @@ def totensor(*args_dtypes_devices: Union[torch.dtype, str, None], _others: Union
                 **kwargs
             }
             args = tuple(
-                torch.tensor(x, *((inputs[dtype_device].dtype, inputs[dtype_device].device) if isinstance(dtype_device, str) else dtype_device))
+                torch.tensor(x).to(inputs[dtype_device] if isinstance(dtype_device, str) else dtype_device)
                 if isinstance(x, (Number, list, tuple)) \
-                    and (dtype_device := dtypes_devices_dict.get(argnames[i], _others)) is not None \
+                    and (dtype_device := dtypes_dict.get(argnames[i], _others)) is not None \
                 else x
                 for i, x in enumerate(args)
             )
             kwargs = {
-                k: torch.tensor(x, *((inputs[dtype_device].dtype, inputs[dtype_device].device) if isinstance(dtype_device, str) else dtype_device))
+                k: torch.tensor(x).to(inputs[dtype_device] if isinstance(dtype_device, str) else dtype_device)
                 if isinstance(x, (Number, list, tuple)) \
-                    and (dtype_device := dtypes_devices_dict.get(k, _others)) is not None \
+                    and (dtype_device := dtypes_dict.get(k, _others)) is not None \
                 else x
                 for k, x in kwargs.items()
             }

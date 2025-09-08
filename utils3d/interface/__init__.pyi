@@ -14,8 +14,8 @@ __all__ = ["sliding_window",
 "lookup", 
 "perspective_from_fov", 
 "perspective_from_window", 
-"intrinsics_from_focal_center", 
 "intrinsics_from_fov", 
+"intrinsics_from_focal_center", 
 "fov_to_focal", 
 "focal_to_fov", 
 "intrinsics_to_fov", 
@@ -50,12 +50,12 @@ __all__ = ["sliding_window",
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
 "make_affine_matrix", 
-"slerp_quaternion", 
-"slerp_vector", 
 "lerp", 
-"lerp_se3_matrix", 
+"slerp", 
+"slerp_rotation_matrix", 
+"interpolate_se3_matrix", 
 "piecewise_lerp", 
-"piecewise_lerp_se3_matrix", 
+"piecewise_interpolate_se3_matrix", 
 "transform", 
 "angle_between", 
 "triangulate_mesh", 
@@ -112,9 +112,6 @@ __all__ = ["sliding_window",
 "matrix_to_axis_angle", 
 "axis_angle_to_quaternion", 
 "quaternion_to_axis_angle", 
-"slerp", 
-"interpolate_extrinsics", 
-"interpolate_view", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -209,14 +206,6 @@ def perspective_from_window(left: Union[float, numpy_.ndarray], right: Union[flo
     utils3d.numpy.transforms.perspective_from_window
 
 @overload
-def intrinsics_from_focal_center(fx: Union[float, numpy_.ndarray], fy: Union[float, numpy_.ndarray], cx: Union[float, numpy_.ndarray], cy: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
-    """Get OpenCV intrinsics matrix
-
-## Returns
-    (ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
-    utils3d.numpy.transforms.intrinsics_from_focal_center
-
-@overload
 def intrinsics_from_fov(fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None) -> numpy_.ndarray:
     """Get normalized OpenCV intrinsics matrix from given field of view.
 You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
@@ -231,6 +220,14 @@ You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 ## Returns
     (ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
     utils3d.numpy.transforms.intrinsics_from_fov
+
+@overload
+def intrinsics_from_focal_center(fx: Union[float, numpy_.ndarray], fy: Union[float, numpy_.ndarray], cx: Union[float, numpy_.ndarray], cy: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+    """Get OpenCV intrinsics matrix
+
+## Returns
+    (ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
+    utils3d.numpy.transforms.intrinsics_from_focal_center
 
 @overload
 def fov_to_focal(fov: numpy_.ndarray):
@@ -599,10 +596,10 @@ of which Euler angles describe, for each value of the angle given.
 
 ## Parameters
     axis: Axis label "X" or "Y or "Z".
-    angle: any shape tensor of Euler angles in radians
+    angle: any shape ndarray of Euler angles in radians
 
 ## Returns
-    Rotation matrices as tensor of shape (..., 3, 3)."""
+    Rotation matrices as ndarray of shape (..., 3, 3)."""
     utils3d.numpy.transforms.euler_axis_angle_rotation
 
 @overload
@@ -655,56 +652,56 @@ def make_affine_matrix(M: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.make_affine_matrix
 
 @overload
-def slerp_quaternion(q1: numpy_.ndarray, q2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
-    """Spherical linear interpolation between two unit quaternions.
-
-## Parameters
-    q1 (ndarray): [..., d] unit vector 1
-    q2 (ndarray): [..., d] unit vector 2
-    t (ndarray): [...] interpolation parameter in [0, 1]
-
-## Returns
-    ndarray: [..., 3] interpolated unit vector"""
-    utils3d.numpy.transforms.slerp_quaternion
-
-@overload
-def slerp_vector(v1: numpy_.ndarray, v2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
-    """Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
-
-## Parameters
-    v1 (ndarray): [..., d] unit vector 1
-    v2 (ndarray): [..., d] unit vector 2
-    t (ndarray): [...] interpolation parameter in [0, 1]
-
-## Returns
-    ndarray: [..., d] interpolated unit vector"""
-    utils3d.numpy.transforms.slerp_vector
-
-@overload
 def lerp(x1: numpy_.ndarray, x2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Linear interpolation between two vectors.
 
 ## Parameters
-    x1 (ndarray): [..., d] vector 1
-    x2 (ndarray): [..., d] vector 2
-    t (ndarray): [...] interpolation parameter. [0, 1] for interpolation between x1 and x2, otherwise for extrapolation.
+    x1 (ndarray): [..., D] vector 1
+    x2 (ndarray): [..., D] vector 2
+    t (ndarray): [..., N] interpolation parameter. [0, 1] for interpolation between x1 and x2, otherwise for extrapolation.
 
 ## Returns
-    ndarray: [..., d] interpolated vector"""
+    ndarray: [..., N, D] interpolated vector"""
     utils3d.numpy.transforms.lerp
 
 @overload
-def lerp_se3_matrix(T1: numpy_.ndarray, T2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
+def slerp(v1: numpy_.ndarray, v2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
+    """Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+
+## Parameters
+- `v1` (ndarray): `(..., D)` (unit) vector 1
+- `v2` (ndarray): `(..., D)` (unit) vector 2
+- `t` (ndarray): `(..., N)` interpolation parameter in [0, 1]
+
+## Returns
+    ndarray: `(..., N, D)` interpolated unit vector"""
+    utils3d.numpy.transforms.slerp
+
+@overload
+def slerp_rotation_matrix(R1: numpy_.ndarray, R2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
+    """Spherical linear interpolation between two rotation matrices.
+
+## Parameters
+- `R1` (ndarray): [..., 3, 3] rotation matrix 1
+- `R2` (ndarray): [..., 3, 3] rotation matrix 2
+- `t` (ndarray): [..., N] interpolation parameter in [0, 1]
+
+## Returns
+    ndarray: [...,N, 3, 3] interpolated rotation matrix"""
+    utils3d.numpy.transforms.slerp_rotation_matrix
+
+@overload
+def interpolate_se3_matrix(T1: numpy_.ndarray, T2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
     """Linear interpolation between two SE(3) matrices.
 
 ## Parameters
-    T1 (ndarray): [..., 4, 4] SE(3) matrix 1
-    T2 (ndarray): [..., 4, 4] SE(3) matrix 2
-    t (ndarray): [...] interpolation parameter in [0, 1]
+- `T1` (ndarray): [..., 4, 4] SE(3) matrix 1
+- `T2` (ndarray): [..., 4, 4] SE(3) matrix 2
+- `t` (ndarray): [..., N] interpolation parameter in [0, 1]
 
 ## Returns
-    ndarray: [..., 4, 4] interpolated SE(3) matrix"""
-    utils3d.numpy.transforms.lerp_se3_matrix
+    ndarray: [..., N, 4, 4] interpolated SE(3) matrix"""
+    utils3d.numpy.transforms.interpolate_se3_matrix
 
 @overload
 def piecewise_lerp(x: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> numpy_.ndarray:
@@ -721,7 +718,7 @@ def piecewise_lerp(x: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extr
     utils3d.numpy.transforms.piecewise_lerp
 
 @overload
-def piecewise_lerp_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> numpy_.ndarray:
+def piecewise_interpolate_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> numpy_.ndarray:
     """Linear spline interpolation for SE(3) matrices.
 
 ## Parameters
@@ -732,7 +729,7 @@ def piecewise_lerp_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: numpy_.nd
 
 ## Returns
 - `T_interp`: ndarray, shape (..., m, 4, 4): the interpolated SE(3) matrices."""
-    utils3d.numpy.transforms.piecewise_lerp_se3_matrix
+    utils3d.numpy.transforms.piecewise_interpolate_se3_matrix
 
 @overload
 def transform(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
@@ -1996,43 +1993,70 @@ def quaternion_to_axis_angle(quaternion: torch_.Tensor, eps: float = 1e-12) -> t
     utils3d.torch.transforms.quaternion_to_axis_angle
 
 @overload
-def slerp(rot_mat_1: torch_.Tensor, rot_mat_2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
-    """Spherical linear interpolation between two rotation matrices
+def make_affine_matrix(M: torch_.Tensor, t: torch_.Tensor):
+    """Make an affine transformation matrix from a linear matrix and a translation vector.
 
 ## Parameters
-    rot_mat_1 (Tensor): shape (..., 3, 3), the first rotation matrix
-    rot_mat_2 (Tensor): shape (..., 3, 3), the second rotation matrix
-    t (Tensor): scalar or shape (...,), the interpolation factor
+    M (Tensor): [..., D, D] linear matrix (rotation, scaling or general deformation)
+    t (Tensor): [..., D] translation vector
 
 ## Returns
-    Tensor: shape (..., 3, 3), the interpolated rotation matrix"""
+    Tensor: [..., D + 1, D + 1] affine transformation matrix"""
+    utils3d.torch.transforms.make_affine_matrix
+
+@overload
+def lerp(v1: torch_.Tensor, v2: torch_.Tensor, t: torch_.Tensor) -> torch_.Tensor:
+    """Linear interpolation between two vectors.
+
+## Parameters
+- `v1` (Tensor): `(..., D)` vector 1
+- `v2` (Tensor): `(..., D)` vector 2
+- `t` (Tensor): `(..., N)` interpolation parameter in [0, 1]
+
+## Returns
+    Tensor: `(..., N, D)` interpolated vector"""
+    utils3d.torch.transforms.lerp
+
+@overload
+def slerp(v1: torch_.Tensor, v2: torch_.Tensor, t: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
+    """Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+
+## Parameters
+    `v1` (Tensor): `(..., D)` (unit) vector 1
+    `v2` (Tensor): `(..., D)` (unit) vector 2
+    `t` (Tensor): `(..., N)` interpolation parameter in [0, 1]
+
+## Returns
+    Tensor: `(..., N, D)` interpolated unit vector"""
     utils3d.torch.transforms.slerp
 
 @overload
-def interpolate_extrinsics(ext1: torch_.Tensor, ext2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
-    """Interpolate extrinsics between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
+def slerp_rotation_matrix(R1: torch_.Tensor, R2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+    """Spherical linear interpolation between two 3D rotation matrices
 
 ## Parameters
-    ext1 (Tensor): shape (..., 4, 4), the first camera pose
-    ext2 (Tensor): shape (..., 4, 4), the second camera pose
-    t (Tensor): scalar or shape (...,), the interpolation factor
+    R1 (Tensor): shape (..., 3, 3), the first rotation matrix
+    R2 (Tensor): shape (..., 3, 3), the second rotation matrix
+    t (Tensor): scalar or shape (..., N), the interpolation factor
 
 ## Returns
-    Tensor: shape (..., 4, 4), the interpolated camera pose"""
-    utils3d.torch.transforms.interpolate_extrinsics
+    Tensor: shape (..., N, 3, 3), the interpolated rotation matrix"""
+    utils3d.torch.transforms.slerp_rotation_matrix
 
 @overload
-def interpolate_view(view1: torch_.Tensor, view2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]):
-    """Interpolate view matrices between two camera poses. Linear interpolation for translation, spherical linear interpolation for rotation.
+def interpolate_se3_matrix(T1: torch_.Tensor, T2: torch_.Tensor, t: torch_.Tensor):
+    """Interpolate between two SE(3) transformation matrices.
+- Spherical linear interpolation (SLERP) is used for the rotational part.
+- Linear interpolation is used for the translational part.
 
 ## Parameters
-    ext1 (Tensor): shape (..., 4, 4), the first camera pose
-    ext2 (Tensor): shape (..., 4, 4), the second camera pose
-    t (Tensor): scalar or shape (...,), the interpolation factor
+- `T1` (Tensor): (..., 4, 4) SE(3) matrix 1
+- `T2` (Tensor): (..., 4, 4) SE(3) matrix 2
+- `t` (Tensor): (..., N) interpolation parameter in [0, 1]
 
 ## Returns
-    Tensor: shape (..., 4, 4), the interpolated camera pose"""
-    utils3d.torch.transforms.interpolate_view
+    Tensor: (..., N, 4, 4) interpolated SE(3) matrix"""
+    utils3d.torch.transforms.interpolate_se3_matrix
 
 @overload
 def extrinsics_to_essential(extrinsics: torch_.Tensor):
@@ -2044,18 +2068,6 @@ def extrinsics_to_essential(extrinsics: torch_.Tensor):
 ## Returns
     (Tensor): [..., 3, 3] essential matrix"""
     utils3d.torch.transforms.extrinsics_to_essential
-
-@overload
-def make_affine_matrix(M: torch_.Tensor, t: torch_.Tensor):
-    """Make an affine transformation matrix from a linear matrix and a translation vector.
-
-## Parameters
-    M (Tensor): [..., D, D] linear matrix (rotation, scaling or general deformation)
-    t (Tensor): [..., D] translation vector
-
-## Returns
-    Tensor: [..., D + 1, D + 1] affine transformation matrix"""
-    utils3d.torch.transforms.make_affine_matrix
 
 @overload
 def rotation_matrix_2d(theta: Union[float, torch_.Tensor]):
