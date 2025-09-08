@@ -3,19 +3,21 @@ from torch import Tensor
 import torch.nn.functional as F
 from typing import *
 from .transforms import angle_between
+from .utils import lookup, csr_eliminate_zeros, csr_adjacency_matrix_from_indices
 
 
 __all__ = [
     'triangulate_mesh',
-    'compute_face_normals',
-    'compute_face_corner_normals',
     'compute_face_corner_angles',
-    'compute_vertex_normals',
-    'compute_edges',
-    'compute_connected_components',
+    'compute_face_corner_normals',
+    'compute_face_corner_tangents',
+    'compute_face_normals',
+    'compute_face_tangents',
+    'get_mesh_edges',
+    'get_mesh_dual_graph',
+    'get_mesh_connected_components',
     'compute_edge_connected_components',
     'compute_boundaries',
-    'compute_dual_graph',
     'remove_unused_vertices',
     'remove_corrupted_faces',
     'remove_isolated_pieces',
@@ -26,6 +28,13 @@ __all__ = [
     'taubin_smooth_mesh',
     'laplacian_hc_smooth_mesh',
 ]
+
+class SegmentedTensor(NamedTuple):
+    """
+    A tuple containing `(data, offsets)` for segmented data.
+    """
+    data: Tensor
+    offsets: Tensor
 
 
 def _group(
@@ -123,11 +132,11 @@ def compute_face_corner_angles(
     Compute face corner angles of a mesh
 
     ## Parameters
-    - `vertices` (np.Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
-    - `faces` (np.Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
+    - `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
+    - `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
 
     ## Returns
-    - `angles` (np.Tensor): `(..., F, P)` face corner angles
+    - `angles` (Tensor): `(..., F, P)` face corner angles
     """
     if faces is not None:
         vertices = vertices.index_select(-2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., F, P, 3)
@@ -160,6 +169,7 @@ def compute_face_corner_normals(
     if normalize:
         normals /= torch.linalg.norm(normals, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
     return normals
+
 
 def compute_face_corner_tangents(
     vertices: Tensor,
@@ -293,32 +303,77 @@ def compute_vertex_normals(
     return vertex_normals
 
     
-def compute_edges(
-    faces: Tensor
-) -> Tuple[Tensor, Tensor, Tensor]:
+def get_mesh_edges(
+    faces: Tensor, 
+    directed: bool = False, 
+    return_face2edge: bool = False, 
+    return_edge2face: bool = False, 
+    return_opposite_edge: bool = False,
+    return_counts: bool = False
+) -> Tuple[Tensor, ...]:
     """
-    Compute edges of a mesh.
-    
+    Get edges of a mesh. Optionally return additional mappings.
+
     ## Parameters
-        faces (Tensor): [T, 3] triangular face indices
-        
+    - `faces` (Tensor): (F, P) polygon faces' vertex indices
+    - `directed` (bool): whether the edges are directed or not. (half edge)
+        - If `False` (default), edges will be viewed as undirected, (i.e (a, b) is the same as (b, a)).
+            Returned edges (a, b) are in the form a < b.
+        - If `True`, edges will be viewed as directed by the face loop. 
+            Edges of opposite direction will be considered different.
+    - `return_face2edge` (bool): whether to return the face to edge mapping
+    - `return_edge2face` (bool): whether to return the edge to face mapping
+    - `return_counts` (bool): whether to return the counts of edges
+
     ## Returns
-        edges (Tensor): [E, 2] edge indices
-        face2edge (Tensor): [T, 3] mapping from face to edge
-        counts (Tensor): [E] degree of each edge
+    - `edges` (Tensor): (E, 2) unique edges' vertex indices
+
+    If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
+    
+    - `face2edge` (Tensor): (F, P) mapping from faces to the indices of edges
+    - `edge2face` (Tensor): (E, F) binary sparse CSR matrix of edge to face.
+    - `opposite_edge` (Tensor): (E,) mapping from edges to indices of opposite edges. -1 if not found.
+    - `counts` (Tensor): (E,) degree of each edge
     """
-    T = faces.shape[0]
-    edges = torch.cat([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], dim=0)    # [3T, 2]
-    edges = torch.sort(edges, dim=1).values
-    edges, inv_map, counts = torch.unique(edges, return_inverse=True, return_counts=True, dim=0)
-    face2edge = inv_map.view(3, T).T
-    return edges, face2edge, counts
+    edges = torch.stack([faces, torch.roll(faces, -1, dims=-1)], dim=-1)    # (F, 3, 2)
+    if not directed:
+        a, b = edges.unbind(dim=-1)
+        edges = torch.stack([torch.minimum(a, b), torch.maximum(a, b)], dim=-1)
+    
+    unique = torch.unique(edges.view(-1, 2), return_inverse=return_face2edge or return_edge2face, return_counts=return_counts or return_edge2face, dim=0)
+    
+    edges: Tensor = unique[0] if isinstance(unique, tuple) else unique
+    if return_face2edge or return_edge2face:
+        inv_map: Tensor = unique[1]
+    if return_counts or return_edge2face:
+        counts: Tensor = unique[-1]
+
+    ret = (edges,)
+    if return_face2edge:
+        face2edge = inv_map.view(faces.shape)
+        ret += (face2edge,)
+    if return_edge2face:
+        edge2face = torch.sparse_csr_tensor(
+            crow_indices=torch.cat([torch.tensor([0], device=faces.device), torch.cumsum(counts, dim=0)]),
+            col_indices=torch.argsort(inv_map) // faces.shape[1],
+            values=torch.ones_like(inv_map, dtype=bool),
+            size=(edges.shape[0], faces.shape[0])
+        )
+        ret += (edge2face,)
+    if return_opposite_edge:
+        assert directed, "Opposite edge is only supported for directed edges"
+        opposite_edge = lookup(edges, edges.flip(-1))
+        ret += (opposite_edge,)
+    if return_counts:
+        ret += (counts,)
+
+    return ret
 
 
-def compute_connected_components(
+def get_mesh_connected_components(
     faces: Tensor,
-    edges: Tensor=None,
-    face2edge: Tensor=None
+    edges: Tensor = None,
+    face2edge: Tensor = None
 ) -> List[Tensor]:
     """
     Compute connected faces of a mesh.
@@ -334,7 +389,7 @@ def compute_connected_components(
     """
     T = faces.shape[0]
     if edges is None or face2edge is None:
-        edges, face2edge, _ = compute_edges(faces)
+        edges, face2edge = get_mesh_edges(faces, return_face2edge=True)
     E = edges.shape[0]
 
     labels = torch.arange(T, dtype=torch.int32, device=faces.device)
@@ -398,8 +453,8 @@ def compute_edge_connected_components(
 
 def compute_boundaries(
     faces: Tensor,
-    edges: Tensor=None,
-    face2edge: Tensor=None,
+    edges: Tensor = None,
+    face2edge: Tensor = None,
     edge_degrees: Tensor=None
 ) -> Tuple[List[Tensor], List[Tensor]]:
     """
@@ -452,23 +507,25 @@ def compute_boundaries(
     return boundary_edge_indices, boundary_face_indices
 
 
-def compute_dual_graph(
-    face2edge: Tensor,
-) -> Tuple[Tensor, Tensor]:
+def get_mesh_dual_graph(faces: Tensor) -> Tuple[Tensor, Tensor]:
     """
-    Compute dual graph of a mesh.
+    Get dual graph of a mesh. (Mesh face as dual graph's vertex, adjacency by edge sharing)
     
     ## Parameters
-        face2edge (Tensor): [T, 3] mapping from face to edge.
-            
+        `faces` (Tensor): (F, P) faces' vertex indices
+
     ## Returns
-        dual_edges (Tensor): [DE, 2] face indices of dual edges
-        dual_edge2edge (Tensor): [DE] mapping from dual edge to edge
+        dual_graph (Tensor): (F, F) binary sparse CSR matrix. Adjacency matrix of the dual graph.
     """
-    all_edge_indices = face2edge.flatten()  # [3T]
-    dual_edges, dual_edge2edge = _group(all_edge_indices, required_group_size=2, return_values=True)
-    dual_edges = dual_edges // face2edge.shape[1]
-    return dual_edges, dual_edge2edge
+    device = faces.device
+    edges, face2edge = get_mesh_edges(faces, directed=False, return_face2edge=True)
+    if not face2edge.is_sparse_csr:
+        face2edge = csr_adjacency_matrix_from_indices(face2edge, n_cols=len(edges))
+    dual_graph = (face2edge.float() @ face2edge.float().transpose(-2, -1)).bool()
+    neg_diag = torch.sparse.spdiags(torch.full((dual_graph.shape[0],), -1, dtype=torch.float32, device=device), torch.tensor(0, device=device), dual_graph.shape, layout=torch.sparse_csr)
+    dual_graph = dual_graph.float() + neg_diag
+    dual_graph = csr_eliminate_zeros(dual_graph).bool()
+    return dual_graph
 
 
 def remove_unused_vertices(
@@ -507,10 +564,10 @@ def remove_corrupted_faces(
     Remove corrupted faces (faces with duplicated vertices)
 
     ## Parameters
-        faces (Tensor): [T, 3] triangular face indices
+        faces (Tensor): [F, 3] face indices
 
     ## Returns
-        Tensor: [T_, 3] triangular face indices
+        Tensor: [F_reduced, 3] face indices
     """
     corrupted = (faces[:, 0] == faces[:, 1]) | (faces[:, 1] == faces[:, 2]) | (faces[:, 2] == faces[:, 0])
     return faces[~corrupted]

@@ -9,6 +9,8 @@ __modules_all__ = {
         'masked_min',
         'masked_max',
         'lookup',
+        'csr_adjacency_matrix_from_indices',
+        'csr_eliminate_zeros'
     ],
     'transforms': [
         'perspective_from_fov',
@@ -68,11 +70,11 @@ __modules_all__ = {
         'compute_face_corner_tangents',
         'compute_face_normals',
         'compute_face_tangents',
-        'compute_edges',
-        'compute_connected_components',
+        'get_mesh_edges',
+        'get_mesh_dual_graph',
+        'get_mesh_connected_components',
         'compute_edge_connected_components',
         'compute_boundaries',
-        'compute_dual_graph',
         'remove_unused_vertices',
         'remove_corrupted_faces',
         'remove_isolated_pieces',

@@ -105,6 +105,8 @@ __all__ = ["sliding_window",
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
+"csr_adjacency_matrix_from_indices", 
+"csr_eliminate_zeros", 
 "matrix_to_euler_angles", 
 "matrix_to_axis_angle", 
 "axis_angle_to_quaternion", 
@@ -113,11 +115,11 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"compute_edges", 
-"compute_connected_components", 
+"get_mesh_edges", 
+"get_mesh_dual_graph", 
+"get_mesh_connected_components", 
 "compute_edge_connected_components", 
 "compute_boundaries", 
-"compute_dual_graph", 
 "remove_isolated_pieces", 
 "laplacian", 
 "laplacian_smooth_mesh", 
@@ -759,6 +761,18 @@ def masked_max(*args, **kwargs):
     return _call_based_on_args('masked_max', args, kwargs)
 
 @suppress_traceback
+def csr_adjacency_matrix_from_indices(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.csr_adjacency_matrix_from_indices
+    return _call_based_on_args('csr_adjacency_matrix_from_indices', args, kwargs)
+
+@suppress_traceback
+def csr_eliminate_zeros(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.csr_eliminate_zeros
+    return _call_based_on_args('csr_eliminate_zeros', args, kwargs)
+
+@suppress_traceback
 def matrix_to_euler_angles(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.matrix_to_euler_angles
@@ -807,16 +821,22 @@ def scale_2d(*args, **kwargs):
     return _call_based_on_args('scale_2d', args, kwargs)
 
 @suppress_traceback
-def compute_edges(*args, **kwargs):
+def get_mesh_edges(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_edges
-    return _call_based_on_args('compute_edges', args, kwargs)
+        None, utils3d.torch.get_mesh_edges
+    return _call_based_on_args('get_mesh_edges', args, kwargs)
 
 @suppress_traceback
-def compute_connected_components(*args, **kwargs):
+def get_mesh_dual_graph(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_connected_components
-    return _call_based_on_args('compute_connected_components', args, kwargs)
+        None, utils3d.torch.get_mesh_dual_graph
+    return _call_based_on_args('get_mesh_dual_graph', args, kwargs)
+
+@suppress_traceback
+def get_mesh_connected_components(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.get_mesh_connected_components
+    return _call_based_on_args('get_mesh_connected_components', args, kwargs)
 
 @suppress_traceback
 def compute_edge_connected_components(*args, **kwargs):
@@ -829,12 +849,6 @@ def compute_boundaries(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.compute_boundaries
     return _call_based_on_args('compute_boundaries', args, kwargs)
-
-@suppress_traceback
-def compute_dual_graph(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_dual_graph
-    return _call_based_on_args('compute_dual_graph', args, kwargs)
 
 @suppress_traceback
 def remove_isolated_pieces(*args, **kwargs):

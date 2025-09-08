@@ -15,6 +15,8 @@ __all__ = [
     'masked_min',
     'masked_max',
     'lookup',
+    'csr_adjacency_matrix_from_indices',
+    'csr_eliminate_zeros'
 ]
 
 
@@ -127,3 +129,38 @@ def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
     index = torch.full((unique.shape[0],), -1, dtype=torch.long, device=key.device)
     index.scatter_(0, inverse[:key.shape[0]], torch.arange(key.shape[0], device=key.device))
     return index[inverse[key.shape[0]:]]
+
+
+def csr_adjacency_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
+    """Convert a regular indices array to a sparse CSR adjacency matrix format
+
+    ## Parameters
+        - `indices` (Tensor): shape (N, M), Each one in `N` has `M` connections.
+        - `n_cols` (int): number of columns in the adjacency matrix
+
+    ## Returns
+        Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix
+    """
+    return torch.sparse_csr_tensor(
+        crow_indices=torch.arange(0, indices.numel() + 1, indices.shape[1], device=indices.device),
+        col_indices=indices.view(-1),
+        values=torch.ones_like(indices, dtype=bool).view(-1),
+        size=(indices.shape[0], n_cols)
+    )
+
+
+def csr_eliminate_zeros(input: Tensor):
+    """Remove zero elements from a sparse CSR tensor.
+    """
+    nonzero = input.values() != 0
+    nonzero_element_indices = nonzero.nonzero(as_tuple=False).flatten()
+    row_nonzero_count = torch.sparse_csr_tensor(
+        input.crow_indices(), 
+        input.col_indices(), 
+        nonzero, 
+        input.size()
+    ).long().sum(dim=-1, keepdim=True).to_dense().flatten()
+    crow_indices = torch.cat([torch.tensor([0], device=input.device), torch.cumsum(row_nonzero_count, dim=0)])
+    col_indices = input.col_indices()[nonzero_element_indices]
+    values = input.values()[nonzero_element_indices]
+    return torch.sparse_csr_tensor(crow_indices, col_indices, values, input.size())
