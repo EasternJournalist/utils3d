@@ -82,7 +82,7 @@ if __name__ == "__main__":
                     fn = torch_funcs[fname]
                     filepath, start_line = get_function_source_location(fn)
                     signature =  get_simple_signature(fn)
-                    if doc_column_description is None and fn.__doc__ is not None:
+                    if not doc_column_description and fn.__doc__ is not None:
                         doc_column_description = get_description(fn)
                     doc_column_torch = f'[`utils3d.pt.{signature}`]({filepath}#L{start_line})'
                 else:

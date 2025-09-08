@@ -39,7 +39,7 @@ The links below will take you to the source code of each function with detailed 
 | ---- | ---- | ---- |
 | `utils3d.angle_between`<br>Calculate the angle between two vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1215) | [`utils3d.pt.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1284) | 
 | `utils3d.axis_angle_to_matrix`<br>Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation | [`utils3d.np.axis_angle_to_matrix(axis_angle, eps)`](utils3d/numpy/transforms.py#L951) | [`utils3d.pt.axis_angle_to_matrix(axis_angle, eps)`](utils3d/torch/transforms.py#L892) | 
-| `utils3d.axis_angle_to_quaternion`<br> | - | [`utils3d.pt.axis_angle_to_quaternion(axis_angle, eps)`](utils3d/torch/transforms.py#L949) | 
+| `utils3d.axis_angle_to_quaternion`<br>Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z) | - | [`utils3d.pt.axis_angle_to_quaternion(axis_angle, eps)`](utils3d/torch/transforms.py#L949) | 
 | `utils3d.crop_intrinsics`<br>Evaluate the new intrinsics after cropping the image | [`utils3d.np.crop_intrinsics(intrinsics, size, cropped_top, cropped_left, cropped_height, cropped_width)`](utils3d/numpy/transforms.py#L395) | [`utils3d.pt.crop_intrinsics(intrinsics, size, cropped_top, cropped_left, cropped_height, cropped_width)`](utils3d/torch/transforms.py#L387) | 
 | `utils3d.depth_buffer_to_linear`<br>OpenGL depth buffer to linear depth | [`utils3d.np.depth_buffer_to_linear(depth_buffer, near, far)`](utils3d/numpy/transforms.py#L529) | [`utils3d.pt.depth_buffer_to_linear(depth, near, far)`](utils3d/torch/transforms.py#L517) | 
 | `utils3d.depth_linear_to_buffer`<br>Project linear depth to depth value in screen space | [`utils3d.np.depth_linear_to_buffer(depth, near, far)`](utils3d/numpy/transforms.py#L509) | [`utils3d.pt.depth_linear_to_buffer(depth, near, far)`](utils3d/torch/transforms.py#L498) | 
@@ -53,12 +53,12 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.interpolate_se3_matrix`<br>Linear interpolation between two SE(3) matrices. | [`utils3d.np.interpolate_se3_matrix(T1, T2, t)`](utils3d/numpy/transforms.py#L1115) | [`utils3d.pt.interpolate_se3_matrix(T1, T2, t)`](utils3d/torch/transforms.py#L1098) | 
 | `utils3d.intrinsics_from_focal_center`<br>Get OpenCV intrinsics matrix | [`utils3d.np.intrinsics_from_focal_center(fx, fy, cx, cy)`](utils3d/numpy/transforms.py#L128) | [`utils3d.pt.intrinsics_from_focal_center(fx, fy, cx, cy)`](utils3d/torch/transforms.py#L136) | 
 | `utils3d.intrinsics_from_fov`<br>Get normalized OpenCV intrinsics matrix from given field of view. | [`utils3d.np.intrinsics_from_fov(fov_x, fov_y, fov_max, fov_min, aspect_ratio)`](utils3d/numpy/transforms.py#L154) | [`utils3d.pt.intrinsics_from_fov(fov_x, fov_y, fov_max, fov_min, aspect_ratio)`](utils3d/torch/transforms.py#L166) | 
-| `utils3d.intrinsics_to_fov`<br> | [`utils3d.np.intrinsics_to_fov(intrinsics)`](utils3d/numpy/transforms.py#L206) | [`utils3d.pt.intrinsics_to_fov(intrinsics)`](utils3d/torch/transforms.py#L218) | 
+| `utils3d.intrinsics_to_fov`<br>NOTE: approximate FOV by assuming centered principal point | [`utils3d.np.intrinsics_to_fov(intrinsics)`](utils3d/numpy/transforms.py#L206) | [`utils3d.pt.intrinsics_to_fov(intrinsics)`](utils3d/torch/transforms.py#L218) | 
 | `utils3d.intrinsics_to_perspective`<br>OpenCV intrinsics to OpenGL perspective matrix | [`utils3d.np.intrinsics_to_perspective(intrinsics, near, far)`](utils3d/numpy/transforms.py#L300) | [`utils3d.pt.intrinsics_to_perspective(intrinsics, near, far)`](utils3d/torch/transforms.py#L291) | 
 | `utils3d.lerp`<br>Linear interpolation between two vectors. | [`utils3d.np.lerp(x1, x2, t)`](utils3d/numpy/transforms.py#L1025) | [`utils3d.pt.lerp(v1, v2, t)`](utils3d/torch/transforms.py#L1035) | 
 | `utils3d.make_affine_matrix`<br>Make an affine transformation matrix from a linear matrix and a translation vector. | [`utils3d.np.make_affine_matrix(M, t)`](utils3d/numpy/transforms.py#L1006) | [`utils3d.pt.make_affine_matrix(M, t)`](utils3d/torch/transforms.py#L1142) | 
-| `utils3d.matrix_to_axis_angle`<br> | - | [`utils3d.pt.matrix_to_axis_angle(rot_mat, eps)`](utils3d/torch/transforms.py#L919) | 
-| `utils3d.matrix_to_euler_angles`<br> | - | [`utils3d.pt.matrix_to_euler_angles(matrix, convention)`](utils3d/torch/transforms.py#L854) | 
+| `utils3d.matrix_to_axis_angle`<br>Convert a batch of 3x3 rotation matrices to axis-angle representation (rotation vector) | - | [`utils3d.pt.matrix_to_axis_angle(rot_mat, eps)`](utils3d/torch/transforms.py#L919) | 
+| `utils3d.matrix_to_euler_angles`<br>Convert rotations given as rotation matrices to Euler angles in radians. | - | [`utils3d.pt.matrix_to_euler_angles(matrix, convention)`](utils3d/torch/transforms.py#L854) | 
 | `utils3d.matrix_to_quaternion`<br>Convert 3x3 rotation matrix to quaternion (w, x, y, z) | [`utils3d.np.matrix_to_quaternion(rot_mat, eps)`](utils3d/numpy/transforms.py#L802) | [`utils3d.pt.matrix_to_quaternion(rot_mat, eps)`](utils3d/torch/transforms.py#L964) | 
 | `utils3d.normalize_intrinsics`<br>Normalize intrinsics from pixel cooridnates to uv coordinates | [`utils3d.np.normalize_intrinsics(intrinsics, size, pixel_definition)`](utils3d/numpy/transforms.py#L354) | [`utils3d.pt.normalize_intrinsics(intrinsics, size, pixel_definition)`](utils3d/torch/transforms.py#L346) | 
 | `utils3d.perspective_from_fov`<br>Get OpenGL perspective matrix from field of view  | [`utils3d.np.perspective_from_fov(fov_x, fov_y, fov_min, fov_max, aspect_ratio, near, far)`](utils3d/numpy/transforms.py#L59) | [`utils3d.pt.perspective_from_fov(fov_x, fov_y, fov_min, fov_max, aspect_ratio, near, far)`](utils3d/torch/transforms.py#L65) | 
@@ -72,19 +72,19 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.project`<br>Calculate projection.  | [`utils3d.np.project(points, intrinsics, extrinsics, view, projection)`](utils3d/numpy/transforms.py#L694) | [`utils3d.pt.project(points, intrinsics, extrinsics, view, projection)`](utils3d/torch/transforms.py#L656) | 
 | `utils3d.project_cv`<br>Project 3D points to 2D following the OpenCV convention | [`utils3d.np.project_cv(points, intrinsics, extrinsics)`](utils3d/numpy/transforms.py#L578) | [`utils3d.pt.project_cv(points, intrinsics, extrinsics)`](utils3d/torch/transforms.py#L565) | 
 | `utils3d.project_gl`<br>Project 3D points to 2D following the OpenGL convention (except for row major matrices) | [`utils3d.np.project_gl(points, projection, view)`](utils3d/numpy/transforms.py#L549) | [`utils3d.pt.project_gl(points, projection, view)`](utils3d/torch/transforms.py#L536) | 
-| `utils3d.quaternion_to_axis_angle`<br> | - | [`utils3d.pt.quaternion_to_axis_angle(quaternion, eps)`](utils3d/torch/transforms.py#L933) | 
+| `utils3d.quaternion_to_axis_angle`<br>Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector) | - | [`utils3d.pt.quaternion_to_axis_angle(quaternion, eps)`](utils3d/torch/transforms.py#L933) | 
 | `utils3d.quaternion_to_matrix`<br>Converts a batch of quaternions (w, x, y, z) to rotation matrices | [`utils3d.np.quaternion_to_matrix(quaternion, eps)`](utils3d/numpy/transforms.py#L777) | [`utils3d.pt.quaternion_to_matrix(quaternion, eps)`](utils3d/torch/transforms.py#L1010) | 
 | `utils3d.ray_intersection`<br>Compute the intersection/closest point of two D-dimensional rays | [`utils3d.np.ray_intersection(p1, d1, p2, d2)`](utils3d/numpy/transforms.py#L978) | - | 
-| `utils3d.rotate_2d`<br> | - | [`utils3d.pt.rotate_2d(theta, center)`](utils3d/torch/transforms.py#L1178) | 
-| `utils3d.rotation_matrix_2d`<br> | - | [`utils3d.pt.rotation_matrix_2d(theta)`](utils3d/torch/transforms.py#L1160) | 
+| `utils3d.rotate_2d`<br>3x3 matrix for 2D rotation around a center | - | [`utils3d.pt.rotate_2d(theta, center)`](utils3d/torch/transforms.py#L1178) | 
+| `utils3d.rotation_matrix_2d`<br>2x2 matrix for 2D rotation | - | [`utils3d.pt.rotation_matrix_2d(theta)`](utils3d/torch/transforms.py#L1160) | 
 | `utils3d.rotation_matrix_from_vectors`<br>Rotation matrix that rotates v1 to v2 | [`utils3d.np.rotation_matrix_from_vectors(v1, v2)`](utils3d/numpy/transforms.py#L939) | [`utils3d.pt.rotation_matrix_from_vectors(v1, v2)`](utils3d/torch/transforms.py#L809) | 
-| `utils3d.scale_2d`<br> | - | [`utils3d.pt.scale_2d(scale, center)`](utils3d/torch/transforms.py#L1232) | 
+| `utils3d.scale_2d`<br>Scale matrix for 2D scaling | - | [`utils3d.pt.scale_2d(scale, center)`](utils3d/torch/transforms.py#L1232) | 
 | `utils3d.screen_coord_to_view_coord`<br>Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices) | [`utils3d.np.screen_coord_to_view_coord(screen_coord, projection)`](utils3d/numpy/transforms.py#L640) | - | 
 | `utils3d.skew_symmetric`<br>Skew symmetric matrix from a 3D vector | [`utils3d.np.skew_symmetric(v)`](utils3d/numpy/transforms.py#L927) | [`utils3d.pt.skew_symmetric(v)`](utils3d/torch/transforms.py#L797) | 
 | `utils3d.slerp`<br>Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized. | [`utils3d.np.slerp(v1, v2, t)`](utils3d/numpy/transforms.py#L1069) | [`utils3d.pt.slerp(v1, v2, t, eps)`](utils3d/torch/transforms.py#L1052) | 
 | `utils3d.slerp_rotation_matrix`<br>Spherical linear interpolation between two rotation matrices. | [`utils3d.np.slerp_rotation_matrix(R1, R2, t)`](utils3d/numpy/transforms.py#L1095) | [`utils3d.pt.slerp_rotation_matrix(R1, R2, t)`](utils3d/torch/transforms.py#L1078) | 
 | `utils3d.transform`<br>Apply affine transformation(s) to a point or a set of points. | [`utils3d.np.transform(x, Ts)`](utils3d/numpy/transforms.py#L1193) | [`utils3d.pt.transform(x, Ts)`](utils3d/torch/transforms.py#L1262) | 
-| `utils3d.translate_2d`<br> | - | [`utils3d.pt.translate_2d(translation)`](utils3d/torch/transforms.py#L1209) | 
+| `utils3d.translate_2d`<br>Translation matrix for 2D translation | - | [`utils3d.pt.translate_2d(translation)`](utils3d/torch/transforms.py#L1209) | 
 | `utils3d.unproject`<br>Calculate inverse projection.  | [`utils3d.np.unproject(uv, depth, intrinsics, extrinsics, projection, view)`](utils3d/numpy/transforms.py#L735) | [`utils3d.pt.unproject(uv, depth, intrinsics, extrinsics, projection, view)`](utils3d/torch/transforms.py#L697) | 
 | `utils3d.unproject_cv`<br>Unproject uv coordinates to 3D view space following the OpenCV convention | [`utils3d.np.unproject_cv(uv, depth, intrinsics, extrinsics)`](utils3d/numpy/transforms.py#L661) | [`utils3d.pt.unproject_cv(uv, depth, intrinsics, extrinsics)`](utils3d/torch/transforms.py#L625) | 
 | `utils3d.unproject_gl`<br>Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices) | [`utils3d.np.unproject_gl(uv, depth, projection, view)`](utils3d/numpy/transforms.py#L610) | [`utils3d.pt.unproject_gl(uv, depth, projection, view)`](utils3d/torch/transforms.py#L595) | 
@@ -97,7 +97,7 @@ The links below will take you to the source code of each function with detailed 
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.bounding_rect_from_mask`<br> | - | [`utils3d.pt.bounding_rect_from_mask(mask)`](utils3d/torch/maps.py#L366) | 
+| `utils3d.bounding_rect_from_mask`<br>Get bounding rectangle of a mask | - | [`utils3d.pt.bounding_rect_from_mask(mask)`](utils3d/torch/maps.py#L366) | 
 | `utils3d.build_mesh_from_depth_map`<br>Get a mesh by lifting depth map to 3D, while removing depths of large depth difference. | [`utils3d.np.build_mesh_from_depth_map(depth, other_maps, intrinsics, extrinsics, atol, rtol, tri)`](utils3d/numpy/maps.py#L187) | [`utils3d.pt.build_mesh_from_depth_map(depth, other_maps, intrinsics, extrinsics, atol, rtol, tri)`](utils3d/torch/maps.py#L197) | 
 | `utils3d.build_mesh_from_map`<br>Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces. | [`utils3d.np.build_mesh_from_map(maps, mask, tri)`](utils3d/numpy/maps.py#L154) | [`utils3d.pt.build_mesh_from_map(maps, mask, tri)`](utils3d/torch/maps.py#L158) | 
 | `utils3d.chessboard`<br>Get a chessboard image | [`utils3d.np.chessboard(size, grid_size, color_a, color_b)`](utils3d/numpy/maps.py#L425) | [`utils3d.pt.chessboard(size, grid_size, color_a, color_b)`](utils3d/torch/maps.py#L383) | 
@@ -124,8 +124,8 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.calc_quad_direction`<br>Calculate the direction of each candidate quad face. | [`utils3d.np.calc_quad_direction(vertices, quads)`](utils3d/numpy/mesh.py#L672) | - | 
 | `utils3d.calc_quad_distortion`<br>Calculate the distortion of each candidate quad face. | [`utils3d.np.calc_quad_distortion(vertices, quads)`](utils3d/numpy/mesh.py#L621) | - | 
 | `utils3d.calc_quad_smoothness`<br>Calculate the smoothness of each candidate quad face connection. | [`utils3d.np.calc_quad_smoothness(quad2edge, quad2adj, quads_direction)`](utils3d/numpy/mesh.py#L713) | - | 
-| `utils3d.compute_boundaries`<br> | - | [`utils3d.pt.compute_boundaries(faces, edges, face2edge, edge_degrees)`](utils3d/torch/mesh.py#L454) | 
-| `utils3d.compute_edge_connected_components`<br> | - | [`utils3d.pt.compute_edge_connected_components(edges)`](utils3d/torch/mesh.py#L415) | 
+| `utils3d.compute_boundaries`<br>Compute boundary edges of a mesh. | - | [`utils3d.pt.compute_boundaries(faces, edges, face2edge, edge_degrees)`](utils3d/torch/mesh.py#L452) | 
+| `utils3d.compute_edge_connected_components`<br>Compute connected edges of a mesh. | - | [`utils3d.pt.compute_edge_connected_components(edges)`](utils3d/torch/mesh.py#L413) | 
 | `utils3d.compute_face_corner_angles`<br>Compute face corner angles of a mesh | [`utils3d.np.compute_face_corner_angles(vertices, faces)`](utils3d/numpy/mesh.py#L84) | [`utils3d.pt.compute_face_corner_angles(vertices, faces)`](utils3d/torch/mesh.py#L127) | 
 | `utils3d.compute_face_corner_normals`<br>Compute the face corner normals of a mesh | [`utils3d.np.compute_face_corner_normals(vertices, faces, normalize)`](utils3d/numpy/mesh.py#L105) | [`utils3d.pt.compute_face_corner_normals(vertices, faces, normalize)`](utils3d/torch/mesh.py#L149) | 
 | `utils3d.compute_face_corner_tangents`<br>Compute the face corner tangent (and bitangent) vectors of a mesh | [`utils3d.np.compute_face_corner_tangents(vertices, uv, faces_vertices, faces_uv, normalize)`](utils3d/numpy/mesh.py#L130) | [`utils3d.pt.compute_face_corner_tangents(vertices, uv, faces_vertices, faces_uv, normalize)`](utils3d/torch/mesh.py#L174) | 
@@ -137,22 +137,22 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.create_icosahedron_mesh`<br>Create an icosahedron mesh of centered at origin. | [`utils3d.np.create_icosahedron_mesh()`](utils3d/numpy/mesh.py#L516) | - | 
 | `utils3d.create_square_mesh`<br>Create a square mesh of area 1 centered at origin in the xy-plane. | [`utils3d.np.create_square_mesh(tri)`](utils3d/numpy/mesh.py#L441) | - | 
 | `utils3d.flatten_mesh_indices`<br> | [`utils3d.np.flatten_mesh_indices(args)`](utils3d/numpy/mesh.py#L428) | - | 
-| `utils3d.get_mesh_connected_components`<br> | - | [`utils3d.pt.get_mesh_connected_components(faces, edges, face2edge)`](utils3d/torch/mesh.py#L373) | 
-| `utils3d.get_mesh_dual_graph`<br> | - | [`utils3d.pt.get_mesh_dual_graph(faces)`](utils3d/torch/mesh.py#L510) | 
-| `utils3d.get_mesh_edges`<br> | - | [`utils3d.pt.get_mesh_edges(faces, directed, return_face2edge, return_edge2face, return_opposite_edge, return_counts)`](utils3d/torch/mesh.py#L306) | 
-| `utils3d.laplacian`<br> | - | [`utils3d.pt.laplacian(vertices, faces, weight)`](utils3d/torch/mesh.py#L698) | 
-| `utils3d.laplacian_hc_smooth_mesh`<br> | - | [`utils3d.pt.laplacian_hc_smooth_mesh(vertices, faces, times, alpha, beta, weight)`](utils3d/torch/mesh.py#L757) | 
-| `utils3d.laplacian_smooth_mesh`<br> | - | [`utils3d.pt.laplacian_smooth_mesh(vertices, faces, weight, times)`](utils3d/torch/mesh.py#L727) | 
-| `utils3d.merge_duplicate_vertices`<br>Merge duplicate vertices of a triangular mesh.  | [`utils3d.np.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/numpy/mesh.py#L278) | [`utils3d.pt.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/torch/mesh.py#L576) | 
+| `utils3d.get_mesh_connected_components`<br>Compute connected faces of a mesh. | - | [`utils3d.pt.get_mesh_connected_components(faces, edges, face2edge)`](utils3d/torch/mesh.py#L371) | 
+| `utils3d.get_mesh_dual_graph`<br>Get dual graph of a mesh. (Mesh face as dual graph's vertex, adjacency by edge sharing) | - | [`utils3d.pt.get_mesh_dual_graph(faces)`](utils3d/torch/mesh.py#L508) | 
+| `utils3d.get_mesh_edges`<br>Get edges of a mesh. Optionally return additional mappings. | - | [`utils3d.pt.get_mesh_edges(faces, directed, return_face2edge, return_edge2face, return_opposite_edge, return_counts)`](utils3d/torch/mesh.py#L305) | 
+| `utils3d.laplacian`<br>Laplacian smooth with cotangent weights | - | [`utils3d.pt.laplacian(vertices, faces, weight)`](utils3d/torch/mesh.py#L696) | 
+| `utils3d.laplacian_hc_smooth_mesh`<br>HC algorithm from Improved Laplacian Smoothing of Noisy Surface Meshes by J.Vollmer et al. | - | [`utils3d.pt.laplacian_hc_smooth_mesh(vertices, faces, times, alpha, beta, weight)`](utils3d/torch/mesh.py#L755) | 
+| `utils3d.laplacian_smooth_mesh`<br>Laplacian smooth with cotangent weights | - | [`utils3d.pt.laplacian_smooth_mesh(vertices, faces, weight, times)`](utils3d/torch/mesh.py#L725) | 
+| `utils3d.merge_duplicate_vertices`<br>Merge duplicate vertices of a triangular mesh.  | [`utils3d.np.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/numpy/mesh.py#L278) | [`utils3d.pt.merge_duplicate_vertices(vertices, faces, tol)`](utils3d/torch/mesh.py#L574) | 
 | `utils3d.merge_meshes`<br>Merge multiple meshes into one mesh. Vertices will be no longer shared. | [`utils3d.np.merge_meshes(meshes)`](utils3d/numpy/mesh.py#L535) | - | 
 | `utils3d.mesh_relations`<br>Calculate the relation between vertices and faces. | [`utils3d.np.mesh_relations(faces)`](utils3d/numpy/mesh.py#L368) | - | 
-| `utils3d.remove_corrupted_faces`<br>Remove corrupted faces (faces with duplicated vertices) | [`utils3d.np.remove_corrupted_faces(faces)`](utils3d/numpy/mesh.py#L264) | [`utils3d.pt.remove_corrupted_faces(faces)`](utils3d/torch/mesh.py#L560) | 
-| `utils3d.remove_isolated_pieces`<br> | - | [`utils3d.pt.remove_isolated_pieces(vertices, faces, connected_components, thresh_num_faces, thresh_radius, thresh_boundary_ratio, remove_unreferenced)`](utils3d/torch/mesh.py#L601) | 
-| `utils3d.remove_unused_vertices`<br>Remove unreferenced vertices of a mesh.  | [`utils3d.np.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/numpy/mesh.py#L303) | [`utils3d.pt.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/torch/mesh.py#L531) | 
+| `utils3d.remove_corrupted_faces`<br>Remove corrupted faces (faces with duplicated vertices) | [`utils3d.np.remove_corrupted_faces(faces)`](utils3d/numpy/mesh.py#L264) | [`utils3d.pt.remove_corrupted_faces(faces)`](utils3d/torch/mesh.py#L558) | 
+| `utils3d.remove_isolated_pieces`<br>Remove isolated pieces of a mesh.  | - | [`utils3d.pt.remove_isolated_pieces(vertices, faces, connected_components, thresh_num_faces, thresh_radius, thresh_boundary_ratio, remove_unreferenced)`](utils3d/torch/mesh.py#L599) | 
+| `utils3d.remove_unused_vertices`<br>Remove unreferenced vertices of a mesh.  | [`utils3d.np.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/numpy/mesh.py#L303) | [`utils3d.pt.remove_unused_vertices(faces, vertice_attrs, return_indices)`](utils3d/torch/mesh.py#L529) | 
 | `utils3d.solve_quad`<br>Solve the quad mesh from the candidate quad faces. | [`utils3d.np.solve_quad(face2edge, edge2face, quad2adj, quads_distortion, quads_smoothness, quads_valid)`](utils3d/numpy/mesh.py#L742) | - | 
 | `utils3d.solve_quad_qp`<br>Solve the quad mesh from the candidate quad faces. | [`utils3d.np.solve_quad_qp(face2edge, edge2face, quad2adj, quads_distortion, quads_smoothness, quads_valid)`](utils3d/numpy/mesh.py#L855) | - | 
-| `utils3d.subdivide_mesh`<br>Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles. | [`utils3d.np.subdivide_mesh(vertices, faces, level)`](utils3d/numpy/mesh.py#L332) | [`utils3d.pt.subdivide_mesh(vertices, faces, n)`](utils3d/torch/mesh.py#L667) | 
-| `utils3d.taubin_smooth_mesh`<br> | - | [`utils3d.pt.taubin_smooth_mesh(vertices, faces, lambda_, mu_)`](utils3d/torch/mesh.py#L740) | 
+| `utils3d.subdivide_mesh`<br>Subdivide a triangular mesh by splitting each triangle into 4 smaller triangles. | [`utils3d.np.subdivide_mesh(vertices, faces, level)`](utils3d/numpy/mesh.py#L332) | [`utils3d.pt.subdivide_mesh(vertices, faces, n)`](utils3d/torch/mesh.py#L665) | 
+| `utils3d.taubin_smooth_mesh`<br>Taubin smooth mesh | - | [`utils3d.pt.taubin_smooth_mesh(vertices, faces, lambda_, mu_)`](utils3d/torch/mesh.py#L738) | 
 | `utils3d.tri_to_quad`<br>Convert a triangle mesh to a quad mesh. | [`utils3d.np.tri_to_quad(vertices, faces)`](utils3d/numpy/mesh.py#L941) | - | 
 | `utils3d.triangulate_mesh`<br>Triangulate a polygonal mesh. | [`utils3d.np.triangulate_mesh(faces, vertices, method)`](utils3d/numpy/mesh.py#L36) | [`utils3d.pt.triangulate_mesh(faces, vertices, method)`](utils3d/torch/mesh.py#L78) | 
 
@@ -161,27 +161,27 @@ The links below will take you to the source code of each function with detailed 
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.RastContext`<br> | [`utils3d.np.RastContext(args, kwargs)`](utils3d/numpy/rasterization.py#L51) | [`utils3d.pt.RastContext(nvd_ctx, backend, device)`](utils3d/torch/rasterization.py#L21) | 
+| `utils3d.RastContext`<br>Create a rasterization context. Nothing but a wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext. | [`utils3d.np.RastContext(args, kwargs)`](utils3d/numpy/rasterization.py#L51) | [`utils3d.pt.RastContext(nvd_ctx, backend, device)`](utils3d/torch/rasterization.py#L21) | 
 | `utils3d.rasterize_lines`<br>Rasterize lines. | [`utils3d.np.rasterize_lines(ctx, size, vertices, lines, attributes, attributes_domain, view, projection, line_width, return_depth, return_interpolation, background_image, background_depth, background_interpolation_id, background_interpolation_uv)`](utils3d/numpy/rasterization.py#L896) | - | 
 | `utils3d.rasterize_point_cloud`<br>Rasterize point cloud. | [`utils3d.np.rasterize_point_cloud(ctx, size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, return_depth, return_point_id, background_image, background_depth, background_point_id)`](utils3d/numpy/rasterization.py#L1117) | - | 
 | `utils3d.rasterize_triangles`<br>Rasterize triangles. | [`utils3d.np.rasterize_triangles(ctx, size, vertices, attributes, attributes_domain, faces, view, projection, cull_backface, return_depth, return_interpolation, background_image, background_depth, background_interpolation_id, background_interpolation_uv)`](utils3d/numpy/rasterization.py#L442) | [`utils3d.pt.rasterize_triangles(ctx, width, height, vertices, faces, attr, uv, texture, model, view, projection, antialiasing, diff_attrs)`](utils3d/torch/rasterization.py#L38) | 
 | `utils3d.rasterize_triangles_peeling`<br>Rasterize triangles with depth peeling. | [`utils3d.np.rasterize_triangles_peeling(ctx, size, vertices, attributes, attributes_domain, faces, view, projection, cull_backface, return_depth, return_interpolation)`](utils3d/numpy/rasterization.py#L665) | [`utils3d.pt.rasterize_triangles_peeling(ctx, vertices, faces, width, height, max_layers, attr, uv, texture, model, view, projection, antialiasing, diff_attrs)`](utils3d/torch/rasterization.py#L145) | 
 | `utils3d.sample_texture`<br>Sample from a texture map with a UV map. | [`utils3d.np.sample_texture(ctx, uv_map, texture_map, interpolation, mipmap_level, repeat, anisotropic)`](utils3d/numpy/rasterization.py#L1306) | [`utils3d.pt.sample_texture(texture, uv, uv_da)`](utils3d/torch/rasterization.py#L271) | 
 | `utils3d.test_rasterization`<br>Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file. | [`utils3d.np.test_rasterization(ctx)`](utils3d/numpy/rasterization.py#L1457) | - | 
-| `utils3d.texture_composite`<br> | - | [`utils3d.pt.texture_composite(texture, uv, uv_da, background)`](utils3d/torch/rasterization.py#L291) | 
-| `utils3d.warp_image_by_depth`<br> | - | [`utils3d.pt.warp_image_by_depth(ctx, depth, image, mask, width, height, extrinsics_src, extrinsics_tgt, intrinsics_src, intrinsics_tgt, near, far, antialiasing, backslash, padding, return_uv, return_dr)`](utils3d/torch/rasterization.py#L332) | 
-| `utils3d.warp_image_by_forward_flow`<br> | - | [`utils3d.pt.warp_image_by_forward_flow(ctx, image, flow, depth, antialiasing, backslash)`](utils3d/torch/rasterization.py#L502) | 
+| `utils3d.texture_composite`<br>Composite textures with depth peeling output. | - | [`utils3d.pt.texture_composite(texture, uv, uv_da, background)`](utils3d/torch/rasterization.py#L291) | 
+| `utils3d.warp_image_by_depth`<br>Warp image by depth.  | - | [`utils3d.pt.warp_image_by_depth(ctx, depth, image, mask, width, height, extrinsics_src, extrinsics_tgt, intrinsics_src, intrinsics_tgt, near, far, antialiasing, backslash, padding, return_uv, return_dr)`](utils3d/torch/rasterization.py#L332) | 
+| `utils3d.warp_image_by_forward_flow`<br>Warp image by forward flow. | - | [`utils3d.pt.warp_image_by_forward_flow(ctx, image, flow, depth, antialiasing, backslash)`](utils3d/torch/rasterization.py#L502) | 
 
 
 ### Utils
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.csr_adjacency_matrix_from_indices`<br> | - | [`utils3d.pt.csr_adjacency_matrix_from_indices(indices, n_cols)`](utils3d/torch/utils.py#L134) | 
-| `utils3d.csr_eliminate_zeros`<br> | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L152) | 
+| `utils3d.csr_adjacency_matrix_from_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | - | [`utils3d.pt.csr_adjacency_matrix_from_indices(indices, n_cols)`](utils3d/torch/utils.py#L134) | 
+| `utils3d.csr_eliminate_zeros`<br>Remove zero elements from a sparse CSR tensor. | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L152) | 
 | `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. | [`utils3d.np.lookup(key, query, value, default_value)`](utils3d/numpy/utils.py#L122) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L113) | 
-| `utils3d.masked_max`<br> | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L104) | 
-| `utils3d.masked_min`<br> | - | [`utils3d.pt.masked_min(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L95) | 
+| `utils3d.masked_max`<br>Similar to torch.max, but with mask | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L104) | 
+| `utils3d.masked_min`<br>Similar to torch.min, but with mask | - | [`utils3d.pt.masked_min(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L95) | 
 | `utils3d.max_pool_1d`<br> | [`utils3d.np.max_pool_1d(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L94) | - | 
 | `utils3d.max_pool_2d`<br> | [`utils3d.np.max_pool_2d(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L111) | - | 
 | `utils3d.max_pool_nd`<br> | [`utils3d.np.max_pool_nd(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L105) | - | 

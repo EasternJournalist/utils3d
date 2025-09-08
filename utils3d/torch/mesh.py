@@ -275,8 +275,7 @@ def compute_vertex_normals(
     faces: Tensor,
     weighted: Literal['uniform', 'area', 'angle'] = 'uniform'
 ) -> Tensor:
-    """
-    Compute vertex normals of a polygon mesh by averaging neighboring face normals
+    """Compute vertex normals of a polygon mesh by averaging neighboring face normals
 
     ## Parameters
         vertices (Tensor): [..., N, 3] 3-dimensional vertices
@@ -311,8 +310,7 @@ def get_mesh_edges(
     return_opposite_edge: bool = False,
     return_counts: bool = False
 ) -> Tuple[Tensor, ...]:
-    """
-    Get edges of a mesh. Optionally return additional mappings.
+    """Get edges of a mesh. Optionally return additional mappings.
 
     ## Parameters
     - `faces` (Tensor): (F, P) polygon faces' vertex indices
