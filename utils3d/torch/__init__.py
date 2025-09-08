@@ -78,8 +78,6 @@ __modules_all__ = {
         'remove_isolated_pieces',
         'merge_duplicate_vertices',
         'subdivide_mesh',
-        'compute_face_tbn',
-        'compute_vertex_tbn',
         'laplacian',
         'laplacian_smooth_mesh',
         'taubin_smooth_mesh',

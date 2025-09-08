@@ -119,8 +119,6 @@ __all__ = ["sliding_window",
 "compute_boundaries", 
 "compute_dual_graph", 
 "remove_isolated_pieces", 
-"compute_face_tbn", 
-"compute_vertex_tbn", 
 "laplacian", 
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
@@ -843,18 +841,6 @@ def remove_isolated_pieces(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.remove_isolated_pieces
     return _call_based_on_args('remove_isolated_pieces', args, kwargs)
-
-@suppress_traceback
-def compute_face_tbn(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_face_tbn
-    return _call_based_on_args('compute_face_tbn', args, kwargs)
-
-@suppress_traceback
-def compute_vertex_tbn(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_vertex_tbn
-    return _call_based_on_args('compute_vertex_tbn', args, kwargs)
 
 @suppress_traceback
 def laplacian(*args, **kwargs):

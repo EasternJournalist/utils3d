@@ -21,8 +21,6 @@ __all__ = [
     'remove_isolated_pieces',
     'merge_duplicate_vertices',
     'subdivide_mesh',
-    'compute_face_tbn',
-    'compute_vertex_tbn',
     'laplacian',
     'laplacian_smooth_mesh',
     'taubin_smooth_mesh',
@@ -142,7 +140,7 @@ def compute_face_corner_angles(
 def compute_face_corner_normals(
     vertices: Tensor,
     faces: Optional[Tensor] = None,
-    normalized: bool = True
+    normalize: bool = True
 ) -> Tensor:
     """
     Compute the face corner normals of a mesh
@@ -150,7 +148,7 @@ def compute_face_corner_normals(
     ## Parameters
     - `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
     - `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
-    - `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
+    - `normalize` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
     ## Returns
     - `normals` (Tensor): (..., F, P, 3) face corner normals
@@ -159,7 +157,7 @@ def compute_face_corner_normals(
         vertices = vertices.index_select(-2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., F, P, 3)
     edges = torch.roll(vertices, -1, dim=-2) - vertices  # (..., T, P, 3)
     normals = torch.cross(torch.roll(edges, 1, dims=-2), edges)
-    if normalized:
+    if normalize:
         normals /= torch.linalg.norm(normals, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
     return normals
 
@@ -178,7 +176,7 @@ def compute_face_corner_tangents(
     - `uv` (Tensor): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
     - `faces_vertices` (Tensor, optional): `(F, P)` face vertex indices
     - `faces_uv` (Tensor, optional): `(F, P)` face UV indices
-    - `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+    - `normalize` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
 s
     ## Returns
     - `tangents` (Tensor): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
@@ -221,7 +219,7 @@ def compute_face_normals(
             vertices[..., 2, :] - vertices[..., 0, :]
         )
     else:
-        normals = compute_face_corner_normals(vertices, normalized=False)
+        normals = compute_face_corner_normals(vertices, normalize=False)
         normals = torch.mean(normals, dim=-2)
     normals /= torch.linalg.norm(normals, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
     return normals
@@ -255,7 +253,7 @@ def compute_face_tangents(
         tangents = torch.stack([vertices[..., 1, :] - vertices[..., 0, :], vertices[..., 2, :] - vertices[..., 0, :]], dim=-1) \
             @ torch.linalg.inv(torch.stack([uv[..., 1, :] - uv[..., 0, :], uv[..., 2, :] - uv[..., 0, :]], dim=-1))
     else:
-        tangents = compute_face_corner_tangents(vertices, uv, normalized=False)
+        tangents = compute_face_corner_tangents(vertices, uv, normalize=False)
         tangents = torch.mean(tangents, dim=-2)
     if normalize:
         tangents /= torch.linalg.norm(tangents, dim=-1, keepdim=True) + torch.finfo(vertices.dtype).eps
@@ -277,7 +275,7 @@ def compute_vertex_normals(
     ## Returns
         normals (Tensor): [..., N, 3] vertex normals (already normalized to unit vectors)
     """
-    face_corner_normals = compute_face_corner_normals(vertices, faces, normalized=False)
+    face_corner_normals = compute_face_corner_normals(vertices, faces, normalize=False)
     if weighted == 'uniform':
         face_corner_normals = F.normalize(face_corner_normals, p=2, dim=-1)
     elif weighted == 'area':
@@ -638,50 +636,6 @@ def subdivide_mesh(vertices: Tensor, faces: Tensor, n: int = 1) -> Tuple[Tensor,
             torch.stack([n_vertices + uni_inv[0], n_vertices + uni_inv[1], n_vertices + uni_inv[2]], dim=1),
         ], dim=0)
     return vertices, faces
-
-
-def compute_face_tbn(tri_vertices: Tensor, tri_uvs: Tensor, eps: float = 1e-12) -> Tensor:
-    """compute TBN matrix for each triangle faces
-
-    ## Parameters
-        - `tri_vertices` (Tensor): shape (..., T, 3, 3), positions
-        - `tri_uvs` (Tensor): shape (..., T, 3, 3) uv coordinates
-        
-    ## Returns
-        `tbn` (Tensor): (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal
-    """
-    e01 = tri_vertices[..., 1, :] - tri_vertices[..., 0, :]
-    e02 = tri_vertices[..., 2, :] - tri_vertices[..., 0, :]
-    uv01 = tri_uvs[..., 1, :] - tri_uvs[..., 0, :]
-    uv02 = tri_uvs[..., 2, :] - tri_uvs[..., 0, :]
-    normal = torch.cross(e01, e02)
-    tangent_bitangent = torch.stack([e01, e02], dim=-1) @ torch.inverse(torch.stack([uv01, uv02], dim=-1))
-    tbn = torch.cat([tangent_bitangent, normal.unsqueeze(-1)], dim=-1)
-    tbn = F.normalize(tbn, p=2, dim=-2, eps=eps)
-    return tbn
-
-
-def compute_vertex_tbn(faces_topo: Tensor, tri_vertices: Tensor, tri_uvs: Tensor) -> Tensor:
-    """compute TBN matrix for each face
-
-    ## Parameters
-        faces_topo (Tensor): (T, 3), face indice of topology
-        pos (Tensor): shape (..., N_pos, 3), positions
-        faces_pos (Tensor): shape(T, 3) 
-        uv (Tensor): shape (..., N_uv, 3) uv coordinates, 
-        faces_uv (Tensor): shape(T, 3) 
-        
-    ## Returns
-        Tensor: (..., V, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal
-    """
-    n_vertices = faces_topo.max().item() + 1
-    n_tri = faces_topo.shape[-2]
-    batch_shape = pos.shape[:-2]
-    face_tbn = compute_face_tbn(pos[faces_pos], uv, faces_uv)    # (..., T, 3, 3)
-    face_tbn = face_tbn[..., :, None, :, :].repeat(*[1] * len(batch_shape), 1, 3, 1, 1).view(*batch_shape, n_tri * 3, 3, 3)   # (..., T * 3, 3, 3)
-    vertex_tbn = torch.index_add(torch.zeros(*batch_shape, n_vertices, 3, 3).to(face_tbn), dim=-3, index=faces_topo.view(-1), source=face_tbn)
-    vertex_tbn = F.normalize(vertex_tbn, p=2, dim=-2)
-    return vertex_tbn
 
 
 def laplacian(vertices: Tensor, faces: Tensor, weight: str = 'uniform') -> Tensor:

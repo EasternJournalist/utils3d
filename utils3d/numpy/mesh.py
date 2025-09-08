@@ -105,7 +105,7 @@ def compute_face_corner_angles(
 def compute_face_corner_normals(
     vertices: ndarray,
     faces: Optional[ndarray] = None,
-    normalized: bool = True
+    normalize: bool = True
 ) -> ndarray:
     """
     Compute the face corner normals of a mesh
@@ -113,7 +113,7 @@ def compute_face_corner_normals(
     ## Parameters
     - `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
     - `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
-    - `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
+    - `normalize` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
     ## Returns
     - `normals` (ndarray): (..., F, P, 3) face corner normals
@@ -122,7 +122,7 @@ def compute_face_corner_normals(
         vertices = vertices[..., faces, :]  # (..., T, P, 3)
     edges = np.roll(vertices, -1, axis=-2) - vertices  # (..., T, P, 3)
     normals = np.cross(np.roll(edges, 1, axis=-2), edges)
-    if normalized:
+    if normalize:
         normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
     return normals
 
@@ -142,7 +142,7 @@ def compute_face_corner_tangents(
     - `uv` (ndarray): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
     - `faces_vertices` (ndarray, optional): `(F, P)` face vertex indices
     - `faces_uv` (ndarray, optional): `(F, P)` face UV indices
-    - `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+    - `normalize` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
 
     ## Returns
     - `tangents` (ndarray): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
@@ -185,7 +185,7 @@ def compute_face_normals(
             vertices[..., 2, :] - vertices[..., 0, :]
         )
     else:
-        normals = compute_face_corner_normals(vertices, normalized=False)
+        normals = compute_face_corner_normals(vertices, normalize=False)
         normals = np.mean(normals, axis=-2)
     normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
     return normals
@@ -219,7 +219,7 @@ def compute_face_tangents(
         tangents = np.stack([vertices[..., 1, :] - vertices[..., 0, :], vertices[..., 2, :] - vertices[..., 0, :]], axis=-1) \
             @ np.linalg.inv(np.stack([uv[..., 1, :] - uv[..., 0, :], uv[..., 2, :] - uv[..., 0, :]], axis=-1))
     else:
-        tangents = compute_face_corner_tangents(vertices, uv, normalized=False)
+        tangents = compute_face_corner_tangents(vertices, uv, normalize=False)
         tangents = np.mean(tangents, axis=-2)
     if normalize:
         tangents /= np.linalg.norm(tangents, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
@@ -242,7 +242,7 @@ def compute_vertex_normals(
     ## Returns
         normals (ndarray): [..., N, 3] vertex normals (already normalized to unit vectors)
     """
-    face_corner_normals = compute_face_corner_normals(vertices, faces, normalized=False)
+    face_corner_normals = compute_face_corner_normals(vertices, faces, normalize=False)
     if weighted == 'uniform':
         face_corner_normals /= np.linalg.norm(face_corner_normals, axis=-1, keepdims=True) + np.finfo(vertices.dtype).eps
     elif weighted == 'area':

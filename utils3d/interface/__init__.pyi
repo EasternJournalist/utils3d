@@ -122,8 +122,6 @@ __all__ = ["sliding_window",
 "compute_boundaries", 
 "compute_dual_graph", 
 "remove_isolated_pieces", 
-"compute_face_tbn", 
-"compute_vertex_tbn", 
 "laplacian", 
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
@@ -782,13 +780,13 @@ def compute_face_corner_angles(vertices: numpy_.ndarray, faces: Optional[numpy_.
     utils3d.numpy.mesh.compute_face_corner_angles
 
 @overload
-def compute_face_corner_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None, normalized: bool = True) -> numpy_.ndarray:
+def compute_face_corner_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None, normalize: bool = True) -> numpy_.ndarray:
     """Compute the face corner normals of a mesh
 
 ## Parameters
 - `vertices` (ndarray): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
 - `faces` (ndarray, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
-- `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
+- `normalize` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
 ## Returns
 - `normals` (ndarray): (..., F, P, 3) face corner normals"""
@@ -803,7 +801,7 @@ def compute_face_corner_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, f
 - `uv` (ndarray): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
 - `faces_vertices` (ndarray, optional): `(F, P)` face vertex indices
 - `faces_uv` (ndarray, optional): `(F, P)` face UV indices
-- `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+- `normalize` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
 
 ## Returns
 - `tangents` (ndarray): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
@@ -2180,13 +2178,13 @@ def compute_face_corner_angles(vertices: torch_.Tensor, faces: Optional[torch_.T
     utils3d.torch.mesh.compute_face_corner_angles
 
 @overload
-def compute_face_corner_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None, normalized: bool = True) -> torch_.Tensor:
+def compute_face_corner_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None, normalize: bool = True) -> torch_.Tensor:
     """Compute the face corner normals of a mesh
 
 ## Parameters
 - `vertices` (Tensor): `(..., N, 3)` vertices if `faces` is provided, or `(..., F, P, 3)` if `faces` is None
 - `faces` (Tensor, optional): `(F, P)` face vertex indices, where P is the number of vertices per face
-- `normalized` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
+- `normalize` (bool): whether to normalize the normals to unit vectors. If not, the normals are the raw cross products.
 
 ## Returns
 - `normals` (Tensor): (..., F, P, 3) face corner normals"""
@@ -2201,7 +2199,7 @@ def compute_face_corner_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, fac
     - `uv` (Tensor): `(..., N, 2)` if `faces` is provided, or `(..., F, P, 2)` if `faces_uv` is None
     - `faces_vertices` (Tensor, optional): `(F, P)` face vertex indices
     - `faces_uv` (Tensor, optional): `(F, P)` face UV indices
-    - `normalized` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
+    - `normalize` (bool): whether to normalize the tangents to unit vectors. If not, the tangents (dX/du, dX/dv) matches the UV parameterized manifold.
 s
     ## Returns
     - `tangents` (Tensor): `(..., F, P, 3, 2)` face corner tangents (and bitangents), 
@@ -2375,33 +2373,6 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     vertices (Tensor): [N_, 3] subdivided 3-dimensional vertices
     faces (Tensor): [4 * T, 3] subdivided triangular face indices"""
     utils3d.torch.mesh.subdivide_mesh
-
-@overload
-def compute_face_tbn(tri_vertices: torch_.Tensor, tri_uvs: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
-    """compute TBN matrix for each triangle faces
-
-## Parameters
-    - `tri_vertices` (Tensor): shape (..., T, 3, 3), positions
-    - `tri_uvs` (Tensor): shape (..., T, 3, 3) uv coordinates
-    
-## Returns
-    `tbn` (Tensor): (..., T, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
-    utils3d.torch.mesh.compute_face_tbn
-
-@overload
-def compute_vertex_tbn(faces_topo: torch_.Tensor, tri_vertices: torch_.Tensor, tri_uvs: torch_.Tensor) -> torch_.Tensor:
-    """compute TBN matrix for each face
-
-## Parameters
-    faces_topo (Tensor): (T, 3), face indice of topology
-    pos (Tensor): shape (..., N_pos, 3), positions
-    faces_pos (Tensor): shape(T, 3) 
-    uv (Tensor): shape (..., N_uv, 3) uv coordinates, 
-    faces_uv (Tensor): shape(T, 3) 
-    
-## Returns
-    Tensor: (..., V, 3, 3) TBN matrix for each face. Note TBN vectors are normalized but not necessarily orthognal"""
-    utils3d.torch.mesh.compute_vertex_tbn
 
 @overload
 def laplacian(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'uniform') -> torch_.Tensor:
