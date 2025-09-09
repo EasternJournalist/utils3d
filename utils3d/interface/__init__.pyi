@@ -771,7 +771,15 @@ y = transform(x, T1, T2, T3)
 
 @overload
 def angle_between(v1: numpy_.ndarray, v2: numpy_.ndarray):
-    """Calculate the angle between two vectors."""
+    """Calculate the angle between two (batches of) vectors.
+Better precision than using the arccos dot product directly.
+
+## Parameters
+- `v1`: ndarray, shape (..., D): the first vector.
+- `v2`: ndarray, shape (..., D): the second vector.
+
+## Returns
+`angle`: ndarray, shape (...): the angle between the two vectors."""
     utils3d.numpy.transforms.angle_between
 
 @overload
@@ -2214,9 +2222,16 @@ y = transform(x, T1, T2, T3)
 
 @overload
 def angle_between(v1: torch_.Tensor, v2: torch_.Tensor, eps: float = 1e-08) -> torch_.Tensor:
-    """Calculate the angle between two vectors.
+    """Calculate the angle between two (batches of) vectors.
+Better precision than using the arccos dot product directly.
 
-NOTE: `eps` prevents zero angle difference which is indifferentiable."""
+## Parameters
+- `v1`: Tensor, shape (..., D): the first vector.
+- `v2`: Tensor, shape (..., D): the second vector.
+- `eps`: float, optional: prevents zero angle difference (indifferentiable).
+
+## Returns
+`angle`: Tensor, shape (...): the angle between the two vectors."""
     utils3d.torch.transforms.angle_between
 
 @overload

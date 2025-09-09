@@ -39,7 +39,7 @@ The links below will take you to the source code of each function with detailed 
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.angle_between`<br>Calculate the angle between two vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1215) | [`utils3d.pt.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1284) | 
+| `utils3d.angle_between`<br>Calculate the angle between two (batches of) vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1215) | [`utils3d.pt.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1284) | 
 | `utils3d.axis_angle_to_matrix`<br>Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation | [`utils3d.np.axis_angle_to_matrix(axis_angle, eps)`](utils3d/numpy/transforms.py#L951) | [`utils3d.pt.axis_angle_to_matrix(axis_angle, eps)`](utils3d/torch/transforms.py#L892) | 
 | `utils3d.axis_angle_to_quaternion`<br>Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z) | - | [`utils3d.pt.axis_angle_to_quaternion(axis_angle, eps)`](utils3d/torch/transforms.py#L949) | 
 | `utils3d.crop_intrinsics`<br>Evaluate the new intrinsics after cropping the image | [`utils3d.np.crop_intrinsics(intrinsics, size, cropped_top, cropped_left, cropped_height, cropped_width)`](utils3d/numpy/transforms.py#L395) | [`utils3d.pt.crop_intrinsics(intrinsics, size, cropped_top, cropped_left, cropped_height, cropped_width)`](utils3d/torch/transforms.py#L387) | 

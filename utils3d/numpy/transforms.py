@@ -1214,7 +1214,15 @@ def transform(x: ndarray, *Ts: ndarray) -> ndarray:
 
 def angle_between(v1: ndarray, v2: ndarray):
     """
-    Calculate the angle between two vectors.
+    Calculate the angle between two (batches of) vectors.
+    Better precision than using the arccos dot product directly.
+
+    ## Parameters
+    - `v1`: ndarray, shape (..., D): the first vector.
+    - `v2`: ndarray, shape (..., D): the second vector.
+
+    ## Returns
+    `angle`: ndarray, shape (...): the angle between the two vectors.
     """
     n1 = np.linalg.norm(v1, axis=-1, keepdims=True)
     n2 = np.linalg.norm(v2, axis=-1, keepdims=True)

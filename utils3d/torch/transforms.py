@@ -1283,9 +1283,16 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
 
 def angle_between(v1: Tensor, v2: Tensor, eps: float = 1e-8) -> Tensor:
     """
-    Calculate the angle between two vectors.
+    Calculate the angle between two (batches of) vectors.
+    Better precision than using the arccos dot product directly.
 
-    NOTE: `eps` prevents zero angle difference which is indifferentiable.
+    ## Parameters
+    - `v1`: Tensor, shape (..., D): the first vector.
+    - `v2`: Tensor, shape (..., D): the second vector.
+    - `eps`: float, optional: prevents zero angle difference (indifferentiable).
+
+    ## Returns
+    `angle`: Tensor, shape (...): the angle between the two vectors.
     """
     v1 = F.normalize(v1, dim=-1, eps=eps)
     v2 = F.normalize(v2, dim=-1, eps=eps)
