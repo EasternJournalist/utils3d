@@ -5,7 +5,7 @@
 A collection of useful functions for 3D computer vision and graphics researchers in Python.
 
 - **NumPy / PyTorch pairs**: most functions have both implementations.
-- **Flat & modular**: all functions are standalone, no wrappers or hierarchies.
+- **Flat & non-modular**: standalone functions only, no classes, no hierarchies.
 - **Native types**: always use raw Python / NumPy / PyTorch / SciPy.sparse types.
 - **Vectorized only**: no Python loops beyond O(log N).
 
