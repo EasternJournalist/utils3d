@@ -1,13 +1,17 @@
 # utils3d
 
-A collection of useful functions for 3D computer vision and graphics researchers in Python.
-
 <img src="doc/teaser.jpg" width="100%">
 
+A collection of useful functions for 3D computer vision and graphics researchers in Python.
 
-⚠️ *This repo changes quickly*. *Functions and interfaces may be added, removed, or modified at any time.*
-- Copy code if you only need a single function.
-- Use commit id or fork if you need stability.
+- **NumPy / PyTorch pairs**: most functions have both implementations.
+- **Flat & modular**: all functions are standalone, no wrappers or hierarchies.
+- **Native types**: always use raw Python / NumPy / PyTorch / SciPy.sparse types.
+- **Vectorized only**: no Python loops beyond O(log N).
+
+> ⚠️ *This repo changes quickly*. *Functions and interfaces may be added, removed, or modified at any time.*
+> - Copy code if you only need a single function.
+> - Use commit id or fork if you need stability.
 
 ## Install
 
@@ -25,12 +29,6 @@ pip install ./utils3d
 ```
 
 ## Documentation
-
-> - **NumPy / PyTorch pairs**: most functions have both implementations.
-> - **Flat & modular**: all functions are standalone, no wrappers or hierarchies.
-> - **Native types**: always use raw Python / NumPy / PyTorch / SciPy.sparse types.
-> - **Vectorized only**: no Python loops beyond O(log N).
-Most of the functions in `utils3d` have both Numpy and Pytorch implementations.
 
 - Use `utils3d.{function}` to call the function automatically selecting the backend based on the input type (Numpy ndarray or Pytorch tensor).
 - Use `utils3d.{np/pt}.{function}` to specifically call the Numpy or Pytorch version.
