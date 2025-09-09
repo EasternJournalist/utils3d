@@ -14,6 +14,8 @@ __modules_all__ = {
         'max_pool_2d',
         'max_pool_nd',
         'lookup',
+        'segment_roll',
+        'csr_matrix_from_indices',
     ],
     'transforms': [
         'perspective_from_fov',
@@ -75,7 +77,7 @@ __modules_all__ = {
         'merge_duplicate_vertices',
         'remove_unused_vertices',
         'subdivide_mesh',
-        'mesh_relations',
+        'get_mesh_edges',
         'flatten_mesh_indices',
         'create_cube_mesh',
         'create_icosahedron_mesh',

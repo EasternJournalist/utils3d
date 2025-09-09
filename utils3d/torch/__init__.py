@@ -9,7 +9,8 @@ __modules_all__ = {
         'masked_min',
         'masked_max',
         'lookup',
-        'csr_adjacency_matrix_from_indices',
+        'segment_roll',
+        'csr_matrix_from_indices',
         'csr_eliminate_zeros'
     ],
     'transforms': [

@@ -1,8 +1,11 @@
 import numpy as np
 from numpy import ndarray
+import scipy.sparse as sp
+from scipy.sparse import csr_array
 from typing import *
 
 from .transforms import unproject_cv, angle_between
+from .utils import lookup, segment_roll
 
 __all__ = [
     'triangulate_mesh',
@@ -16,7 +19,7 @@ __all__ = [
     'merge_duplicate_vertices',
     'remove_unused_vertices',
     'subdivide_mesh',
-    'mesh_relations',
+    'get_mesh_edges',
     'flatten_mesh_indices',
     'create_cube_mesh',
     'create_icosahedron_mesh',
@@ -363,46 +366,6 @@ def subdivide_mesh(
             np.stack([n_vertices + uni_inv[0], n_vertices + uni_inv[1], n_vertices + uni_inv[2]], axis=1),
         ], axis=0)
     return vertices, faces
-
-
-def mesh_relations(
-    faces: ndarray,
-) -> Tuple[ndarray, ndarray]:
-    """
-    Calculate the relation between vertices and faces.
-    NOTE: The input mesh must be a manifold triangle mesh.
-
-    ## Parameters
-        faces (ndarray): [T, 3] triangular face indices
-
-    ## Returns
-        edges (ndarray): [E, 2] edge indices
-        edge2face (ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
-        face2edge (ndarray): [T, 3] face to edge relation
-        face2face (ndarray): [T, 3] face to face relation
-    """
-    T = faces.shape[0]
-    edges = np.stack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=1).reshape(-1, 2)  # [3T, 2]
-    edges = np.sort(edges, axis=1)  # [3T, 2]
-    edges, face2edge, occurence = np.unique(edges, axis=0, return_inverse=True, return_counts=True) # [E, 2], [3T], [E]
-    E = edges.shape[0]
-    assert np.all(occurence <= 2), "The input mesh is not a manifold mesh."
-
-    # Edge to face relation
-    padding = np.arange(E, dtype=np.int32)[occurence == 1]
-    padded_face2edge = np.concatenate([face2edge, padding], axis=0)  # [2E]
-    edge2face = np.argsort(padded_face2edge, kind='stable').reshape(-1, 2) // 3  # [E, 2]
-    edge2face_valid = edge2face[:, 1] < T   # [E]
-    edge2face[~edge2face_valid, 1] = -1
-
-    # Face to edge relation
-    face2edge = face2edge.reshape(-1, 3)  # [T, 3]
-
-    # Face to face relation
-    face2face = edge2face[face2edge]  # [T, 3, 2]
-    face2face = face2face[face2face != np.arange(T)[:, None, None]].reshape(T, 3)  # [T, 3]
-    
-    return edges, edge2face, face2edge, face2face
 
 
 @overload
@@ -761,7 +724,6 @@ def solve_quad(
     ## Returns
         weights (ndarray): [Q] weight of each valid quad face
     """
-    import scipy.sparse as sp
     import scipy.optimize as opt
 
     T = face2edge.shape[0]
@@ -874,7 +836,6 @@ def solve_quad_qp(
     ## Returns
         weights (ndarray): [Q] weight of each valid quad face
     """
-    import scipy.sparse as sp
     import piqp
 
     T = face2edge.shape[0]
@@ -955,3 +916,79 @@ def tri_to_quad(
         faces (ndarray): [Q, 4] quad face indices
     """
     raise NotImplementedError
+
+
+def get_mesh_edges(
+    faces: Union[ndarray, csr_array], 
+    directed: bool = False, 
+    return_face2edge: bool = False, 
+    return_edge2face: bool = False, 
+    return_opposite_edge: bool = False,
+    return_counts: bool = False
+) -> Tuple[ndarray, Union[ndarray, csr_array], csr_array, ndarray, ndarray]:
+    """Get edges of a mesh. Optionally return additional mappings.
+
+    ## Parameters
+    - `faces` (Tensor): polygon faces
+        - `(F, P)` dense array of indices, where each face has `P` vertices.
+        - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+    - `directed` (bool): whether the edges are directed or not. (half edge)
+        - If `False` (default), edges will be viewed as undirected, (i.e (a, b) is the same as (b, a)).
+            Returned edges (a, b) are in the form a < b.
+        - If `True`, edges will be viewed as directed by the face loop. 
+            Edges of opposite direction will be considered different.
+    - `return_face2edge` (bool): whether to return the face to edge mapping
+    - `return_edge2face` (bool): whether to return the edge to face mapping
+    - `return_opposite_edge` (bool): whether to return the opposite edge mapping. Only supported when `directed` is True.
+    - `return_counts` (bool): whether to return the counts of edges
+
+    ## Returns
+    - `edges` (ndarray): `(E, 2)` unique edges' vertex indices
+
+    If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
+
+    - `face2edge` (ndarray | csr_array): mapping from faces to the indices of edges
+        - `(F, P)` if input `faces` is a dense array
+        - `(F, E)` if input `faces` is a sparse csr array
+    - `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
+    - `opposite_edge` (ndarray): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
+        If directed edge is not unique, the mapping will only present one of the opposite edges.
+    - `counts` (ndarray): `(E,)` counts of each edge
+    """
+    if isinstance(faces, csr_array):
+        edges = np.stack([faces.indices, segment_roll(faces.indices, faces.indptr, -1)], axis=-1) # (nzz, 2)
+    else:
+        edges = np.stack([faces, np.roll(faces, -1, axis=-1)], axis=-1).view(-1, 2)    # (F * P, 2)
+    if not directed:
+        a, b = edges[:, 0], edges[:, 1]
+        edges = np.stack([np.minimum(a, b), np.maximum(a, b)], axis=-1)
+    
+    unique = np.unique(edges, return_inverse=return_face2edge or return_edge2face, return_counts=return_counts or return_edge2face, axis=0)
+    
+    edges: ndarray = unique[0] if isinstance(unique, tuple) else unique
+    if return_face2edge or return_edge2face:
+        inv_map: ndarray = unique[1]
+    if return_counts or return_edge2face:
+        counts: ndarray = unique[-1]
+
+    ret = (edges,)
+    if return_face2edge:
+        if isinstance(faces, csr_array):
+            face2edge = csr_array((np.ones_like(inv_map, dtype=bool), inv_map, faces.indptr), shape=(faces.shape[0], edges.shape[0]))
+        else:
+            face2edge = inv_map.view(faces.shape)
+        ret += (face2edge,)
+    if return_edge2face:
+        edge2face = csr_array((
+            np.ones_like(inv_map, dtype=bool),
+            np.argsort(inv_map) // faces.shape[1],
+            np.concatenate([np.array([0], dtype=counts.dtype), np.cumsum(counts)]),
+        ), shape=(edges.shape[0], faces.shape[0]))
+        ret += (edge2face,)
+    if return_opposite_edge:
+        assert directed, "Opposite edge is only supported for directed edges"
+        opposite_edge = lookup(edges, np.flip(edges, -1))
+        ret += (opposite_edge,)
+    if return_counts:
+        ret += (counts,)
+    return ret[0] if len(ret) == 1 else ret

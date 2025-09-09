@@ -12,6 +12,8 @@ __all__ = ["sliding_window",
 "max_pool_2d", 
 "max_pool_nd", 
 "lookup", 
+"segment_roll", 
+"csr_matrix_from_indices", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -69,7 +71,7 @@ __all__ = ["sliding_window",
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
 "subdivide_mesh", 
-"mesh_relations", 
+"get_mesh_edges", 
 "flatten_mesh_indices", 
 "create_cube_mesh", 
 "create_icosahedron_mesh", 
@@ -108,7 +110,6 @@ __all__ = ["sliding_window",
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
-"csr_adjacency_matrix_from_indices", 
 "csr_eliminate_zeros", 
 "matrix_to_euler_angles", 
 "matrix_to_axis_angle", 
@@ -118,7 +119,6 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"get_mesh_edges", 
 "get_mesh_dual_graph", 
 "get_mesh_connected_components", 
 "compute_edge_connected_components", 
@@ -139,7 +139,7 @@ def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], 
 This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
 
 ## Parameters
-- `x` (np.ndarray): Input array.
+- `x` (ndarray): Input array.
 - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
     is provided, the same size is used for all specified axes.
 - `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
@@ -157,7 +157,7 @@ This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with
 - `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
 
 ## Returns
-- (np.ndarray): Sliding window of the input array. 
+- (ndarray): Sliding window of the input array. 
     - If no padding, the output is a view of the input array with zero copy.
     - Otherwise, the output is no longer a view but a copy of the padded array."""
     utils3d.numpy.utils.sliding_window
@@ -175,19 +175,40 @@ def max_pool_nd(x: numpy_.ndarray, kernel_size: Tuple[int, ...], stride: Tuple[i
     utils3d.numpy.utils.max_pool_nd
 
 @overload
-def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Union[numbers.Number, numpy_.ndarray] = 1) -> numpy_.ndarray:
     """Look up `query` in `key` like a dictionary.
 
-### Parameters
-    `key` (np.ndarray): shape (num_keys, *query_key_shape), the array to search in
-    `query` (np.ndarray): shape (num_queries, *query_key_shape), the array to search for
-    `value` (Optional[np.ndarray]): shape (K, *value_shape), the array to get values from
-    `default_value` (Optional[np.ndarray]): shape (*value_shape), default values to return if query is not found
+## Parameters
+    `key` (ndarray): shape `(K, *qk_shape)`, the array to search in
+    `query` (ndarray): shape `(Q, *qk_shape)`, the array to search for
+    `value` (Optional[ndarray]): shape `(K, *v_shape)`, the array to get values from
+    `default_value` (Optional[ndarray]): shape `(*v_shape)`, default values to return if query is not found
 
-### Returns
-    If `value` is None, return the indices (num_queries,) of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
-    If `value` is provided, return the corresponding values (num_queries, *value_shape), or default_value if not found."""
+## Returns
+    If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+    If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+
+## NOTE
+`O((Q + K) * log(Q + K))` complexity."""
     utils3d.numpy.utils.lookup
+
+@overload
+def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> numpy_.ndarray:
+    """Roll the data tensor within each segment defined by offsets.
+    """
+    utils3d.numpy.utils.segment_roll
+
+@overload
+def csr_matrix_from_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.sparse._csr.csr_array:
+    """Convert a regular indices array to a sparse CSR adjacency matrix format
+
+## Parameters
+    - `indices` (ndarray): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+    - `n_cols` (int): total number of columns in the adjacency matrix
+
+## Returns
+    Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
+    utils3d.numpy.utils.csr_matrix_from_indices
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
@@ -906,19 +927,36 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
-def mesh_relations(faces: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Calculate the relation between vertices and faces.
-NOTE: The input mesh must be a manifold triangle mesh.
+def get_mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray]:
+    """Get edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-    faces (ndarray): [T, 3] triangular face indices
+- `faces` (Tensor): polygon faces
+    - `(F, P)` dense array of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `directed` (bool): whether the edges are directed or not. (half edge)
+    - If `False` (default), edges will be viewed as undirected, (i.e (a, b) is the same as (b, a)).
+        Returned edges (a, b) are in the form a < b.
+    - If `True`, edges will be viewed as directed by the face loop. 
+        Edges of opposite direction will be considered different.
+- `return_face2edge` (bool): whether to return the face to edge mapping
+- `return_edge2face` (bool): whether to return the edge to face mapping
+- `return_opposite_edge` (bool): whether to return the opposite edge mapping. Only supported when `directed` is True.
+- `return_counts` (bool): whether to return the counts of edges
 
 ## Returns
-    edges (ndarray): [E, 2] edge indices
-    edge2face (ndarray): [E, 2] edge to face relation. The second column is -1 if the edge is boundary.
-    face2edge (ndarray): [T, 3] face to edge relation
-    face2face (ndarray): [T, 3] face to face relation"""
-    utils3d.numpy.mesh.mesh_relations
+- `edges` (ndarray): `(E, 2)` unique edges' vertex indices
+
+If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
+
+- `face2edge` (ndarray | csr_array): mapping from faces to the indices of edges
+    - `(F, P)` if input `faces` is a dense array
+    - `(F, E)` if input `faces` is a sparse csr array
+- `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
+- `opposite_edge` (ndarray): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
+    If directed edge is not unique, the mapping will only present one of the opposite edges.
+- `counts` (ndarray): `(E,)` counts of each edge"""
+    utils3d.numpy.mesh.get_mesh_edges
 
 @overload
 def flatten_mesh_indices(*args: numpy_.ndarray) -> Tuple[numpy_.ndarray, ...]:
@@ -1526,28 +1564,40 @@ def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, k
     utils3d.torch.utils.masked_max
 
 @overload
-def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
-    """Find the indices of `query` in `key`.
+def lookup(key: torch_.Tensor, query: torch_.Tensor, value: Optional[torch_.Tensor] = None, default_value: Union[numbers.Number, torch_.Tensor] = 0) -> torch_.LongTensor:
+    """Look up `query` in `key` like a dictionary. 
 
-### Parameters
-    key (Tensor): shape (K, ...), the array to search in
-    query (Tensor): shape (Q, ...), the array to search for
+## Parameters
+- `key` (Tensor): shape `(K, *qk_shape)`, the array to search in
+- `query` (Tensor): shape `(Q, *qk_shape)`, the array to search for
+- `value` (Optional[Tensor]): shape `(K, *v_shape)`, the array to get values from
+- `default_value` (Optional[Tensor]): shape `(*v_shape)`, default values to return if query is not found
 
-### Returns
-    Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1."""
+## Returns
+    If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+    If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+
+## NOTE
+`O((Q + K) * log(Q + K))` complexity."""
     utils3d.torch.utils.lookup
 
 @overload
-def csr_adjacency_matrix_from_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:
+def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int) -> torch_.Tensor:
+    """Roll the data tensor within each segment defined by offsets.
+    """
+    utils3d.torch.utils.segment_roll
+
+@overload
+def csr_matrix_from_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
 ## Parameters
-    - `indices` (Tensor): shape (N, M), Each one in `N` has `M` connections.
-    - `n_cols` (int): number of columns in the adjacency matrix
+    - `indices` (Tensor): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+    - `n_cols` (int): total number of columns in the adjacency matrix
 
 ## Returns
     Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
-    utils3d.torch.utils.csr_adjacency_matrix_from_indices
+    utils3d.torch.utils.csr_matrix_from_indices
 
 @overload
 def csr_eliminate_zeros(input: torch_.Tensor):
@@ -2174,12 +2224,11 @@ def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, metho
     """Triangulate a polygonal mesh.
 
 ## Parameters
-    faces (Tensor): [L, P] polygonal faces
-    vertices (Tensor, optional): [N, 3] 3-dimensional vertices.
-        If given, the triangulation is performed according to the distance
-        between vertices. Defaults to None.
-    backslash (Tensor, optional): [L] boolean array indicating
-        how to triangulate the quad faces. Defaults to None.
+- `faces` (Tensor): [L, P] polygonal faces
+- `vertices` (Tensor, optional): [N, 3] 3-dimensional vertices.
+    If given, the triangulation is performed according to the distance
+    between vertices. Defaults to None.
+- `method`
 
 ## Returns
     (Tensor): [L * (P - 2), 3] triangular faces"""
@@ -2255,11 +2304,13 @@ def compute_face_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vert
     utils3d.torch.mesh.compute_face_tangents
 
 @overload
-def get_mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Tuple[torch_.Tensor, ...]:
+def get_mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Get edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-- `faces` (Tensor): (F, P) polygon faces' vertex indices
+- `faces` (Tensor): polygon faces
+    - `(F, P)` dense tensor of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr tensor of indices, each row corresponds to the vertices of a face.
 - `directed` (bool): whether the edges are directed or not. (half edge)
     - If `False` (default), edges will be viewed as undirected, (i.e (a, b) is the same as (b, a)).
         Returned edges (a, b) are in the form a < b.
@@ -2267,17 +2318,21 @@ def get_mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edg
         Edges of opposite direction will be considered different.
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
+- `return_opposite_edge` (bool): whether to return the opposite edge mapping. Only supported when `directed` is True.
 - `return_counts` (bool): whether to return the counts of edges
 
 ## Returns
-- `edges` (Tensor): (E, 2) unique edges' vertex indices
+- `edges` (Tensor): `(E, 2)` unique edges' vertex indices
 
 If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
 
-- `face2edge` (Tensor): (F, P) mapping from faces to the indices of edges
-- `edge2face` (Tensor): (E, F) binary sparse CSR matrix of edge to face.
-- `opposite_edge` (Tensor): (E,) mapping from edges to indices of opposite edges. -1 if not found.
-- `counts` (Tensor): (E,) degree of each edge"""
+- `face2edge` (Tensor): mapping from faces to the indices of edges
+    - `(F, P)` if input `faces` is a dense tensor
+    - `(F, E)` if input `faces` is a sparse csr tensor
+- `edge2face` (Tensor): `(E, F)` binary sparse CSR matrix of edge to face.
+- `opposite_edge` (Tensor): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
+    If directed edge is not unique, the mapping will only present one of the opposite edges.
+- `counts` (Tensor): `(E,)` counts of each edge"""
     utils3d.torch.mesh.get_mesh_edges
 
 @overload
@@ -2285,10 +2340,11 @@ def get_mesh_dual_graph(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Ten
     """Get dual graph of a mesh. (Mesh face as dual graph's vertex, adjacency by edge sharing)
 
 ## Parameters
-    `faces` (Tensor): (F, P) faces' vertex indices
+- `faces`: `Tensor` faces indices
+    - `(F, P)` dense tensor 
 
 ## Returns
-    dual_graph (Tensor): (F, F) binary sparse CSR matrix. Adjacency matrix of the dual graph."""
+- `dual_graph` (Tensor): `(F, F)` binary sparse CSR matrix. Adjacency matrix of the dual graph."""
     utils3d.torch.mesh.get_mesh_dual_graph
 
 @overload

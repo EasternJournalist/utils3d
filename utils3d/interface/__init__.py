@@ -9,6 +9,8 @@ __all__ = ["sliding_window",
 "max_pool_2d", 
 "max_pool_nd", 
 "lookup", 
+"segment_roll", 
+"csr_matrix_from_indices", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -66,7 +68,7 @@ __all__ = ["sliding_window",
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
 "subdivide_mesh", 
-"mesh_relations", 
+"get_mesh_edges", 
 "flatten_mesh_indices", 
 "create_cube_mesh", 
 "create_icosahedron_mesh", 
@@ -105,7 +107,6 @@ __all__ = ["sliding_window",
 "test_rasterization", 
 "masked_min", 
 "masked_max", 
-"csr_adjacency_matrix_from_indices", 
 "csr_eliminate_zeros", 
 "matrix_to_euler_angles", 
 "matrix_to_axis_angle", 
@@ -115,7 +116,6 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"get_mesh_edges", 
 "get_mesh_dual_graph", 
 "get_mesh_connected_components", 
 "compute_edge_connected_components", 
@@ -183,6 +183,18 @@ def lookup(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.lookup, utils3d.torch.lookup
     return _call_based_on_args('lookup', args, kwargs)
+
+@suppress_traceback
+def segment_roll(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_roll, utils3d.torch.segment_roll
+    return _call_based_on_args('segment_roll', args, kwargs)
+
+@suppress_traceback
+def csr_matrix_from_indices(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.csr_matrix_from_indices, utils3d.torch.csr_matrix_from_indices
+    return _call_based_on_args('csr_matrix_from_indices', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):
@@ -527,10 +539,10 @@ def subdivide_mesh(*args, **kwargs):
     return _call_based_on_args('subdivide_mesh', args, kwargs)
 
 @suppress_traceback
-def mesh_relations(*args, **kwargs):
+def get_mesh_edges(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.mesh_relations, None
-    return _call_based_on_args('mesh_relations', args, kwargs)
+        utils3d.numpy.get_mesh_edges, utils3d.torch.get_mesh_edges
+    return _call_based_on_args('get_mesh_edges', args, kwargs)
 
 @suppress_traceback
 def flatten_mesh_indices(*args, **kwargs):
@@ -761,12 +773,6 @@ def masked_max(*args, **kwargs):
     return _call_based_on_args('masked_max', args, kwargs)
 
 @suppress_traceback
-def csr_adjacency_matrix_from_indices(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.csr_adjacency_matrix_from_indices
-    return _call_based_on_args('csr_adjacency_matrix_from_indices', args, kwargs)
-
-@suppress_traceback
 def csr_eliminate_zeros(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.csr_eliminate_zeros
@@ -819,12 +825,6 @@ def scale_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.scale_2d
     return _call_based_on_args('scale_2d', args, kwargs)
-
-@suppress_traceback
-def get_mesh_edges(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.get_mesh_edges
-    return _call_based_on_args('get_mesh_edges', args, kwargs)
 
 @suppress_traceback
 def get_mesh_dual_graph(*args, **kwargs):

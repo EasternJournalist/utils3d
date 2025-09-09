@@ -1,4 +1,7 @@
 import numpy as np
+from numpy import ndarray
+import scipy.sparse as sp
+from scipy.sparse import csr_array
 from typing import *
 from numbers import Number
 import warnings
@@ -11,24 +14,26 @@ __all__ = [
     'max_pool_2d',
     'max_pool_nd',
     'lookup',
+    'segment_roll',
+    'csr_matrix_from_indices'
 ]
 
 
 def sliding_window(
-    x: np.ndarray, 
+    x: ndarray, 
     window_size: Union[int, Tuple[int, ...]], 
     stride: Optional[Union[int, Tuple[int, ...]]] = None, 
     pad_size: Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]] = None, 
     pad_mode: str = 'constant',
     pad_value: Number = 0,
     axis: Optional[Tuple[int,...]] = None
-) -> np.ndarray:
+) -> ndarray:
     """
     Get a sliding window of the input array.
     This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
 
     ## Parameters
-    - `x` (np.ndarray): Input array.
+    - `x` (ndarray): Input array.
     - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
         is provided, the same size is used for all specified axes.
     - `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
@@ -46,7 +51,7 @@ def sliding_window(
     - `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
 
     ## Returns
-    - (np.ndarray): Sliding window of the input array. 
+    - (ndarray): Sliding window of the input array. 
         - If no padding, the output is a view of the input array with zero copy.
         - Otherwise, the output is no longer a view but a copy of the padded array.
     """
@@ -91,7 +96,7 @@ def sliding_window(
     return x
 
 
-def max_pool_1d(x: np.ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
+def max_pool_1d(x: ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
     axis = axis % x.ndim
     if padding > 0:
         fill_value = np.nan if x.dtype.kind == 'f' else np.iinfo(x.dtype).min
@@ -102,13 +107,13 @@ def max_pool_1d(x: np.ndarray, kernel_size: int, stride: int, padding: int = 0, 
     return max_pool
 
 
-def max_pool_nd(x: np.ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> np.ndarray:
+def max_pool_nd(x: ndarray, kernel_size: Tuple[int,...], stride: Tuple[int,...], padding: Tuple[int,...], axis: Tuple[int,...]) -> ndarray:
     for i in range(len(axis)):
         x = max_pool_1d(x, kernel_size[i], stride[i], padding[i], axis[i])
     return x
 
 
-def max_pool_2d(x: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
+def max_pool_2d(x: ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
     if isinstance(kernel_size, Number):
         kernel_size = (kernel_size, kernel_size)
     if isinstance(stride, Number):
@@ -119,19 +124,22 @@ def max_pool_2d(x: np.ndarray, kernel_size: Union[int, Tuple[int, int]], stride:
     return max_pool_nd(x, kernel_size, stride, padding, axis)
 
 
-def lookup(key: np.ndarray, query: np.ndarray, value: Optional[np.ndarray] = None, default_value: Optional[np.ndarray] = None) -> np.ndarray:
+def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, default_value: Union[Number, ndarray] = 1) -> ndarray:
     """
     Look up `query` in `key` like a dictionary.
 
-    ### Parameters
-        `key` (np.ndarray): shape (num_keys, *query_key_shape), the array to search in
-        `query` (np.ndarray): shape (num_queries, *query_key_shape), the array to search for
-        `value` (Optional[np.ndarray]): shape (K, *value_shape), the array to get values from
-        `default_value` (Optional[np.ndarray]): shape (*value_shape), default values to return if query is not found
+    ## Parameters
+        `key` (ndarray): shape `(K, *qk_shape)`, the array to search in
+        `query` (ndarray): shape `(Q, *qk_shape)`, the array to search for
+        `value` (Optional[ndarray]): shape `(K, *v_shape)`, the array to get values from
+        `default_value` (Optional[ndarray]): shape `(*v_shape)`, default values to return if query is not found
 
-    ### Returns
-        If `value` is None, return the indices (num_queries,) of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
-        If `value` is provided, return the corresponding values (num_queries, *value_shape), or default_value if not found.
+    ## Returns
+        If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+        If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+
+    ## NOTE
+    `O((Q + K) * log(Q + K))` complexity.
     """
     _, index, inverse = np.unique(
         np.concatenate([key, query], axis=0),
@@ -142,5 +150,31 @@ def lookup(key: np.ndarray, query: np.ndarray, value: Optional[np.ndarray] = Non
     result = index[inverse[key.shape[0]:]]
     if value is None:
         return np.where(result < key.shape[0], result, -1)
-    return np.where(result < key.shape[0], value[result.clip(0, key.shape[0] - 1)], default_value if default_value is not None else 0)
+    return np.where(result < key.shape[0], value[result.clip(0, key.shape[0] - 1)], default_value)
 
+
+def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:
+    """Roll the data tensor within each segment defined by offsets.
+    """
+    lengths = offsets[1:] - offsets[:-1]
+    start = np.repeat(offsets[:-1], lengths)
+    elem_indices = start + (np.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % np.repeat(lengths, lengths)
+    data = data[elem_indices]
+    return data
+
+
+def csr_matrix_from_indices(indices: ndarray, n_cols: int) -> csr_array:
+    """Convert a regular indices array to a sparse CSR adjacency matrix format
+
+    ## Parameters
+        - `indices` (ndarray): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+        - `n_cols` (int): total number of columns in the adjacency matrix
+
+    ## Returns
+        Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix
+    """
+    return csr_array((
+        np.ones_like(indices, dtype=bool).ravel(), 
+        indices.ravel(),
+        np.arange(0, indices.size + 1, indices.shape[1])
+    ), shape=(indices.shape[0], n_cols))

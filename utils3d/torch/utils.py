@@ -15,7 +15,8 @@ __all__ = [
     'masked_min',
     'masked_max',
     'lookup',
-    'csr_adjacency_matrix_from_indices',
+    'segment_roll',
+    'csr_matrix_from_indices',
     'csr_eliminate_zeros'
 ]
 
@@ -110,16 +111,22 @@ def masked_max(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: 
         return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max(dim=dim, keepdim=keepdim)
     
 
-def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
+def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_value: Union[Number, Tensor] = 0) -> torch.LongTensor:
     """
-    Find the indices of `query` in `key`.
+    Look up `query` in `key` like a dictionary. 
 
-    ### Parameters
-        key (Tensor): shape (K, ...), the array to search in
-        query (Tensor): shape (Q, ...), the array to search for
+    ## Parameters
+    - `key` (Tensor): shape `(K, *qk_shape)`, the array to search in
+    - `query` (Tensor): shape `(Q, *qk_shape)`, the array to search for
+    - `value` (Optional[Tensor]): shape `(K, *v_shape)`, the array to get values from
+    - `default_value` (Optional[Tensor]): shape `(*v_shape)`, default values to return if query is not found
 
-    ### Returns
-        Tensor: shape (Q,), indices of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+    ## Returns
+        If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
+        If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+
+    ## NOTE
+    `O((Q + K) * log(Q + K))` complexity.
     """
     unique, inverse = torch.unique(
         torch.cat([key, query], dim=0),
@@ -128,15 +135,18 @@ def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
     )
     index = torch.full((unique.shape[0],), -1, dtype=torch.long, device=key.device)
     index.scatter_(0, inverse[:key.shape[0]], torch.arange(key.shape[0], device=key.device))
-    return index[inverse[key.shape[0]:]]
+    result = index.index_select(0, inverse[key.shape[0]:])
+    if value is None:
+        return torch.where(result < key.shape[0], result, -1)
+    return torch.where(result < key.shape[0], value[result.clamp(0, key.shape[0] - 1)], default_value)
 
 
-def csr_adjacency_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
+def csr_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
     ## Parameters
-        - `indices` (Tensor): shape (N, M), Each one in `N` has `M` connections.
-        - `n_cols` (int): number of columns in the adjacency matrix
+        - `indices` (Tensor): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+        - `n_cols` (int): total number of columns in the adjacency matrix
 
     ## Returns
         Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix
@@ -164,3 +174,32 @@ def csr_eliminate_zeros(input: Tensor):
     col_indices = input.col_indices()[nonzero_element_indices]
     values = input.values()[nonzero_element_indices]
     return torch.sparse_csr_tensor(crow_indices, col_indices, values, input.size())
+
+
+def segment_roll(data: torch.Tensor, offsets: torch.Tensor, shift: int) -> Tensor:
+    """Roll the data tensor within each segment defined by offsets.
+    """
+    lengths = offsets[1:] - offsets[:-1]
+    start = offsets[:-1].repeat_interleave(lengths)
+    elem_indices = start + (torch.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % lengths.repeat_interleave(lengths)
+    data = data.gather(0, elem_indices)
+    return data
+
+
+def csr_roll_col_indices(input: Tensor, shift: int):
+    """Roll the order of column indices of a sparse CSR tensor.
+    The result is mathematically equivalent to the original matrix, but with a different column order.
+
+    ## Parameters
+        - `input` (Tensor): shape `(N, M)`, sparse CSR tensor
+        - `shift` (int): number of positions to shift the column indices
+
+    ## Returns
+        Tensor: shape `(N, M)` sparse CSR tensor with rolled column indices
+    """
+    lengths = input.crow_indices()[1:] - input.crow_indices()[:-1]
+    start = input.crow_indices()[:-1].repeat_interleave(lengths)
+    elem_indices = start + (torch.arange(input.col_indices().shape[0], dtype=input.col_indices().dtype) - start - shift) % lengths.repeat_interleave(lengths)
+    col_indices = input.col_indices().gather(0, elem_indices)
+    values = input.values().gather(0, elem_indices)
+    return torch.sparse_csr_tensor(input.crow_indices(), col_indices, values, input.size())
