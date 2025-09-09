@@ -9,7 +9,7 @@ A collection of useful functions for 3D computer vision and graphics researchers
 - **Native types**: always use raw Python / NumPy / PyTorch / SciPy.sparse types.
 - **Vectorized only**: no Python loops beyond O(log N).
 
-> ⚠️ *This repo changes quickly*. *Functions and interfaces may be added, removed, or modified at any time.*
+> ⚠️ *This repo changes quickly*. *Functions may be added, removed, or modified at any time.*
 > - Copy code if you only need a single function.
 > - Use commit id or fork if you need stability.
 
