@@ -68,7 +68,9 @@ __all__ = ["sliding_window",
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
 "subdivide_mesh", 
-"get_mesh_edges", 
+"mesh_edges", 
+"mesh_connected_components", 
+"graph_connected_components", 
 "flatten_mesh_indices", 
 "create_cube_mesh", 
 "create_icosahedron_mesh", 
@@ -116,12 +118,10 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"get_mesh_dual_graph", 
-"get_mesh_connected_components", 
-"compute_edge_connected_components", 
+"mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
-"laplacian", 
+"compute_mesh_laplacian", 
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
@@ -539,10 +539,22 @@ def subdivide_mesh(*args, **kwargs):
     return _call_based_on_args('subdivide_mesh', args, kwargs)
 
 @suppress_traceback
-def get_mesh_edges(*args, **kwargs):
+def mesh_edges(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.get_mesh_edges, utils3d.torch.get_mesh_edges
-    return _call_based_on_args('get_mesh_edges', args, kwargs)
+        utils3d.numpy.mesh_edges, utils3d.torch.mesh_edges
+    return _call_based_on_args('mesh_edges', args, kwargs)
+
+@suppress_traceback
+def mesh_connected_components(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.mesh_connected_components, utils3d.torch.mesh_connected_components
+    return _call_based_on_args('mesh_connected_components', args, kwargs)
+
+@suppress_traceback
+def graph_connected_components(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.graph_connected_components, utils3d.torch.graph_connected_components
+    return _call_based_on_args('graph_connected_components', args, kwargs)
 
 @suppress_traceback
 def flatten_mesh_indices(*args, **kwargs):
@@ -827,22 +839,10 @@ def scale_2d(*args, **kwargs):
     return _call_based_on_args('scale_2d', args, kwargs)
 
 @suppress_traceback
-def get_mesh_dual_graph(*args, **kwargs):
+def mesh_dual_graph(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.get_mesh_dual_graph
-    return _call_based_on_args('get_mesh_dual_graph', args, kwargs)
-
-@suppress_traceback
-def get_mesh_connected_components(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.get_mesh_connected_components
-    return _call_based_on_args('get_mesh_connected_components', args, kwargs)
-
-@suppress_traceback
-def compute_edge_connected_components(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.compute_edge_connected_components
-    return _call_based_on_args('compute_edge_connected_components', args, kwargs)
+        None, utils3d.torch.mesh_dual_graph
+    return _call_based_on_args('mesh_dual_graph', args, kwargs)
 
 @suppress_traceback
 def compute_boundaries(*args, **kwargs):
@@ -857,10 +857,10 @@ def remove_isolated_pieces(*args, **kwargs):
     return _call_based_on_args('remove_isolated_pieces', args, kwargs)
 
 @suppress_traceback
-def laplacian(*args, **kwargs):
+def compute_mesh_laplacian(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.laplacian
-    return _call_based_on_args('laplacian', args, kwargs)
+        None, utils3d.torch.compute_mesh_laplacian
+    return _call_based_on_args('compute_mesh_laplacian', args, kwargs)
 
 @suppress_traceback
 def laplacian_smooth_mesh(*args, **kwargs):

@@ -13,17 +13,17 @@ __all__ = [
     'compute_face_corner_tangents',
     'compute_face_normals',
     'compute_face_tangents',
-    'get_mesh_edges',
-    'get_mesh_dual_graph',
-    'get_mesh_connected_components',
-    'compute_edge_connected_components',
+    'mesh_edges',
+    'mesh_dual_graph',
+    'mesh_connected_components',
+    'graph_connected_components',
     'compute_boundaries',
     'remove_unused_vertices',
     'remove_corrupted_faces',
     'remove_isolated_pieces',
     'merge_duplicate_vertices',
     'subdivide_mesh',
-    'laplacian',
+    'compute_mesh_laplacian',
     'laplacian_smooth_mesh',
     'taubin_smooth_mesh',
     'laplacian_hc_smooth_mesh',
@@ -294,7 +294,7 @@ def compute_vertex_normals(
     return vertex_normals
 
     
-def get_mesh_edges(
+def mesh_edges(
     faces: Tensor, 
     directed: bool = False, 
     return_face2edge: bool = False, 
@@ -372,85 +372,76 @@ def get_mesh_edges(
     return ret[0] if len(ret) == 1 else ret
 
 
-def get_mesh_connected_components(
-    faces: Tensor,
-    edges: Tensor = None,
-    face2edge: Tensor = None
-) -> List[Tensor]:
+def mesh_connected_components(faces: Tensor, num_vertices: Optional[int] = None) -> List[Tensor]:
     """
-    Compute connected faces of a mesh.
+    Compute connected components of a mesh.
 
     ## Parameters
-        faces (Tensor): [T, 3] triangular face indices
-        edges (Tensor, optional): [E, 2] edge indices. Defaults to None.
-        face2edge (Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
-            NOTE: If edges and face2edge are not provided, they will be computed.
+    - `faces` (Tensor): polygon faces
+        - `(F, P)` dense tensor of indices, where each face has `P` vertices.
+        - `(F, V)` binary sparse csr tensor of indices, each row corresponds to the vertices of a face.
+    - `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
 
     ## Returns
-        components (List[Tensor]): list of connected faces
-    """
-    T = faces.shape[0]
-    if edges is None or face2edge is None:
-        edges, face2edge = get_mesh_edges(faces, return_face2edge=True)
-    E = edges.shape[0]
 
-    labels = torch.arange(T, dtype=torch.int32, device=faces.device)
+    If `num_vertices` is given, return:
+    - `labels` (Tensor): (N,) component labels of each vertex
+
+    If `num_vertices` is None, return:
+    - `vertices_ids` (Tensor): (N,) vertex indices that are in the edges
+    - `labels` (Tensor): (N,) component labels corresponding to `vertices_ids`
+    """
+    edges = mesh_edges(faces, directed=False)
+    return graph_connected_components(edges, num_vertices)
+
+
+def graph_connected_components(edges: Tensor, num_vertices: Optional[int] = None) -> Union[Tensor, Tuple[Tensor, Tensor]]:
+    """
+    Compute connected components of an undirected graph.
+
+    ## Parameters
+    - `edges` (Tensor): (E, 2) edge indices
+
+    ## Returns
+
+    If `num_vertices` is given, return:
+    - `labels` (Tensor): (N,) component labels of each vertex
+
+    If `num_vertices` is None, return:
+    - `vertices_ids` (Tensor): (N,) vertex indices that are in the edges
+    - `labels` (Tensor): (N,) component labels corresponding to `vertices_ids`
+    """
+    if num_vertices is None:
+        # Re-index edges
+        vertices_ids, edges = torch.unique(edges.flatten(), return_inverse=True)
+        edges = edges.view(-1, 2)
+        labels = torch.arange(vertices_ids.shape[0], dtype=torch.int32, device=edges.device)
+    else:
+        labels = torch.arange(num_vertices, dtype=torch.int32, device=edges.device)
+    
+    # Make edges undirected
+    edges = torch.cat([edges, edges.flip(-1)], dim=0)
+    src, dst = edges.unbind(-1)
+
+    # Loop until convergence
     while True:
-        edge_labels = torch.scatter_reduce(
-            torch.zeros(E, dtype=torch.int32, device=faces.device),
-            0,
-            face2edge.flatten().long(),
-            labels.view(-1, 1).expand(-1, 3).flatten(),
-            reduce='amin',
-            include_self=False
+        labels = labels.index_select(0, labels)
+        new_labels = labels.scatter_reduce(
+            dim=0, 
+            index=dst, 
+            src=labels.index_select(0, src), 
+            reduce='amin', 
+            include_self=True
         )
-        new_labels = torch.min(edge_labels[face2edge], dim=-1).values
         if torch.equal(labels, new_labels):
             break
         labels = new_labels
 
-    components = _group(labels)
+    if num_vertices is None:
+        return vertices_ids, labels
+    else:
+        return labels
 
-    return components
-
-
-def compute_edge_connected_components(
-    edges: Tensor,
-) -> List[Tensor]:
-    """
-    Compute connected edges of a mesh.
-
-    ## Parameters
-        edges (Tensor): [E, 2] edge indices
-
-    ## Returns
-        components (List[Tensor]): list of connected edges
-    """
-    E = edges.shape[0]
-
-    # Re-index edges
-    verts, edges = torch.unique(edges.flatten(), return_inverse=True)
-    edges = edges.view(-1, 2)
-    V = verts.shape[0]
-
-    labels = torch.arange(E, dtype=torch.int32, device=edges.device)
-    while True:
-        vertex_labels = torch.scatter_reduce(
-            torch.zeros(V, dtype=torch.int32, device=edges.device),
-            0,
-            edges.flatten().long(),
-            labels.view(-1, 1).expand(-1, 2).flatten(),
-            reduce='amin',
-            include_self=False
-        )
-        new_labels = torch.min(vertex_labels[edges], dim=-1).values
-        if torch.equal(labels, new_labels):
-            break
-        labels = new_labels
-
-    components = _group(labels)
-
-    return components
 
 
 def compute_boundaries(
@@ -509,7 +500,7 @@ def compute_boundaries(
     return boundary_edge_indices, boundary_face_indices
 
 
-def get_mesh_dual_graph(faces: Tensor) -> Tuple[Tensor, Tensor]:
+def mesh_dual_graph(faces: Tensor) -> Tuple[Tensor, Tensor]:
     """
     Get dual graph of a mesh. (Mesh face as dual graph's vertex, adjacency by edge sharing)
     
@@ -521,7 +512,7 @@ def get_mesh_dual_graph(faces: Tensor) -> Tuple[Tensor, Tensor]:
     - `dual_graph` (Tensor): `(F, F)` binary sparse CSR matrix. Adjacency matrix of the dual graph.
     """
     device = faces.device
-    edges, face2edge = get_mesh_edges(faces, directed=False, return_face2edge=True)
+    edges, face2edge = mesh_edges(faces, directed=False, return_face2edge=True)
     if not face2edge.is_sparse_csr:
         face2edge = csr_matrix_from_indices(face2edge, n_cols=len(edges))
     dual_graph = (face2edge.float() @ face2edge.float().transpose(-2, -1)).bool()
@@ -698,7 +689,7 @@ def subdivide_mesh(vertices: Tensor, faces: Tensor, n: int = 1) -> Tuple[Tensor,
     return vertices, faces
 
 
-def laplacian(vertices: Tensor, faces: Tensor, weight: str = 'uniform') -> Tensor:
+def compute_mesh_laplacian(vertices: Tensor, faces: Tensor, weight: str = 'uniform') -> Tensor:
     """Laplacian smooth with cotangent weights
 
     ## Parameters

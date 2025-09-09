@@ -71,7 +71,9 @@ __all__ = ["sliding_window",
 "merge_duplicate_vertices", 
 "remove_unused_vertices", 
 "subdivide_mesh", 
-"get_mesh_edges", 
+"mesh_edges", 
+"mesh_connected_components", 
+"graph_connected_components", 
 "flatten_mesh_indices", 
 "create_cube_mesh", 
 "create_icosahedron_mesh", 
@@ -119,12 +121,10 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
-"get_mesh_dual_graph", 
-"get_mesh_connected_components", 
-"compute_edge_connected_components", 
+"mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
-"laplacian", 
+"compute_mesh_laplacian", 
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
@@ -935,11 +935,11 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
-def get_mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray]:
+def mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray]:
     """Get edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-- `faces` (Tensor): polygon faces
+- `faces` (ndarray): polygon faces
     - `(F, P)` dense array of indices, where each face has `P` vertices.
     - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
 - `directed` (bool): whether the edges are directed or not. (half edge)
@@ -964,7 +964,44 @@ If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_co
 - `opposite_edge` (ndarray): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
     If directed edge is not unique, the mapping will only present one of the opposite edges.
 - `counts` (ndarray): `(E,)` counts of each edge"""
-    utils3d.numpy.mesh.get_mesh_edges
+    utils3d.numpy.mesh.mesh_edges
+
+@overload
+def mesh_connected_components(faces: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
+    """Compute connected faces of a mesh.
+
+## Parameters
+- `faces` (ndarray): polygon faces
+    - `(F, P)` dense array of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
+
+## Returns
+
+If `num_vertices` is given, return:
+- `labels` (ndarray): (N,) component labels of each vertex
+
+If `num_vertices` is None, return:
+- `vertices_ids` (ndarray): (N,) vertex indices that are in the edges
+- `labels` (ndarray): (N,) int32 component labels corresponding to `vertices_ids`"""
+    utils3d.numpy.mesh.mesh_connected_components
+
+@overload
+def graph_connected_components(edges: numpy_.ndarray, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
+    """Compute connected components of an undirected graph.
+
+## Parameters
+- `edges` (ndarray): (E, 2) edge indices
+
+## Returns
+
+If `num_vertices` is given, return:
+- `labels` (ndarray): (N,) component labels of each vertex
+
+If `num_vertices` is None, return:
+- `vertices_ids` (ndarray): (N,) vertex indices that are in the edges
+- `labels` (ndarray): (N,) int32 component labels corresponding to `vertices_ids`"""
+    utils3d.numpy.mesh.graph_connected_components
 
 @overload
 def flatten_mesh_indices(*args: numpy_.ndarray) -> Tuple[numpy_.ndarray, ...]:
@@ -1601,6 +1638,7 @@ def csr_matrix_from_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tenso
 
 ## Parameters
     - `indices` (Tensor): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+    - `values` (Tensor): shape (N, M) values of the connections
     - `n_cols` (int): total number of columns in the adjacency matrix
 
 ## Returns
@@ -2319,7 +2357,7 @@ def compute_face_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vert
     utils3d.torch.mesh.compute_face_tangents
 
 @overload
-def get_mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Get edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
@@ -2348,10 +2386,10 @@ If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_co
 - `opposite_edge` (Tensor): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
     If directed edge is not unique, the mapping will only present one of the opposite edges.
 - `counts` (Tensor): `(E,)` counts of each edge"""
-    utils3d.torch.mesh.get_mesh_edges
+    utils3d.torch.mesh.mesh_edges
 
 @overload
-def get_mesh_dual_graph(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def mesh_dual_graph(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Get dual graph of a mesh. (Mesh face as dual graph's vertex, adjacency by edge sharing)
 
 ## Parameters
@@ -2360,32 +2398,44 @@ def get_mesh_dual_graph(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Ten
 
 ## Returns
 - `dual_graph` (Tensor): `(F, F)` binary sparse CSR matrix. Adjacency matrix of the dual graph."""
-    utils3d.torch.mesh.get_mesh_dual_graph
+    utils3d.torch.mesh.mesh_dual_graph
 
 @overload
-def get_mesh_connected_components(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None) -> List[torch_.Tensor]:
-    """Compute connected faces of a mesh.
+def mesh_connected_components(faces: torch_.Tensor, num_vertices: Optional[int] = None) -> List[torch_.Tensor]:
+    """Compute connected components of a mesh.
 
 ## Parameters
-    faces (Tensor): [T, 3] triangular face indices
-    edges (Tensor, optional): [E, 2] edge indices. Defaults to None.
-    face2edge (Tensor, optional): [T, 3] mapping from face to edge. Defaults to None.
-        NOTE: If edges and face2edge are not provided, they will be computed.
+- `faces` (Tensor): polygon faces
+    - `(F, P)` dense tensor of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr tensor of indices, each row corresponds to the vertices of a face.
+- `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
 
 ## Returns
-    components (List[Tensor]): list of connected faces"""
-    utils3d.torch.mesh.get_mesh_connected_components
+
+If `num_vertices` is given, return:
+- `labels` (Tensor): (N,) component labels of each vertex
+
+If `num_vertices` is None, return:
+- `vertices_ids` (Tensor): (N,) vertex indices that are in the edges
+- `labels` (Tensor): (N,) component labels corresponding to `vertices_ids`"""
+    utils3d.torch.mesh.mesh_connected_components
 
 @overload
-def compute_edge_connected_components(edges: torch_.Tensor) -> List[torch_.Tensor]:
-    """Compute connected edges of a mesh.
+def graph_connected_components(edges: torch_.Tensor, num_vertices: Optional[int] = None) -> Union[torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor]]:
+    """Compute connected components of an undirected graph.
 
 ## Parameters
-    edges (Tensor): [E, 2] edge indices
+- `edges` (Tensor): (E, 2) edge indices
 
 ## Returns
-    components (List[Tensor]): list of connected edges"""
-    utils3d.torch.mesh.compute_edge_connected_components
+
+If `num_vertices` is given, return:
+- `labels` (Tensor): (N,) component labels of each vertex
+
+If `num_vertices` is None, return:
+- `vertices_ids` (Tensor): (N,) vertex indices that are in the edges
+- `labels` (Tensor): (N,) component labels corresponding to `vertices_ids`"""
+    utils3d.torch.mesh.graph_connected_components
 
 @overload
 def compute_boundaries(faces: torch_.Tensor, edges: torch_.Tensor = None, face2edge: torch_.Tensor = None, edge_degrees: torch_.Tensor = None) -> Tuple[List[torch_.Tensor], List[torch_.Tensor]]:
@@ -2478,14 +2528,14 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.torch.mesh.subdivide_mesh
 
 @overload
-def laplacian(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'uniform') -> torch_.Tensor:
+def compute_mesh_laplacian(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'uniform') -> torch_.Tensor:
     """Laplacian smooth with cotangent weights
 
 ## Parameters
     vertices (Tensor): shape (..., N, 3)
     faces (Tensor): shape (T, 3)
     weight (str): 'uniform' or 'cotangent'"""
-    utils3d.torch.mesh.laplacian
+    utils3d.torch.mesh.compute_mesh_laplacian
 
 @overload
 def laplacian_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, weight: str = 'uniform', times: int = 5) -> torch_.Tensor:

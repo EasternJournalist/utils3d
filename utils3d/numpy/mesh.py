@@ -19,7 +19,9 @@ __all__ = [
     'merge_duplicate_vertices',
     'remove_unused_vertices',
     'subdivide_mesh',
-    'get_mesh_edges',
+    'mesh_edges',
+    'mesh_connected_components',
+    'graph_connected_components',
     'flatten_mesh_indices',
     'create_cube_mesh',
     'create_icosahedron_mesh',
@@ -918,7 +920,7 @@ def tri_to_quad(
     raise NotImplementedError
 
 
-def get_mesh_edges(
+def mesh_edges(
     faces: Union[ndarray, csr_array], 
     directed: bool = False, 
     return_face2edge: bool = False, 
@@ -929,7 +931,7 @@ def get_mesh_edges(
     """Get edges of a mesh. Optionally return additional mappings.
 
     ## Parameters
-    - `faces` (Tensor): polygon faces
+    - `faces` (ndarray): polygon faces
         - `(F, P)` dense array of indices, where each face has `P` vertices.
         - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
     - `directed` (bool): whether the edges are directed or not. (half edge)
@@ -992,3 +994,75 @@ def get_mesh_edges(
     if return_counts:
         ret += (counts,)
     return ret[0] if len(ret) == 1 else ret
+
+
+def mesh_connected_components(
+    faces: Optional[ndarray] = None,
+    num_vertices: Optional[int] = None
+) -> Union[ndarray, Tuple[ndarray, ndarray]]:
+    """
+    Compute connected faces of a mesh.
+
+    ## Parameters
+    - `faces` (ndarray): polygon faces
+        - `(F, P)` dense array of indices, where each face has `P` vertices.
+        - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+    - `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
+
+    ## Returns
+
+    If `num_vertices` is given, return:
+    - `labels` (ndarray): (N,) component labels of each vertex
+
+    If `num_vertices` is None, return:
+    - `vertices_ids` (ndarray): (N,) vertex indices that are in the edges
+    - `labels` (ndarray): (N,) int32 component labels corresponding to `vertices_ids`
+    """
+    edges = mesh_edges(faces, directed=False)
+    return graph_connected_components(edges, num_vertices)
+
+
+def graph_connected_components(
+    edges: ndarray, 
+    num_vertices: Optional[int] = None
+) -> Union[ndarray, Tuple[ndarray, ndarray]]:
+    """
+    Compute connected components of an undirected graph.
+
+    ## Parameters
+    - `edges` (ndarray): (E, 2) edge indices
+
+    ## Returns
+
+    If `num_vertices` is given, return:
+    - `labels` (ndarray): (N,) component labels of each vertex
+
+    If `num_vertices` is None, return:
+    - `vertices_ids` (ndarray): (N,) vertex indices that are in the edges
+    - `labels` (ndarray): (N,) int32 component labels corresponding to `vertices_ids`
+    """
+    if num_vertices is None:
+        # Re-index edges
+        vertices_ids, edges = np.unique(edges.flatten(), return_inverse=True)
+        edges = edges.reshape(-1, 2)
+        labels = np.arange(vertices_ids.shape[0], dtype=np.int32)
+    else:
+        labels = np.arange(num_vertices, dtype=np.int32)
+
+    # Make edges undirected
+    edges = np.concatenate([edges, np.flip(edges, -1)], axis=0)
+    src, dst = edges[..., 0], edges[..., 1]
+
+    # Loop until convergence
+    while True:
+        labels = labels[labels]
+        new_labels = labels.copy()
+        np.minimum.at(new_labels, dst, labels[src])
+        if np.equal(labels, new_labels).all():
+            break
+        labels = new_labels
+
+    if num_vertices is None:
+        return vertices_ids, labels
+    else:
+        return labels

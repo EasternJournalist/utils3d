@@ -146,6 +146,7 @@ def csr_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
 
     ## Parameters
         - `indices` (Tensor): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+        - `values` (Tensor): shape (N, M) values of the connections
         - `n_cols` (int): total number of columns in the adjacency matrix
 
     ## Returns
@@ -154,7 +155,7 @@ def csr_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
     return torch.sparse_csr_tensor(
         crow_indices=torch.arange(0, indices.numel() + 1, indices.shape[1], device=indices.device),
         col_indices=indices.view(-1),
-        values=torch.ones_like(indices, dtype=bool).view(-1),
+        values=torch.ones_like(indices, dtype=torch.bool).view(-1),
         size=(indices.shape[0], n_cols)
     )
 
