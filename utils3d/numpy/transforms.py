@@ -39,8 +39,12 @@ __all__ = [
     'axis_angle_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',
+    'axis_angle_to_quaternion',
     'euler_axis_angle_rotation',
     'euler_angles_to_matrix',
+    'matrix_to_axis_angle',
+    'matrix_to_euler_angles',
+    'quaternion_to_axis_angle',
     'skew_symmetric',
     'rotation_matrix_from_vectors',
     'ray_intersection',
@@ -845,6 +849,36 @@ def matrix_to_quaternion(rot_mat: ndarray, eps: float = 1e-12) -> ndarray:
     return quat
 
 
+def quaternion_to_axis_angle(quaternion: ndarray, eps: float = 1e-12) -> ndarray:
+    """Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector)
+
+    ## Parameters
+        quaternion (ndarray): shape (..., 4), the quaternions to convert
+
+    ## Returns
+        ndarray: shape (..., 3), the axis-angle vectors corresponding to the given quaternions
+    """
+    assert quaternion.shape[-1] == 4
+    norm = np.linalg.norm(quaternion[..., 1:], axis=-1, keepdims=True)
+    axis = quaternion[..., 1:] / np.maximum(norm, eps)
+    angle = 2 * np.atan2(norm, quaternion[..., 0:1])
+    return angle * axis
+
+
+def matrix_to_axis_angle(rot_mat: ndarray, eps: float = 1e-12) -> ndarray:
+    """Convert a batch of 3x3 rotation matrices to axis-angle representation (rotation vector)
+
+    ## Parameters
+        rot_mat (ndarray): shape (..., 3, 3), the rotation matrices to convert
+
+    ## Returns
+        ndarray: shape (..., 3), the axis-angle vectors corresponding to the given rotation matrices
+    """
+    quat = matrix_to_quaternion(rot_mat)
+    axis_angle = quaternion_to_axis_angle(quat, eps=eps)
+    return axis_angle
+
+
 def extrinsics_to_essential(extrinsics: ndarray):
     """
     extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
@@ -973,6 +1007,92 @@ def axis_angle_to_matrix(axis_angle: ndarray, eps: float = 1e-12) -> ndarray:
     ident = np.eye(3, dtype=dtype)
     rot_mat = ident + sin * K + (1 - cos) * (K @ K)
     return rot_mat
+
+
+def axis_angle_to_quaternion(axis_angle: ndarray, eps: float = 1e-12) -> ndarray:
+    """Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z)
+
+    ## Parameters
+        axis_angle (ndarray): shape (..., 3), axis-angle vcetors
+
+    ## Returns
+        ndarray: shape (..., 4) The quaternions for the given axis-angle parameters
+    """
+    angle = np.linalg.norm(axis_angle, axis=-1, keepdims=True)
+    axis = axis_angle / (angle + eps)
+    quat = np.concatenate([np.cos(angle / 2), np.sin(angle / 2) * axis], axis=-1)
+    return quat
+
+
+def _angle_from_tan(
+    axis: str, other_axis: str, data: ndarray, horizontal: bool, tait_bryan: bool
+) -> ndarray:
+    """
+    Extract the first or third Euler angle from the two members of
+    the matrix which are positive constant times its sine and cosine.
+
+    ## Parameters
+        axis: Axis label "X" or "Y or "Z" for the angle we are finding.
+        other_axis: Axis label "X" or "Y or "Z" for the middle axis in the
+            convention.
+        data: Rotation matrices as tensor of shape (..., 3, 3).
+        horizontal: Whether we are looking for the angle for the third axis,
+            which means the relevant entries are in the same row of the
+            rotation matrix. If not, they are in the same column.
+        tait_bryan: Whether the first and third axes in the convention differ.
+
+    ## Returns
+        Euler Angles in radians for each matrix in data as a tensor
+        of shape (...).
+    """
+
+    i1, i2 = {"X": (2, 1), "Y": (0, 2), "Z": (1, 0)}[axis]
+    if horizontal:
+        i2, i1 = i1, i2
+    even = (axis + other_axis) in ["XY", "YZ", "ZX"]
+    if horizontal == even:
+        return np.atan2(data[..., i1], data[..., i2])
+    if tait_bryan:
+        return np.atan2(-data[..., i2], data[..., i1])
+    return np.atan2(data[..., i2], -data[..., i1])
+
+
+def matrix_to_euler_angles(matrix: ndarray, convention: str) -> ndarray:
+    """
+    Convert rotations given as rotation matrices to Euler angles in radians.
+    NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), instead of `Rx * Ry * Rz` (like pytorch3d)
+
+    ## Parameters
+        matrix: Rotation matrices as tensor of shape (..., 3, 3).
+        convention: Convention string of three uppercase letters.
+
+    ## Returns
+        Euler angles in radians as tensor of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)
+    """
+    if not all(c in 'XYZ' for c in convention) or not all(c in convention for c in 'XYZ'):
+        raise ValueError(f"Invalid convention {convention}.")
+    if not matrix.shape[-2:] == (3, 3):
+        raise ValueError(f"Invalid rotation matrix shape {matrix.shape}.")
+    
+    i0 = 'XYZ'.index(convention[0])
+    i2 = 'XYZ'.index(convention[2])
+    tait_bryan = i0 != i2
+    if tait_bryan:
+        central_angle = np.asin(matrix[..., i2, i0] * (-1.0 if i2 - i0 in [-1, 2] else 1.0))
+    else:
+        central_angle = np.acos(matrix[..., i2, i2])
+
+    # Angles in composition order
+    o = [
+        _angle_from_tan(
+            convention[0], convention[1], matrix[..., i2, :], True, tait_bryan
+        ),
+        central_angle,
+        _angle_from_tan(
+            convention[2], convention[1], matrix[..., i0], False, tait_bryan
+        ),
+    ]
+    return np.stack([o[convention.index(c)] for c in 'XYZ'], -1)
 
 
 def ray_intersection(p1: ndarray, d1: ndarray, p2: ndarray, d2: ndarray):

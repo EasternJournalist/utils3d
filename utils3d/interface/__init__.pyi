@@ -46,8 +46,12 @@ __all__ = ["sliding_window",
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
 "extrinsics_to_essential", 
+"axis_angle_to_quaternion", 
 "euler_axis_angle_rotation", 
 "euler_angles_to_matrix", 
+"matrix_to_axis_angle", 
+"matrix_to_euler_angles", 
+"quaternion_to_axis_angle", 
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
@@ -113,10 +117,6 @@ __all__ = ["sliding_window",
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
-"matrix_to_euler_angles", 
-"matrix_to_axis_angle", 
-"axis_angle_to_quaternion", 
-"quaternion_to_axis_angle", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -175,8 +175,8 @@ def max_pool_nd(x: numpy_.ndarray, kernel_size: Tuple[int, ...], stride: Tuple[i
     utils3d.numpy.utils.max_pool_nd
 
 @overload
-def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Union[numbers.Number, numpy_.ndarray] = 1) -> numpy_.ndarray:
-    """Look up `query` in `key` like a dictionary.
+def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Union[numbers.Number, numpy_.ndarray] = 0) -> numpy_.ndarray:
+    """Look up `query` in `key` like a dictionary.  Useful for COO indexing.
 
 ## Parameters
     `key` (ndarray): shape `(K, *qk_shape)`, the array to search in
@@ -611,6 +611,17 @@ def extrinsics_to_essential(extrinsics: numpy_.ndarray):
     utils3d.numpy.transforms.extrinsics_to_essential
 
 @overload
+def axis_angle_to_quaternion(axis_angle: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+    """Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z)
+
+## Parameters
+    axis_angle (ndarray): shape (..., 3), axis-angle vcetors
+
+## Returns
+    ndarray: shape (..., 4) The quaternions for the given axis-angle parameters"""
+    utils3d.numpy.transforms.axis_angle_to_quaternion
+
+@overload
 def euler_axis_angle_rotation(axis: str, angle: numpy_.ndarray) -> numpy_.ndarray:
     """Return the rotation matrices for one of the rotations about an axis
 of which Euler angles describe, for each value of the angle given.
@@ -634,6 +645,41 @@ def euler_angles_to_matrix(euler_angles: numpy_.ndarray, convention: str = 'XYZ'
 ## Returns
     Rotation matrices as ndarray of shape (..., 3, 3)."""
     utils3d.numpy.transforms.euler_angles_to_matrix
+
+@overload
+def matrix_to_axis_angle(rot_mat: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+    """Convert a batch of 3x3 rotation matrices to axis-angle representation (rotation vector)
+
+## Parameters
+    rot_mat (ndarray): shape (..., 3, 3), the rotation matrices to convert
+
+## Returns
+    ndarray: shape (..., 3), the axis-angle vectors corresponding to the given rotation matrices"""
+    utils3d.numpy.transforms.matrix_to_axis_angle
+
+@overload
+def matrix_to_euler_angles(matrix: numpy_.ndarray, convention: str) -> numpy_.ndarray:
+    """Convert rotations given as rotation matrices to Euler angles in radians.
+NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), instead of `Rx * Ry * Rz` (like pytorch3d)
+
+## Parameters
+    matrix: Rotation matrices as tensor of shape (..., 3, 3).
+    convention: Convention string of three uppercase letters.
+
+## Returns
+    Euler angles in radians as tensor of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)"""
+    utils3d.numpy.transforms.matrix_to_euler_angles
+
+@overload
+def quaternion_to_axis_angle(quaternion: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+    """Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector)
+
+## Parameters
+    quaternion (ndarray): shape (..., 4), the quaternions to convert
+
+## Returns
+    ndarray: shape (..., 3), the axis-angle vectors corresponding to the given quaternions"""
+    utils3d.numpy.transforms.quaternion_to_axis_angle
 
 @overload
 def skew_symmetric(v: numpy_.ndarray):
@@ -1618,7 +1664,7 @@ def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, k
 
 @overload
 def lookup(key: torch_.Tensor, query: torch_.Tensor, value: Optional[torch_.Tensor] = None, default_value: Union[numbers.Number, torch_.Tensor] = 0) -> torch_.LongTensor:
-    """Look up `query` in `key` like a dictionary. 
+    """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
 ## Parameters
 - `key` (Tensor): shape `(K, *qk_shape)`, the array to search in

@@ -43,8 +43,12 @@ __all__ = ["sliding_window",
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
 "extrinsics_to_essential", 
+"axis_angle_to_quaternion", 
 "euler_axis_angle_rotation", 
 "euler_angles_to_matrix", 
+"matrix_to_axis_angle", 
+"matrix_to_euler_angles", 
+"quaternion_to_axis_angle", 
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
@@ -110,10 +114,6 @@ __all__ = ["sliding_window",
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
-"matrix_to_euler_angles", 
-"matrix_to_axis_angle", 
-"axis_angle_to_quaternion", 
-"quaternion_to_axis_angle", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -389,6 +389,12 @@ def extrinsics_to_essential(*args, **kwargs):
     return _call_based_on_args('extrinsics_to_essential', args, kwargs)
 
 @suppress_traceback
+def axis_angle_to_quaternion(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.axis_angle_to_quaternion, utils3d.torch.axis_angle_to_quaternion
+    return _call_based_on_args('axis_angle_to_quaternion', args, kwargs)
+
+@suppress_traceback
 def euler_axis_angle_rotation(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.euler_axis_angle_rotation, utils3d.torch.euler_axis_angle_rotation
@@ -399,6 +405,24 @@ def euler_angles_to_matrix(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.euler_angles_to_matrix, utils3d.torch.euler_angles_to_matrix
     return _call_based_on_args('euler_angles_to_matrix', args, kwargs)
+
+@suppress_traceback
+def matrix_to_axis_angle(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.matrix_to_axis_angle, utils3d.torch.matrix_to_axis_angle
+    return _call_based_on_args('matrix_to_axis_angle', args, kwargs)
+
+@suppress_traceback
+def matrix_to_euler_angles(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.matrix_to_euler_angles, utils3d.torch.matrix_to_euler_angles
+    return _call_based_on_args('matrix_to_euler_angles', args, kwargs)
+
+@suppress_traceback
+def quaternion_to_axis_angle(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.quaternion_to_axis_angle, utils3d.torch.quaternion_to_axis_angle
+    return _call_based_on_args('quaternion_to_axis_angle', args, kwargs)
 
 @suppress_traceback
 def skew_symmetric(*args, **kwargs):
@@ -789,30 +813,6 @@ def csr_eliminate_zeros(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.csr_eliminate_zeros
     return _call_based_on_args('csr_eliminate_zeros', args, kwargs)
-
-@suppress_traceback
-def matrix_to_euler_angles(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.matrix_to_euler_angles
-    return _call_based_on_args('matrix_to_euler_angles', args, kwargs)
-
-@suppress_traceback
-def matrix_to_axis_angle(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.matrix_to_axis_angle
-    return _call_based_on_args('matrix_to_axis_angle', args, kwargs)
-
-@suppress_traceback
-def axis_angle_to_quaternion(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.axis_angle_to_quaternion
-    return _call_based_on_args('axis_angle_to_quaternion', args, kwargs)
-
-@suppress_traceback
-def quaternion_to_axis_angle(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.quaternion_to_axis_angle
-    return _call_based_on_args('quaternion_to_axis_angle', args, kwargs)
 
 @suppress_traceback
 def rotation_matrix_2d(*args, **kwargs):
