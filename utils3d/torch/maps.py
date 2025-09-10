@@ -358,7 +358,7 @@ def depth_map_to_normal_map(depth: Tensor, intrinsics: Tensor, mask: Tensor = No
 
 def depth_map_to_point_map(depth: Tensor, intrinsics: Tensor, extrinsics: Tensor = None):
     height, width = depth.shape[-2:]
-    uv = uv_map(width=width, height=height, dtype=depth.dtype, device=depth.device)
+    uv = uv_map(height, width, dtype=depth.dtype, device=depth.device)
     pts = unproject_cv(uv, depth, intrinsics=intrinsics[..., None, :, :], extrinsics=extrinsics[..., None, :, :] if extrinsics is not None else None)
     return pts
 

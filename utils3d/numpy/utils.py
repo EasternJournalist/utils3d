@@ -124,9 +124,9 @@ def max_pool_2d(x: ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Un
     return max_pool_nd(x, kernel_size, stride, padding, axis)
 
 
-def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, default_value: Union[Number, ndarray] = 1) -> ndarray:
+def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, default_value: Union[Number, ndarray] = 0) -> ndarray:
     """
-    Look up `query` in `key` like a dictionary.
+    Look up `query` in `key` like a dictionary.  Useful for COO indexing.
 
     ## Parameters
         `key` (ndarray): shape `(K, *qk_shape)`, the array to search in
@@ -150,7 +150,7 @@ def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, defaul
     result = index[inverse[key.shape[0]:]]
     if value is None:
         return np.where(result < key.shape[0], result, -1)
-    return np.where(result < key.shape[0], value[result.clip(0, key.shape[0] - 1)], default_value)
+    return np.where((result < key.shape[0])[:, *((None,) * (value.ndim - 1))], value[result.clip(0, key.shape[0] - 1)], default_value)
 
 
 def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:

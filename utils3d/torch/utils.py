@@ -113,7 +113,7 @@ def masked_max(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: 
 
 def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_value: Union[Number, Tensor] = 0) -> torch.LongTensor:
     """
-    Look up `query` in `key` like a dictionary. 
+    Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
     ## Parameters
     - `key` (Tensor): shape `(K, *qk_shape)`, the array to search in
@@ -138,7 +138,7 @@ def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_v
     result = index.index_select(0, inverse[key.shape[0]:])
     if value is None:
         return torch.where(result < key.shape[0], result, -1)
-    return torch.where(result < key.shape[0], value[result.clamp(0, key.shape[0] - 1)], default_value)
+    return torch.where((result < key.shape[0])[:, *((None,) * (value.ndim - 1))], value[result.clamp(0, key.shape[0] - 1)], default_value)
 
 
 def csr_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
