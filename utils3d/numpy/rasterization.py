@@ -48,215 +48,215 @@ def one_value(dtype):
         return 1
 
 
+RASTERIZE_TRIANGLES_VS = """
+#version 430
+uniform mat4 uViewMat;
+uniform mat4 uProjectionMat;
+in vec3 inVert;
+in vec4 inAttr;
+{return_interpolation} in vec2 inUV;
+{flat} out vec4 vAttr;
+out vec3 vViewPos;
+{return_interpolation} out vec2 vUV;
+void main() {
+    vec4 viewPos = uViewMat * vec4(inVert, 1.0);
+    vAttr = inAttr;
+    vViewPos = viewPos.xyz;
+    gl_Position = uProjectionMat * viewPos;
+    {return_interpolation} vUV = inUV;
+}
+"""
+
+RASTERIZE_TRIANGLES_FS = """
+#version 430
+{flat} in vec4 vAttr;
+in vec2 vUV;
+in vec3 vViewPos;
+out vec4 outAttr;
+{return_interpolation} out int outID;
+{return_interpolation} out vec2 outUV;
+void main() {
+    float currDepth = log2(-vViewPos.z) / 64.f + 0.5f;
+    outAttr = vAttr;
+    {return_interpolation} outID = gl_PrimitiveID;
+    {return_interpolation} outUV = vUV;
+    gl_FragDepth = currDepth;
+}
+"""
+
+RASTERIZE_TRIANGLES_PEELING_FS = """
+#version 430
+uniform sampler2D prevBufferDepthMap;
+uniform vec2 uScreenSize;
+{flat} in vec4 vAttr;
+in vec2 vUV;
+in vec3 vViewPos;
+out vec4 outAttr;
+{return_interpolation} out int outID;
+{return_interpolation} out vec2 outUV;
+void main() {
+    float currDepth = log2(-vViewPos.z) / 64.f + 0.5f;
+    float prevDepth = texture(prevBufferDepthMap, gl_FragCoord.xy / uScreenSize).r;
+    if (currDepth <= prevDepth) {
+        discard; 
+    }
+    outAttr = vAttr;
+    {return_interpolation} outID = gl_PrimitiveID;
+    {return_interpolation} outUV = vUV;
+    gl_FragDepth = currDepth;
+}
+"""
+
+RASTERIZE_POINT_CLOUD_VS = """
+#version 430
+uniform mat4 uViewMat;
+uniform mat4 uProjectionMat;
+in vec3 inVert;
+in vec4 inAttr;
+in float inPointSize;
+{return_point_id} out int vPointID;
+out vec3 vViewPos;
+out vec4 vAttr;
+out float vPointSize;
+void main() {
+    vec4 viewPos = uViewMat * vec4(inVert, 1.0);
+    vAttr = inAttr;
+    vViewPos = viewPos.xyz;
+    vPointSize = inPointSize;
+    {return_point_id} vPointID = gl_VertexID;
+    gl_Position = uProjectionMat * viewPos;
+}
+"""
+
+RASTERIZE_POINT_CLOUD_GS = """
+#version 430 core
+layout(points) in;
+layout(triangle_strip, max_vertices = {num_point_shape_vertices}) out;
+in vec3 vViewPos[];
+in vec4 vAttr[];
+in float vPointSize[];
+{return_point_id} in int vPointID[];
+flat out vec4 gAttr;
+out vec3 gViewPos;
+flat out vec3 gPointViewPos;
+flat out vec2 gPointCenter2D;
+flat out float gPointSize;
+{return_point_id} flat out int gPointID;
+uniform mat4 uViewMat;
+uniform mat4 uProjectionMat;
+uniform vec2 uScreenSize;
+uniform bool uIsPointSize3D;
+const vec3 triangle[3] = {vec3(0., 0.5, 0.0), vec3(-0.433013, -0.25, 0.0), vec3(0.433013,  -0.25, 0.0)};
+const vec3 square[4] = {vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(-0.5,  0.5, 0.0), vec3( 0.5,  0.5, 0.0)};
+const vec3 pentagon[5] = {vec3(0.0, 0.5, 0.0),  vec3(-0.475528, 0.154508, 0.0),  vec3(0.475528, 0.154508, 0.0),  vec3(-0.293893, -0.404508, 0.0),  vec3(0.293893, -0.404508, 0.0)};
+const vec3 hexagon[6] = {vec3(0.0, 0.5, 0.0), vec3(-0.433013, 0.25, 0.0), vec3(0.433013, 0.25, 0.0), vec3(-0.433013, -0.25, 0.0), vec3(0.433013, -0.25, 0.0), vec3(0.0, -0.5, 0.0)};
+const vec3 circle[4] = {vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(-0.5,  0.5, 0.0), vec3( 0.5,  0.5, 0.0)};
+void main() {
+    mat4 invProjection = inverse(uProjectionMat);
+    gAttr = vAttr[0];
+    {return_point_id} gPointID = vPointID[0];
+    gPointViewPos = vViewPos[0];
+    gPointCenter2D = (0.5 * gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w + 0.5) * uScreenSize;
+    gPointSize = vPointSize[0];
+    for (int i = 0; i < {point_shape}.length(); ++i) {
+        vec3 viewPos = uIsPointSize3D ? gPointViewPos + gPointSize * {point_shape}[i] : gPointViewPos;
+        vec4 clipCoord = uProjectionMat * vec4(viewPos, 1.0);
+        if (!uIsPointSize3D) clipCoord.xy += 2 * gPointSize * clipCoord.w / uScreenSize * {point_shape}[i].xy;
+        gViewPos = (invProjection * clipCoord).xyz;
+        gl_Position = clipCoord;
+        EmitVertex();
+    }
+    EndPrimitive();
+}
+"""
+
+RASTERIZE_POINT_CLOUD_FS = """
+#version 430 core
+flat  in vec4 gAttr;
+in vec3 gViewPos;
+flat in vec3 gPointViewPos;
+flat in vec2 gPointCenter2D;
+flat in float gPointSize;
+{return_point_id} flat in int gPointID;
+out vec4 outAttr;
+{return_point_id} out int outPointID;
+uniform bool uIsPointSize3D;
+void main() {
+    outAttr = gAttr;
+    {return_point_id} outPointID = gPointID;
+    gl_FragDepth = log2(-gViewPos.z) / 64.f + 0.5f;
+    {circle_begin} 
+    float distSquare;
+    if (uIsPointSize3D) {
+        vec3 x = gViewPos - gPointViewPos;
+        distSquare = dot(x, x);
+    }
+    else {
+        vec2 x = gl_FragCoord.xy - gPointCenter2D;
+        distSquare = dot(x, x);   
+    }
+    if (distSquare > 0.25 * gPointSize * gPointSize)
+        discard;
+    {circle_end}
+}
+"""
+
+FULL_SCREEN_VS = """
+#version 430 core
+out vec2 screenXY;
+void main() {
+    screenXY = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+    gl_Position = vec4(screenXY * 2.0 - 1.0, 0.0, 1.0);
+}
+"""
+
+CLEAR_TEXTURE_FS = """
+#version 430
+uniform {type} uCleanColor;
+in vec2 screenXY;
+out {type} outColor;
+void main() {
+    outColor = uCleanColor;
+}
+"""
+
+SAMPLE_TEXTURE_FS = """
+#version 430
+uniform sampler2D texMap;
+uniform sampler2D uvMap;
+in vec2 screenXY;
+out vec4 outColor;
+void main() {
+    outColor = vec4(texture(texMap, texture(uvMap, screenXY).xy));
+}
+"""
+
+DEPTH_LINEAR_TO_BUFFER_FS = """
+#version 430
+uniform sampler2D linearDepthMap;
+in vec2 screenXY;
+void main() {
+    float d = texture(linearDepthMap, screenXY).r;
+    gl_FragDepth = min(1.f, log2(d) / 64.f + 0.5f);
+}
+"""
+
+DEPTH_BUFFER_TO_LINEAR_FS = """
+#version 430
+uniform sampler2D bufferDepthMap;
+in vec2 screenXY;
+out float outLinearDepth;
+void main() {
+    float d = texture(bufferDepthMap, screenXY).r;
+    outLinearDepth = d == 1.f ? 1.f / 0.f : exp2((d - 0.5f) * 64.f);
+}
+"""
+
 class RastContext:
-
-    RASTERIZE_TRIANGLES_VS = """
-    #version 430
-    uniform mat4 uViewMat;
-    uniform mat4 uProjectionMat;
-    in vec3 inVert;
-    in vec4 inAttr;
-    {return_interpolation} in vec2 inUV;
-    {flat} out vec4 vAttr;
-    out vec3 vViewPos;
-    {return_interpolation} out vec2 vUV;
-    void main() {
-        vec4 viewPos = uViewMat * vec4(inVert, 1.0);
-        vAttr = inAttr;
-        vViewPos = viewPos.xyz;
-        gl_Position = uProjectionMat * viewPos;
-        {return_interpolation} vUV = inUV;
-    }
+    """ Context for numpy-side rasterization. Based on moderngl.
     """
-
-    RASTERIZE_TRIANGLES_FS = """
-    #version 430
-    {flat} in vec4 vAttr;
-    in vec2 vUV;
-    in vec3 vViewPos;
-    out vec4 outAttr;
-    {return_interpolation} out int outID;
-    {return_interpolation} out vec2 outUV;
-    void main() {
-        float currDepth = log2(-vViewPos.z) / 64.f + 0.5f;
-        outAttr = vAttr;
-        {return_interpolation} outID = gl_PrimitiveID;
-        {return_interpolation} outUV = vUV;
-        gl_FragDepth = currDepth;
-    }
-    """
-
-    RASTERIZE_TRIANGLES_PEELING_FS = """
-    #version 430
-    uniform sampler2D prevBufferDepthMap;
-    uniform vec2 uScreenSize;
-    {flat} in vec4 vAttr;
-    in vec2 vUV;
-    in vec3 vViewPos;
-    out vec4 outAttr;
-    {return_interpolation} out int outID;
-    {return_interpolation} out vec2 outUV;
-    void main() {
-        float currDepth = log2(-vViewPos.z) / 64.f + 0.5f;
-        float prevDepth = texture(prevBufferDepthMap, gl_FragCoord.xy / uScreenSize).r;
-        if (currDepth <= prevDepth) {
-            discard; 
-        }
-        outAttr = vAttr;
-        {return_interpolation} outID = gl_PrimitiveID;
-        {return_interpolation} outUV = vUV;
-        gl_FragDepth = currDepth;
-    }
-    """
-
-    RASTERIZE_POINT_CLOUD_VS = """
-    #version 430
-    uniform mat4 uViewMat;
-    uniform mat4 uProjectionMat;
-    in vec3 inVert;
-    in vec4 inAttr;
-    in float inPointSize;
-    {return_point_id} out int vPointID;
-    out vec3 vViewPos;
-    out vec4 vAttr;
-    out float vPointSize;
-    void main() {
-        vec4 viewPos = uViewMat * vec4(inVert, 1.0);
-        vAttr = inAttr;
-        vViewPos = viewPos.xyz;
-        vPointSize = inPointSize;
-        {return_point_id} vPointID = gl_VertexID;
-        gl_Position = uProjectionMat * viewPos;
-    }
-    """
-
-    RASTERIZE_POINT_CLOUD_GS = """
-    #version 430 core
-    layout(points) in;
-    layout(triangle_strip, max_vertices = {num_point_shape_vertices}) out;
-    in vec3 vViewPos[];
-    in vec4 vAttr[];
-    in float vPointSize[];
-    {return_point_id} in int vPointID[];
-    flat out vec4 gAttr;
-    out vec3 gViewPos;
-    flat out vec3 gPointViewPos;
-    flat out vec2 gPointCenter2D;
-    flat out float gPointSize;
-    {return_point_id} flat out int gPointID;
-    uniform mat4 uViewMat;
-    uniform mat4 uProjectionMat;
-    uniform vec2 uScreenSize;
-    uniform bool uIsPointSize3D;
-    const vec3 triangle[3] = {vec3(0., 0.5, 0.0), vec3(-0.433013, -0.25, 0.0), vec3(0.433013,  -0.25, 0.0)};
-    const vec3 square[4] = {vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(-0.5,  0.5, 0.0), vec3( 0.5,  0.5, 0.0)};
-    const vec3 pentagon[5] = {vec3(0.0, 0.5, 0.0),  vec3(-0.475528, 0.154508, 0.0),  vec3(0.475528, 0.154508, 0.0),  vec3(-0.293893, -0.404508, 0.0),  vec3(0.293893, -0.404508, 0.0)};
-    const vec3 hexagon[6] = {vec3(0.0, 0.5, 0.0), vec3(-0.433013, 0.25, 0.0), vec3(0.433013, 0.25, 0.0), vec3(-0.433013, -0.25, 0.0), vec3(0.433013, -0.25, 0.0), vec3(0.0, -0.5, 0.0)};
-    const vec3 circle[4] = {vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(-0.5,  0.5, 0.0), vec3( 0.5,  0.5, 0.0)};
-    void main() {
-        mat4 invProjection = inverse(uProjectionMat);
-        gAttr = vAttr[0];
-        {return_point_id} gPointID = vPointID[0];
-        gPointViewPos = vViewPos[0];
-        gPointCenter2D = (0.5 * gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w + 0.5) * uScreenSize;
-        gPointSize = vPointSize[0];
-        for (int i = 0; i < {point_shape}.length(); ++i) {
-            vec3 viewPos = uIsPointSize3D ? gPointViewPos + gPointSize * {point_shape}[i] : gPointViewPos;
-            vec4 clipCoord = uProjectionMat * vec4(viewPos, 1.0);
-            if (!uIsPointSize3D) clipCoord.xy += 2 * gPointSize * clipCoord.w / uScreenSize * {point_shape}[i].xy;
-            gViewPos = (invProjection * clipCoord).xyz;
-            gl_Position = clipCoord;
-            EmitVertex();
-        }
-        EndPrimitive();
-    }
-    """
-
-    RASTERIZE_POINT_CLOUD_FS = """
-    #version 430 core
-    flat  in vec4 gAttr;
-    in vec3 gViewPos;
-    flat in vec3 gPointViewPos;
-    flat in vec2 gPointCenter2D;
-    flat in float gPointSize;
-    {return_point_id} flat in int gPointID;
-    out vec4 outAttr;
-    {return_point_id} out int outPointID;
-    uniform bool uIsPointSize3D;
-    void main() {
-        outAttr = gAttr;
-        {return_point_id} outPointID = gPointID;
-        gl_FragDepth = log2(-gViewPos.z) / 64.f + 0.5f;
-        {circle_begin} 
-        float distSquare;
-        if (uIsPointSize3D) {
-            vec3 x = gViewPos - gPointViewPos;
-            distSquare = dot(x, x);
-        }
-        else {
-            vec2 x = gl_FragCoord.xy - gPointCenter2D;
-            distSquare = dot(x, x);   
-        }
-        if (distSquare > 0.25 * gPointSize * gPointSize)
-            discard;
-        {circle_end}
-    }
-    """
-
-    FULL_SCREEN_VS = """
-    #version 430 core
-    out vec2 screenXY;
-    void main() {
-        screenXY = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-        gl_Position = vec4(screenXY * 2.0 - 1.0, 0.0, 1.0);
-    }
-    """
-
-    CLEAR_TEXTURE_FS = """
-    #version 430
-    uniform {type} uCleanColor;
-    in vec2 screenXY;
-    out {type} outColor;
-    void main() {
-        outColor = uCleanColor;
-    }
-    """
-
-    SAMPLE_TEXTURE_FS = """
-    #version 430
-    uniform sampler2D texMap;
-    uniform sampler2D uvMap;
-    in vec2 screenXY;
-    out vec4 outColor;
-    void main() {
-        outColor = vec4(texture(texMap, texture(uvMap, screenXY).xy));
-    }
-    """
-
-    DEPTH_LINEAR_TO_BUFFER_FS = """
-    #version 430
-    uniform sampler2D linearDepthMap;
-    in vec2 screenXY;
-    void main() {
-        float d = texture(linearDepthMap, screenXY).r;
-        gl_FragDepth = min(1.f, log2(d) / 64.f + 0.5f);
-    }
-    """
-
-    DEPTH_BUFFER_TO_LINEAR_FS = """
-    #version 430
-    uniform sampler2D bufferDepthMap;
-    in vec2 screenXY;
-    out float outLinearDepth;
-    void main() {
-        float d = texture(bufferDepthMap, screenXY).r;
-        outLinearDepth = d == 1.f ? 1.f / 0.f : exp2((d - 0.5f) * 64.f);
-    }
-    """
-
     def __init__(self, *args, **kwargs):
-        """
-        Create a moderngl context.
+        """Create context for numpy-side rasterization. Based on moderngl.
 
         ## Parameters
             Leave empty to create context with default settings. Or refer to moderngl.create_context() for other parameters.
@@ -298,95 +298,12 @@ class RastContext:
         else:
             self.mgl_ctx = moderngl.create_context(*args, **kwargs)
         self.programs = {}
-        self.shared_objects = {}
-
-    def get_program_triangles(self, flat: bool = False, return_interpolation: bool = False) -> moderngl.Program:
-        program_name = f'rasterize_triangles(flat={flat}, return_interpolation={return_interpolation})'
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.RASTERIZE_TRIANGLES_VS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//'),
-                fragment_shader=RastContext.RASTERIZE_TRIANGLES_FS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//')
-            )
-        return self.programs[program_name]
-
-    def get_program_point_cloud(self, return_point_id: bool = False, point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square') -> moderngl.Program:
-        program_name = f'rasterize_point_cloud(return_point_id={return_point_id}, point_shape={point_shape})'
-        num_point_shape_vertices = {'triangle': 3, 'square': 4, 'pentagon': 5, 'hexagon': 6, 'circle': 4}.get(point_shape)
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.RASTERIZE_POINT_CLOUD_VS.replace('{return_point_id}', '' if return_point_id else '//'),
-                geometry_shader=RastContext.RASTERIZE_POINT_CLOUD_GS\
-                    .replace('{return_point_id}', '' if return_point_id else '//')\
-                    .replace('{point_shape}', point_shape)\
-                    .replace('{num_point_shape_vertices}', str(num_point_shape_vertices)),
-                fragment_shader=RastContext.RASTERIZE_POINT_CLOUD_FS\
-                    .replace('{return_point_id}', '' if return_point_id else '//')\
-                    .replace('{circle_begin}', '' if point_shape == 'circle' else '/*')\
-                    .replace('{circle_end}', '' if point_shape == 'circle' else '*/')
-            )
-        return self.programs[program_name]
-    
-    def get_program_triangles_peeling(self, flat: bool = False, return_interpolation: bool = False) -> moderngl.Program:
-        program_name = f'rasterize_triangles_peeling(flat={flat}, return_interpolation={return_interpolation})'
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.RASTERIZE_TRIANGLES_VS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//'),
-                fragment_shader=RastContext.RASTERIZE_TRIANGLES_PEELING_FS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//')
-            )
-            self.programs[program_name]['prevBufferDepthMap'] = 0
-        return self.programs[program_name]
-
-    def get_program_depth_buffer_to_linear(self) -> moderngl.Program:
-        program_name = f'depth_buffer_to_linear'
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.FULL_SCREEN_VS,
-                fragment_shader=RastContext.DEPTH_BUFFER_TO_LINEAR_FS
-            )
-            self.programs[program_name]['bufferDepthMap'] = 0
-        return self.programs[program_name]
-
-    def get_program_depth_linear_to_buffer(self) -> moderngl.Program:
-        program_name = f'depth_linear_to_buffer'
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.FULL_SCREEN_VS,
-                fragment_shader=RastContext.DEPTH_LINEAR_TO_BUFFER_FS
-            )
-            self.programs[program_name]['linearDepthMap'] = 0
-        return self.programs[program_name]
-
-    def get_program_sample_texture(self) -> moderngl.Program:
-        program_name = 'sample_texture'
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.FULL_SCREEN_VS,
-                fragment_shader=RastContext.SAMPLE_TEXTURE_FS
-            )
-            self.programs[program_name]['texMap'] = 0
-            self.programs[program_name]['uvMap'] = 1
-        return self.programs[program_name]
-
-    def get_program_clear_texture(self, dtype: Literal['i4', 'f4']) -> moderngl.Program:
-        dtype_to_vec_type = {
-            'i4': 'ivec4',
-            'f4': 'vec4'
-        }
-        program_name = f'clear_texture_{dtype}'
-        if program_name not in self.programs:
-            self.programs[program_name] = self.mgl_ctx.program(
-                vertex_shader=RastContext.FULL_SCREEN_VS,
-                fragment_shader=RastContext.CLEAR_TEXTURE_FS.replace('{type}', dtype_to_vec_type[dtype])
-            )
-        return self.programs[program_name]
 
     def __del__(self):
         try:
             self.mgl_ctx.release()
             for prog_name, prog in self.programs.items():
                 prog.release()
-            for obj_name, obj in self.shared_objects.items():
-                obj.release()
         except:
             pass
 
@@ -430,13 +347,44 @@ def clear_texture(ctx: RastContext, tex: moderngl.Texture, value: Union[Tuple[fl
         fbo.release()
     elif tex.dtype == 'i4':
         fbo = ctx.mgl_ctx.framebuffer(color_attachments=[tex])
-        prog = ctx.get_program_clear_texture(tex.dtype)
+        dtype_to_vec_type = {'i4': 'ivec4', 'f4': 'vec4'}
+        program_name = f'clear_texture_{tex.dtype}'
+        if prog := ctx.programs.get(program_name, None) is None:
+            prog = ctx.mgl_ctx.program(
+                vertex_shader=FULL_SCREEN_VS,
+                fragment_shader=CLEAR_TEXTURE_FS.replace('{type}', dtype_to_vec_type[tex.dtype])
+            )
+            ctx.programs[program_name] = prog
         vao = ctx.mgl_ctx.vertex_array(prog, [])
         prog['uCleanColor'].value = value + (0,) * (4 - len(value))
         fbo.use()
         vao.render(moderngl.TRIANGLES, vertices=3)
         fbo.release()
         vao.release()
+
+
+def depth_texture_buffer_to_linear(ctx: RastContext, buffer_depth_tex: moderngl.Texture, linear_depth_tex: moderngl.Texture):
+    program_name = f'depth_buffer_to_linear'
+    if (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=FULL_SCREEN_VS,
+            fragment_shader=DEPTH_BUFFER_TO_LINEAR_FS
+        )
+        prog['bufferDepthMap'] = 0
+        ctx.programs[program_name] = prog
+    run_full_screen_program(ctx, prog, buffer_depth_tex, out_tex_or_rbo=linear_depth_tex)
+
+
+def depth_texture_linear_to_buffer(ctx: RastContext, linear_depth_tex: moderngl.Texture, buffer_depth_tex: moderngl.Texture):
+    program_name = f'depth_linear_to_buffer'
+    if (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=FULL_SCREEN_VS,
+            fragment_shader=DEPTH_LINEAR_TO_BUFFER_FS
+        )
+        prog['linearDepthMap'] = 0
+        ctx.programs[program_name] = prog
+    run_full_screen_program(ctx, prog, linear_depth_tex, out_depth=buffer_depth_tex)
 
 
 def rasterize_triangles(
@@ -461,32 +409,32 @@ def rasterize_triangles(
     Rasterize triangles.
 
     ## Parameters
-        ctx (RastContext): rasterization context
-        size (Tuple[int, int]): (height, width) of the output image
-        vertices (np.ndarray): (N, 3) or (T, 3, 3)
-        faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-        attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
-        attributes_domain (Literal['vertex', 'face']): domain of the attributes
-        view (np.ndarray): (4, 4) View matrix (world to camera).
-        projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
-        cull_backface (bool): whether to cull backface
-        background_image (np.ndarray): (H, W, C) background image
-        background_depth (np.ndarray): (H, W) background depth
-        background_interpolation_id (np.ndarray): (H, W) background triangle ID map
-        background_interpolation_uv (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+    - `ctx` (RastContext): rasterization context. Created by `RastContext()`
+    - `size` (Tuple[int, int]): (height, width) of the output image
+    - `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
+    - `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
+    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `cull_backface` (bool): whether to cull backface
+    - `background_image` (np.ndarray): (H, W, C) background image
+    - `background_depth` (np.ndarray): (H, W) background depth
+    - `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
+    - `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
     ## Returns
-        A dictionary containing
-        
-        if attributes is not None
-        - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+    A dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
-        if return_depth is True
-        - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
-        
-        if return_interpolation is True
-        - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-        - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+
+    if return_interpolation is True
+    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
     height, width = size
     if faces is None:
@@ -541,7 +489,14 @@ def rasterize_triangles(
         background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
 
     # Get program
-    prog = ctx.get_program_triangles(flat=attributes_domain == 'face', return_interpolation=return_interpolation)
+    flat = attributes_domain == 'face'
+    program_name = f'rasterize_triangles(flat={flat}, return_interpolation={return_interpolation})'
+    if  (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=RASTERIZE_TRIANGLES_VS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//'),
+            fragment_shader=RASTERIZE_TRIANGLES_FS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//')
+        )
+        ctx.programs[program_name] = prog
 
     # Create buffers
     vbo_vertices = ctx.mgl_ctx.buffer(np.ascontiguousarray(vertices, dtype='f4'))
@@ -573,7 +528,7 @@ def rasterize_triangles(
     if background_image is None:
         clear_texture(ctx, image_tex, value=(0.0, 0.0, 0.0, 1.0))
     if background_depth is not None:
-        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, out_depth=buffer_depth_tex)
+        depth_texture_linear_to_buffer(ctx, linear_depth_tex, buffer_depth_tex)
     else:
         clear_texture(ctx, buffer_depth_tex, value=1.0)
     if return_interpolation:
@@ -620,7 +575,7 @@ def rasterize_triangles(
     else:
         image = None
     if return_depth:
-        run_full_screen_program(ctx, ctx.get_program_depth_buffer_to_linear(), buffer_depth_tex, linear_depth_tex)
+        depth_texture_buffer_to_linear(ctx, buffer_depth_tex, linear_depth_tex)
         depth = np.frombuffer(linear_depth_tex.read(), dtype='f4').reshape((height, width))
         depth = np.flip(depth, axis=0)
     else:
@@ -681,29 +636,32 @@ def rasterize_triangles_peeling(
     Rasterize triangles with depth peeling.
 
     ## Parameters
-        ctx (RastContext): rasterization context
-        size (Tuple[int, int]): (height, width) of the output image
-        vertices (np.ndarray): (N, 3) or (T, 3, 3)
-        faces (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-        attributes (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
-        attributes_domain (Literal['vertex', 'face']): domain of the attributes
-        view (np.ndarray): (4, 4) View matrix (world to camera).
-        projection (np.ndarray): (4, 4) Projection matrix (camera to clip space).
-        cull_backface (bool): whether to cull backface
-    ## Returns
-        A context manager of generator of dictionary containing
-        
-        if attributes is not None
-        - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
-        if return_depth is True
-        - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
-        
-        if return_interpolation is True
-        - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-        - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+    - `ctx` (RastContext): rasterization context
+    - `size` (Tuple[int, int]): (height, width) of the output image
+    - `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
+    - `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
+    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `cull_backface` (bool): whether to cull backface
+
+    ## Returns
+
+    A context manager of generator of dictionary containing
     
-    ## Example Usage
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_interpolation is True
+    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+    
+    ## Example
     ```
     with rasterize_triangles_peeling(
         ctx, 
@@ -762,8 +720,16 @@ def rasterize_triangles_peeling(
         projection = np.eye(4, np.float32) 
     
     # Get program
-    prog = ctx.get_program_triangles_peeling(flat=attributes_domain == 'face', return_interpolation=return_interpolation)
-
+    flat = attributes_domain == 'face'
+    program_name = f'rasterize_triangles_peeling(flat={flat}, return_interpolation={return_interpolation})'
+    if (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=RASTERIZE_TRIANGLES_VS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//'),
+            fragment_shader=RASTERIZE_TRIANGLES_PEELING_FS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//')
+        )
+        prog['prevBufferDepthMap'] = 0
+        ctx.programs[program_name] = prog
+    
     # Create buffers
     vbo_vertices = ctx.mgl_ctx.buffer(np.ascontiguousarray(vertices, dtype='f4'))
     if attributes is not None:
@@ -847,7 +813,7 @@ def rasterize_triangles_peeling(
             else:
                 image = None
             if return_depth:
-                run_full_screen_program(ctx, ctx.get_program_depth_buffer_to_linear(), fbo_curr.depth_attachment, linear_depth_tex)
+                depth_texture_buffer_to_linear(ctx, fbo_curr.depth_attachment, linear_depth_tex)
                 depth = np.frombuffer(linear_depth_tex.read(), dtype='f4').reshape((height, width))
                 depth = np.flip(depth, axis=0)
             else:
@@ -930,17 +896,18 @@ def rasterize_lines(
     - `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
 
     ## Returns
-        A dictionary containing
-        
-        if attributes is not None
-        - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
-        if return_depth is True
-        - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
-        
-        if return_interpolation is True
-        - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-        - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+    A dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_interpolation is True
+    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
     height, width = size
     if lines is None:
@@ -995,8 +962,15 @@ def rasterize_lines(
     if background_image is not None:
         background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
 
-    # Get program
-    prog = ctx.get_program_triangles(flat=attributes_domain == 'line', return_interpolation=return_interpolation)
+    # Get program (shared with triangle rasterization)
+    flat = attributes_domain == 'line'
+    program_name = f'rasterize_triangles(flat={flat}, return_interpolation={return_interpolation})'
+    if  (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=RASTERIZE_TRIANGLES_VS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//'),
+            fragment_shader=RASTERIZE_TRIANGLES_FS.replace('{flat}', 'flat' if flat else '').replace('{return_interpolation}', '' if return_interpolation else '//')
+        )
+        ctx.programs[program_name] = prog
 
     # Create buffers
     vbo_vertices = ctx.mgl_ctx.buffer(np.ascontiguousarray(vertices, dtype='f4'))
@@ -1030,7 +1004,7 @@ def rasterize_lines(
     if background_depth is None:
         clear_texture(ctx, buffer_depth_tex, value=1.0)
     else:
-        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, out_depth=buffer_depth_tex)
+        depth_texture_linear_to_buffer(ctx, linear_depth_tex, buffer_depth_tex)
     if return_interpolation:
         if background_interpolation_id is None:
             clear_texture(ctx, interpolation_id_tex, value=(-1,))
@@ -1072,7 +1046,7 @@ def rasterize_lines(
     else:
         image = None
     if return_depth:
-        run_full_screen_program(ctx, ctx.get_program_depth_buffer_to_linear(), buffer_depth_tex, linear_depth_tex)
+        depth_texture_buffer_to_linear(ctx, buffer_depth_tex, linear_depth_tex)
         depth = np.frombuffer(linear_depth_tex.read(), dtype='f4').reshape((height, width))
         depth = np.flip(depth, axis=0)
     else:
@@ -1135,6 +1109,7 @@ def rasterize_point_cloud(
     Rasterize point cloud.
 
     ## Parameters
+
     - `ctx` (RastContext): rasterization context
     - `size` (Tuple[int, int]): (height, width) of the output image
     - `points` (np.ndarray): (N, 3)
@@ -1152,16 +1127,17 @@ def rasterize_point_cloud(
     - `background_point_id` (np.ndarray): (H, W) background point ID map
 
     ## Returns
-        A dictionary containing
-        
-        if attributes is not None
-        - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
-        if return_depth is True
-        - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
-        
-        if return_point_id is True
-        - `point_id` (np.ndarray): (H, W) int32 point ID map
+    A dictionary containing
+    
+    if attributes is not None
+    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+
+    if return_depth is True
+    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    
+    if return_point_id is True
+    - `point_id` (np.ndarray): (H, W) int32 point ID map
     """
     height, width = size
     assert points.ndim == 2 and points.shape[1] == 3 and points.dtype == np.float32, f"Points should be a float32 array with shape (N, 3), but got {points.shape} {points.dtype}"
@@ -1196,7 +1172,22 @@ def rasterize_point_cloud(
 
     # Get program
     prog = ctx.get_program_point_cloud(return_point_id=return_point_id, point_shape=point_shape)
-    
+    program_name = f'rasterize_point_cloud(return_point_id={return_point_id}, point_shape={point_shape})'
+    num_point_shape_vertices = {'triangle': 3, 'square': 4, 'pentagon': 5, 'hexagon': 6, 'circle': 4}.get(point_shape)
+    if (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=RASTERIZE_POINT_CLOUD_VS.replace('{return_point_id}', '' if return_point_id else '//'),
+            geometry_shader=RASTERIZE_POINT_CLOUD_GS\
+                .replace('{return_point_id}', '' if return_point_id else '//')\
+                .replace('{point_shape}', point_shape)\
+                .replace('{num_point_shape_vertices}', str(num_point_shape_vertices)),
+            fragment_shader=RASTERIZE_POINT_CLOUD_FS\
+                .replace('{return_point_id}', '' if return_point_id else '//')\
+                .replace('{circle_begin}', '' if point_shape == 'circle' else '/*')\
+                .replace('{circle_end}', '' if point_shape == 'circle' else '*/')
+        )
+        ctx.programs[program_name] = prog
+
     # Create buffers
     vbo_vertices = ctx.mgl_ctx.buffer(np.ascontiguousarray(points, dtype='f4'))
     if attributes is not None:
@@ -1226,7 +1217,7 @@ def rasterize_point_cloud(
     if background_depth is None:
         clear_texture(ctx, buffer_depth_tex, value=1.0)
     else:
-        run_full_screen_program(ctx, ctx.get_program_depth_linear_to_buffer(), linear_depth_tex, out_depth=buffer_depth_tex)
+        depth_texture_linear_to_buffer(ctx, linear_depth_tex, buffer_depth_tex)
     if return_point_id:
         clear_texture(ctx, point_id_tex, value=(-1,))
 
@@ -1267,7 +1258,7 @@ def rasterize_point_cloud(
     else:
         image = None
     if return_depth:
-        run_full_screen_program(ctx, ctx.get_program_depth_buffer_to_linear(), buffer_depth_tex, linear_depth_tex)
+        depth_texture_buffer_to_linear(ctx, buffer_depth_tex, linear_depth_tex)
         depth = np.frombuffer(linear_depth_tex.read(), dtype='f4').reshape((height, width))
         depth = np.flip(depth, axis=0)
     else:
@@ -1347,8 +1338,19 @@ def sample_texture(
     # Create render buffer and frame buffer
     output_tex = ctx.mgl_ctx.texture((uv_map.shape[1], uv_map.shape[0]), texture_map.shape[2], dtype=texture_dtype)
 
+    # Get program
+    program_name = 'sample_texture'
+    if (prog := ctx.programs.get(program_name, None)) is None:
+        prog = ctx.mgl_ctx.program(
+            vertex_shader=FULL_SCREEN_VS,
+            fragment_shader=SAMPLE_TEXTURE_FS
+        )
+        prog['texMap'] = 0
+        prog['uvMap'] = 1
+        ctx.programs[program_name] = prog
+
     # Render
-    run_full_screen_program(ctx, ctx.get_program_sample_texture(), [texture_tex, uv_tex], output_tex)
+    run_full_screen_program(ctx, prog, [texture_tex, uv_tex], output_tex)
 
     # Read buffer
     image_buffer = np.frombuffer(output_tex.read(), dtype=texture_dtype).reshape((height, width, texture_tex.shape[2]))
@@ -1454,20 +1456,24 @@ def sample_texture(
 
 
 
-def test_rasterization(ctx: RastContext):
+def test_rasterization(ctx: Optional[RastContext] = None):
     """
     Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file.
     """
+
     from .mesh import create_cube_mesh
     from .transforms import perspective_from_fov, view_look_at
 
+    if ctx is None:
+        ctx = RastContext()
+        
     vertices, faces = create_cube_mesh(tri=True)
     attributes = np.random.rand(len(vertices), 3).astype(np.float32)
     projection = perspective_from_fov(fov_x=np.deg2rad(60), aspect_ratio=1, near=1e-8, far=100000)
     view = view_look_at([1, 2, 2], [0, 0, 0], [0, 1, 0])
     out = rasterize_triangles(
         ctx, 
-        512, 512, 
+        (512, 512), 
         vertices=vertices, 
         attributes=attributes, 
         faces=faces, 
