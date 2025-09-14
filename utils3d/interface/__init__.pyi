@@ -13,7 +13,8 @@ __all__ = ["sliding_window",
 "max_pool_nd", 
 "lookup", 
 "segment_roll", 
-"csr_matrix_from_indices", 
+"csr_matrix_from_dense_indices", 
+"split_groups_by_labels", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -76,21 +77,16 @@ __all__ = ["sliding_window",
 "remove_unused_vertices", 
 "subdivide_mesh", 
 "mesh_edges", 
+"mesh_half_edges", 
 "mesh_connected_components", 
 "graph_connected_components", 
+"mesh_adjacency_graph", 
 "flatten_mesh_indices", 
 "create_cube_mesh", 
 "create_icosahedron_mesh", 
 "create_square_mesh", 
 "create_camera_frustum_mesh", 
 "merge_meshes", 
-"calc_quad_candidates", 
-"calc_quad_distortion", 
-"calc_quad_direction", 
-"calc_quad_smoothness", 
-"solve_quad", 
-"solve_quad_qp", 
-"tri_to_quad", 
 "uv_map", 
 "pixel_coord_map", 
 "screen_coord_map", 
@@ -199,7 +195,7 @@ def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> n
     utils3d.numpy.utils.segment_roll
 
 @overload
-def csr_matrix_from_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.sparse._csr.csr_array:
+def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.sparse._csr.csr_array:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
 ## Parameters
@@ -208,7 +204,23 @@ def csr_matrix_from_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.spars
 
 ## Returns
     Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
-    utils3d.numpy.utils.csr_matrix_from_indices
+    utils3d.numpy.utils.csr_matrix_from_dense_indices
+
+@overload
+def split_groups_by_labels(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
+    """Split the data into groups based on the provided labels.
+
+## Parameters
+    - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+    - `data` (ndarray, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+        If None, return the indices in each group instead.
+
+## Returns
+    - groups (List[Tuple[ndarray, ndarray]]): List of length G. Each element is a tuple of (label, data_in_group).
+        - `label` (ndarray): shape (*label_dims,) the label of the group.
+        - `data_in_group` (ndarray): shape (M, *data_dims) the data points in the group.
+        If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
+    utils3d.numpy.utils.split_groups_by_labels
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
@@ -981,21 +993,15 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
-def mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray]:
-    """Get edges of a mesh. Optionally return additional mappings.
+def mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray]:
+    """Get undirected edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
 - `faces` (ndarray): polygon faces
     - `(F, P)` dense array of indices, where each face has `P` vertices.
     - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
-- `directed` (bool): whether the edges are directed or not. (half edge)
-    - If `False` (default), edges will be viewed as undirected, (i.e (a, b) is the same as (b, a)).
-        Returned edges (a, b) are in the form a < b.
-    - If `True`, edges will be viewed as directed by the face loop. 
-        Edges of opposite direction will be considered different.
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
-- `return_opposite_edge` (bool): whether to return the opposite edge mapping. Only supported when `directed` is True.
 - `return_counts` (bool): whether to return the counts of edges
 
 ## Returns
@@ -1007,10 +1013,40 @@ If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_co
     - `(F, P)` if input `faces` is a dense array
     - `(F, E)` if input `faces` is a sparse csr array
 - `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
-- `opposite_edge` (ndarray): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
-    If directed edge is not unique, the mapping will only present one of the opposite edges.
 - `counts` (ndarray): `(E,)` counts of each edge"""
     utils3d.numpy.mesh.mesh_edges
+
+@overload
+def mesh_half_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+    """Get half edges of a mesh. Optionally return additional mappings.
+
+## Parameters
+- `faces` (ndarray): polygon faces
+    - `(F, P)` dense array of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `return_face2edge` (bool): whether to return the face to edge mapping
+- `return_edge2face` (bool): whether to return the edge to face mapping
+- `return_twin` (bool): whether to return the mapping from one edge to its opposite/twin edge
+- `return_next` (bool): whether to return the mapping from one edge to its next edge in the face loop
+- `return_prev` (bool): whether to return the mapping from one edge to its previous edge in the face loop
+- `return_counts` (bool): whether to return the counts of edges
+
+## Returns
+- `edges` (ndarray): `(E, 2)` unique edges' vertex indices
+
+If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
+
+- `face2edge` (ndarray | csr_array): mapping from faces to the indices of edges
+    - `(F, P)` if input `faces` is a dense array
+    - `(F, E)` if input `faces` is a sparse csr array
+- `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
+- `twin` (ndarray): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
+- `next` (ndarray): `(E,)` mapping from edges to indices of next edges in the face loop.
+- `prev` (ndarray): `(E,)` mapping from edges to indices of previous edges in the face loop.
+- `counts` (ndarray): `(E,)` counts of each half edge
+
+NOTE: If the mesh is not manifold, `twin`, `next`, and `prev` can point to arbitrary one of the candidates."""
+    utils3d.numpy.mesh.mesh_half_edges
 
 @overload
 def mesh_connected_components(faces: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
@@ -1035,6 +1071,7 @@ If `num_vertices` is None, return:
 @overload
 def graph_connected_components(edges: numpy_.ndarray, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
     """Compute connected components of an undirected graph.
+Using scipy.sparse.csgraph.connected_components as backend.
 
 ## Parameters
 - `edges` (ndarray): (E, 2) edge indices
@@ -1048,6 +1085,35 @@ If `num_vertices` is None, return:
 - `vertices_ids` (ndarray): (N,) vertex indices that are in the edges
 - `labels` (ndarray): (N,) int32 component labels corresponding to `vertices_ids`"""
     utils3d.numpy.mesh.graph_connected_components
+
+@overload
+def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array, NoneType] = None, edges: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None, self_loop: bool = False) -> scipy.sparse._csr.csr_array:
+    """Get adjacency graph of a mesh.
+
+## Parameters
+- `adjacency` (str): type of adjacency graph. Options:
+    - `'vertex2edge'`: vertex to adjacent edges. Returns (V, E) csr
+    - `'vertex2face'`: vertex to adjacent faces. Returns (V, F) csr
+    - `'edge2vertex'`: edge to adjacent vertices. Returns (E, V) csr
+    - `'edge2face'`: edge to its adjacent faces. Returns (E, F) csr
+    - `'face2edge'`: face to its adjacent edges. Returns (F, E) csr
+    - `'face2vertex'`: face to its adjacent vertices. Returns (F, V) csr
+    - `'vertex2edge2vertex'`: vertex to adjacent vertices if they share an edge. Returns (V, V) csr
+    - `'vertex2face2vertex'`: vertex to adjacent vertices if they share a face. Returns (V, V) csr
+    - `'edge2vertex2edge'`: edge to adjacent edges if they share a vertex. Returns (E, E) csr
+    - `'edge2face2edge'`: edge to adjacent edges if they share a face. Returns (E, E) csr
+    - `'face2edge2face'`: face to adjacent faces if they share an edge. Returns (F, F) csr
+    - `'face2vertex2face'`: face to adjacent faces if they share a vertex. Returns (F, F) csr
+- `faces` (ndarray): polygon faces
+    - `(F, P)` dense array of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `edges` (ndarray, optional): (E, 2) edge indices. NOTE: assumed to be undirected edges.
+- `num_vertices` (int, optional): total number of vertices.
+- `self_loop` (bool): whether to include self-loops in the adjacency graph. Defaults to False.
+
+## Returns
+- `graph` (csr_array): adjacency graph in csr format"""
+    utils3d.numpy.mesh.mesh_adjacency_graph
 
 @overload
 def flatten_mesh_indices(*args: numpy_.ndarray) -> Tuple[numpy_.ndarray, ...]:
@@ -1095,105 +1161,6 @@ def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarr
     - `faces`: [sum(T_i), P] merged face indices, contigous from 0 to sum(T_i) * P - 1
     - `*vertice_attrs`: [sum(T_i) * P, ...] merged vertex attributes, where every P values correspond to a face"""
     utils3d.numpy.mesh.merge_meshes
-
-@overload
-def calc_quad_candidates(edges: numpy_.ndarray, face2edge: numpy_.ndarray, edge2face: numpy_.ndarray):
-    """Calculate the candidate quad faces.
-
-## Parameters
-    edges (ndarray): [E, 2] edge indices
-    face2edge (ndarray): [T, 3] face to edge relation
-    edge2face (ndarray): [E, 2] edge to face relation
-
-## Returns
-    quads (ndarray): [Q, 4] quad candidate indices
-    quad2edge (ndarray): [Q, 4] edge to quad candidate relation
-    quad2adj (ndarray): [Q, 8] adjacent quad candidates of each quad candidate
-    quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid"""
-    utils3d.numpy.mesh.calc_quad_candidates
-
-@overload
-def calc_quad_distortion(vertices: numpy_.ndarray, quads: numpy_.ndarray):
-    """Calculate the distortion of each candidate quad face.
-
-## Parameters
-    vertices (ndarray): [N, 3] 3-dimensional vertices
-    quads (ndarray): [Q, 4] quad face indices
-
-## Returns
-    distortion (ndarray): [Q] distortion of each quad face"""
-    utils3d.numpy.mesh.calc_quad_distortion
-
-@overload
-def calc_quad_direction(vertices: numpy_.ndarray, quads: numpy_.ndarray):
-    """Calculate the direction of each candidate quad face.
-
-## Parameters
-    vertices (ndarray): [N, 3] 3-dimensional vertices
-    quads (ndarray): [Q, 4] quad face indices
-
-## Returns
-    direction (ndarray): [Q, 4] direction of each quad face.
-        Represented by the angle between the crossing and each edge."""
-    utils3d.numpy.mesh.calc_quad_direction
-
-@overload
-def calc_quad_smoothness(quad2edge: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_direction: numpy_.ndarray):
-    """Calculate the smoothness of each candidate quad face connection.
-
-## Parameters
-    quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
-    quads_direction (ndarray): [Q, 4] direction of each quad face
-
-## Returns
-    smoothness (ndarray): [Q, 8] smoothness of each quad face connection"""
-    utils3d.numpy.mesh.calc_quad_smoothness
-
-@overload
-def solve_quad(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
-    """Solve the quad mesh from the candidate quad faces.
-
-## Parameters
-    face2edge (ndarray): [T, 3] face to edge relation
-    edge2face (ndarray): [E, 2] edge to face relation
-    quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
-    quads_distortion (ndarray): [Q] distortion of each quad face
-    quads_smoothness (ndarray): [Q, 8] smoothness of each quad face connection
-    quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
-
-## Returns
-    weights (ndarray): [Q] weight of each valid quad face"""
-    utils3d.numpy.mesh.solve_quad
-
-@overload
-def solve_quad_qp(face2edge: numpy_.ndarray, edge2face: numpy_.ndarray, quad2adj: numpy_.ndarray, quads_distortion: numpy_.ndarray, quads_smoothness: numpy_.ndarray, quads_valid: numpy_.ndarray):
-    """Solve the quad mesh from the candidate quad faces.
-
-## Parameters
-    face2edge (ndarray): [T, 3] face to edge relation
-    edge2face (ndarray): [E, 2] edge to face relation
-    quad2adj (ndarray): [Q, 8] adjacent quad faces of each quad face
-    quads_distortion (ndarray): [Q] distortion of each quad face
-    quads_smoothness (ndarray): [Q, 8] smoothness of each quad face connection
-    quads_valid (ndarray): [E] whether the quad corresponding to the edge is valid
-
-## Returns
-    weights (ndarray): [Q] weight of each valid quad face"""
-    utils3d.numpy.mesh.solve_quad_qp
-
-@overload
-def tri_to_quad(vertices: numpy_.ndarray, faces: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Convert a triangle mesh to a quad mesh.
-NOTE: The input mesh must be a manifold mesh.
-
-## Parameters
-    vertices (ndarray): [N, 3] 3-dimensional vertices
-    faces (ndarray): [T, 3] triangular face indices
-
-## Returns
-    vertices (ndarray): [N_, 3] 3-dimensional vertices
-    faces (ndarray): [Q, 4] quad face indices"""
-    utils3d.numpy.mesh.tri_to_quad
 
 @overload
 def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
@@ -1687,7 +1654,7 @@ def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int) -> tor
     utils3d.torch.utils.segment_roll
 
 @overload
-def csr_matrix_from_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:
+def csr_matrix_from_dense_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
 ## Parameters
@@ -1697,13 +1664,29 @@ def csr_matrix_from_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tenso
 
 ## Returns
     Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
-    utils3d.torch.utils.csr_matrix_from_indices
+    utils3d.torch.utils.csr_matrix_from_dense_indices
 
 @overload
 def csr_eliminate_zeros(input: torch_.Tensor):
     """Remove zero elements from a sparse CSR tensor.
     """
     utils3d.torch.utils.csr_eliminate_zeros
+
+@overload
+def split_groups_by_labels(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
+    """Split the data into groups based on the provided labels.
+
+## Parameters
+    - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+    - `data` (Tensor, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+        If None, return the indices in each group instead.
+
+## Returns
+    - groups (List[Tuple[Tensor, Tensor]]): List of length G. Each element is a tuple of (label, data_in_group).
+        - `label` (Tensor): shape (*label_dims,) the label of the group.
+        - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
+        If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
+    utils3d.torch.utils.split_groups_by_labels
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
@@ -2411,21 +2394,15 @@ def compute_face_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vert
     utils3d.torch.mesh.compute_face_tangents
 
 @overload
-def mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edge: bool = False, return_edge2face: bool = False, return_opposite_edge: bool = False, return_counts: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, ...]]:
-    """Get edges of a mesh. Optionally return additional mappings.
+def mesh_edges(faces: torch_.Tensor, return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Get undirected edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
 - `faces` (Tensor): polygon faces
-    - `(F, P)` dense tensor of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr tensor of indices, each row corresponds to the vertices of a face.
-- `directed` (bool): whether the edges are directed or not. (half edge)
-    - If `False` (default), edges will be viewed as undirected, (i.e (a, b) is the same as (b, a)).
-        Returned edges (a, b) are in the form a < b.
-    - If `True`, edges will be viewed as directed by the face loop. 
-        Edges of opposite direction will be considered different.
+    - `(F, P)` dense array of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
-- `return_opposite_edge` (bool): whether to return the opposite edge mapping. Only supported when `directed` is True.
 - `return_counts` (bool): whether to return the counts of edges
 
 ## Returns
@@ -2434,13 +2411,43 @@ def mesh_edges(faces: torch_.Tensor, directed: bool = False, return_face2edge: b
 If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
 
 - `face2edge` (Tensor): mapping from faces to the indices of edges
-    - `(F, P)` if input `faces` is a dense tensor
-    - `(F, E)` if input `faces` is a sparse csr tensor
+    - `(F, P)` if input `faces` is a dense array
+    - `(F, E)` if input `faces` is a sparse csr array
 - `edge2face` (Tensor): `(E, F)` binary sparse CSR matrix of edge to face.
-- `opposite_edge` (Tensor): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
-    If directed edge is not unique, the mapping will only present one of the opposite edges.
 - `counts` (Tensor): `(E,)` counts of each edge"""
     utils3d.torch.mesh.mesh_edges
+
+@overload
+def mesh_half_edges(faces: torch_.Tensor, return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Get half edges of a mesh. Optionally return additional mappings.
+
+## Parameters
+- `faces` (Tensor): polygon faces
+    - `(F, P)` dense array of indices, where each face has `P` vertices.
+    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `return_face2edge` (bool): whether to return the face to edge mapping
+- `return_edge2face` (bool): whether to return the edge to face mapping
+- `return_twin` (bool): whether to return the mapping from one edge to its opposite/twin edge
+- `return_next` (bool): whether to return the mapping from one edge to its next edge in the face loop
+- `return_prev` (bool): whether to return the mapping from one edge to its previous edge in the face loop
+- `return_counts` (bool): whether to return the counts of edges
+
+## Returns
+- `edges` (Tensor): `(E, 2)` unique edges' vertex indices
+
+If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_counts` is True, the corresponding outputs will be appended in order:
+
+- `face2edge` (Tensor | Tensor): mapping from faces to the indices of edges
+    - `(F, P)` if input `faces` is a dense array
+    - `(F, E)` if input `faces` is a sparse csr array
+- `edge2face` (Tensor): `(E, F)` binary sparse CSR matrix of edge to face.
+- `twin` (Tensor): `(E,)` mapping from edges to indices of opposite edges. -1 if not found. 
+- `next` (Tensor): `(E,)` mapping from edges to indices of next edges in the face loop.
+- `prev` (Tensor): `(E,)` mapping from edges to indices of previous edges in the face loop.
+- `counts` (Tensor): `(E,)` counts of each half edge
+
+NOTE: If the mesh is not manifold, `twin`, `next`, and `prev` can point to arbitrary one of the candidates."""
+    utils3d.torch.mesh.mesh_half_edges
 
 @overload
 def mesh_dual_graph(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:

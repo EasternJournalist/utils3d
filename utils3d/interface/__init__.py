@@ -10,7 +10,8 @@ __all__ = ["sliding_window",
 "max_pool_nd", 
 "lookup", 
 "segment_roll", 
-"csr_matrix_from_indices", 
+"csr_matrix_from_dense_indices", 
+"split_groups_by_labels", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -73,21 +74,16 @@ __all__ = ["sliding_window",
 "remove_unused_vertices", 
 "subdivide_mesh", 
 "mesh_edges", 
+"mesh_half_edges", 
 "mesh_connected_components", 
 "graph_connected_components", 
+"mesh_adjacency_graph", 
 "flatten_mesh_indices", 
 "create_cube_mesh", 
 "create_icosahedron_mesh", 
 "create_square_mesh", 
 "create_camera_frustum_mesh", 
 "merge_meshes", 
-"calc_quad_candidates", 
-"calc_quad_distortion", 
-"calc_quad_direction", 
-"calc_quad_smoothness", 
-"solve_quad", 
-"solve_quad_qp", 
-"tri_to_quad", 
 "uv_map", 
 "pixel_coord_map", 
 "screen_coord_map", 
@@ -191,10 +187,16 @@ def segment_roll(*args, **kwargs):
     return _call_based_on_args('segment_roll', args, kwargs)
 
 @suppress_traceback
-def csr_matrix_from_indices(*args, **kwargs):
+def csr_matrix_from_dense_indices(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.csr_matrix_from_indices, utils3d.torch.csr_matrix_from_indices
-    return _call_based_on_args('csr_matrix_from_indices', args, kwargs)
+        utils3d.numpy.csr_matrix_from_dense_indices, utils3d.torch.csr_matrix_from_dense_indices
+    return _call_based_on_args('csr_matrix_from_dense_indices', args, kwargs)
+
+@suppress_traceback
+def split_groups_by_labels(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.split_groups_by_labels, utils3d.torch.split_groups_by_labels
+    return _call_based_on_args('split_groups_by_labels', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):
@@ -569,6 +571,12 @@ def mesh_edges(*args, **kwargs):
     return _call_based_on_args('mesh_edges', args, kwargs)
 
 @suppress_traceback
+def mesh_half_edges(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.mesh_half_edges, utils3d.torch.mesh_half_edges
+    return _call_based_on_args('mesh_half_edges', args, kwargs)
+
+@suppress_traceback
 def mesh_connected_components(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.mesh_connected_components, utils3d.torch.mesh_connected_components
@@ -579,6 +587,12 @@ def graph_connected_components(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.graph_connected_components, utils3d.torch.graph_connected_components
     return _call_based_on_args('graph_connected_components', args, kwargs)
+
+@suppress_traceback
+def mesh_adjacency_graph(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.mesh_adjacency_graph, None
+    return _call_based_on_args('mesh_adjacency_graph', args, kwargs)
 
 @suppress_traceback
 def flatten_mesh_indices(*args, **kwargs):
@@ -615,48 +629,6 @@ def merge_meshes(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.merge_meshes, None
     return _call_based_on_args('merge_meshes', args, kwargs)
-
-@suppress_traceback
-def calc_quad_candidates(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_candidates, None
-    return _call_based_on_args('calc_quad_candidates', args, kwargs)
-
-@suppress_traceback
-def calc_quad_distortion(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_distortion, None
-    return _call_based_on_args('calc_quad_distortion', args, kwargs)
-
-@suppress_traceback
-def calc_quad_direction(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_direction, None
-    return _call_based_on_args('calc_quad_direction', args, kwargs)
-
-@suppress_traceback
-def calc_quad_smoothness(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.calc_quad_smoothness, None
-    return _call_based_on_args('calc_quad_smoothness', args, kwargs)
-
-@suppress_traceback
-def solve_quad(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.solve_quad, None
-    return _call_based_on_args('solve_quad', args, kwargs)
-
-@suppress_traceback
-def solve_quad_qp(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.solve_quad_qp, None
-    return _call_based_on_args('solve_quad_qp', args, kwargs)
-
-@suppress_traceback
-def tri_to_quad(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.tri_to_quad, None
-    return _call_based_on_args('tri_to_quad', args, kwargs)
 
 @suppress_traceback
 def uv_map(*args, **kwargs):

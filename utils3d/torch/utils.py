@@ -16,8 +16,9 @@ __all__ = [
     'masked_max',
     'lookup',
     'segment_roll',
-    'csr_matrix_from_indices',
-    'csr_eliminate_zeros'
+    'csr_matrix_from_dense_indices',
+    'csr_eliminate_zeros',
+    'split_groups_by_labels'
 ]
 
 
@@ -141,7 +142,7 @@ def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_v
     return torch.where((result < key.shape[0])[:, *((None,) * (value.ndim - 1))], value[result.clamp(0, key.shape[0] - 1)], default_value)
 
 
-def csr_matrix_from_indices(indices: Tensor, n_cols: int) -> Tensor:
+def csr_matrix_from_dense_indices(indices: Tensor, n_cols: int) -> Tensor:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
     ## Parameters
@@ -204,3 +205,25 @@ def csr_roll_col_indices(input: Tensor, shift: int):
     col_indices = input.col_indices().gather(0, elem_indices)
     values = input.values().gather(0, elem_indices)
     return torch.sparse_csr_tensor(input.crow_indices(), col_indices, values, input.size())
+
+
+def split_groups_by_labels(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, Tensor]]:
+    """
+    Split the data into groups based on the provided labels.
+
+    ## Parameters
+        - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+        - `data` (Tensor, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+            If None, return the indices in each group instead.
+
+    ## Returns
+        - groups (List[Tuple[Tensor, Tensor]]): List of length G. Each element is a tuple of (label, data_in_group).
+            - `label` (Tensor): shape (*label_dims,) the label of the group.
+            - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
+            If `data` is None, `data_in_group` will be the indices of the data points in the original array.
+    """
+    group_labels, inv, counts = torch.unique(labels, return_inverse=True, return_counts=True, dim=0)
+    if data is None:
+        data = torch.arange(labels.shape[0], device=labels.device)
+    data_groups = torch.split(data[torch.argsort(inv)], counts.tolist())
+    return list(zip(group_labels, data_groups))

@@ -15,7 +15,8 @@ __modules_all__ = {
         'max_pool_nd',
         'lookup',
         'segment_roll',
-        'csr_matrix_from_indices',
+        'csr_matrix_from_dense_indices',
+        'split_groups_by_labels'
     ],
     'transforms': [
         'perspective_from_fov',
@@ -82,21 +83,16 @@ __modules_all__ = {
         'remove_unused_vertices',
         'subdivide_mesh',
         'mesh_edges',
+        'mesh_half_edges',
         'mesh_connected_components',
         'graph_connected_components',
+        'mesh_adjacency_graph',
         'flatten_mesh_indices',
         'create_cube_mesh',
         'create_icosahedron_mesh',
         'create_square_mesh',
         'create_camera_frustum_mesh',
         'merge_meshes',
-        'calc_quad_candidates',
-        'calc_quad_distortion',
-        'calc_quad_direction',
-        'calc_quad_smoothness',
-        'solve_quad',
-        'solve_quad_qp',
-        'tri_to_quad'
     ],
     'maps': [
         'uv_map',

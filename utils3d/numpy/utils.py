@@ -15,7 +15,8 @@ __all__ = [
     'max_pool_nd',
     'lookup',
     'segment_roll',
-    'csr_matrix_from_indices'
+    'csr_matrix_from_dense_indices',
+    'split_groups_by_labels'
 ]
 
 
@@ -163,7 +164,7 @@ def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:
     return data
 
 
-def csr_matrix_from_indices(indices: ndarray, n_cols: int) -> csr_array:
+def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> csr_array:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
     ## Parameters
@@ -178,3 +179,26 @@ def csr_matrix_from_indices(indices: ndarray, n_cols: int) -> csr_array:
         indices.ravel(),
         np.arange(0, indices.size + 1, indices.shape[1])
     ), shape=(indices.shape[0], n_cols))
+
+
+def split_groups_by_labels(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndarray, ndarray]]:
+    """
+    Split the data into groups based on the provided labels.
+
+    ## Parameters
+        - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+        - `data` (ndarray, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+            If None, return the indices in each group instead.
+
+    ## Returns
+        - groups (List[Tuple[ndarray, ndarray]]): List of length G. Each element is a tuple of (label, data_in_group).
+            - `label` (ndarray): shape (*label_dims,) the label of the group.
+            - `data_in_group` (ndarray): shape (M, *data_dims) the data points in the group.
+            If `data` is None, `data_in_group` will be the indices of the data points in the original array.
+    """
+    group_labels, inv, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
+    if data is None:
+        data = np.arange(labels.shape[0])
+    sections = np.cumsum(counts, axis=0)[:-1]
+    data_groups = np.split(data[np.argsort(inv)], sections)
+    return list(zip(group_labels, data_groups))

@@ -10,8 +10,9 @@ __modules_all__ = {
         'masked_max',
         'lookup',
         'segment_roll',
-        'csr_matrix_from_indices',
-        'csr_eliminate_zeros'
+        'csr_matrix_from_dense_indices',
+        'csr_eliminate_zeros',
+        'split_groups_by_labels'
     ],
     'transforms': [
         'perspective_from_fov',
@@ -72,6 +73,7 @@ __modules_all__ = {
         'compute_face_normals',
         'compute_face_tangents',
         'mesh_edges',
+        'mesh_half_edges',
         'mesh_dual_graph',
         'mesh_connected_components',
         'graph_connected_components',
