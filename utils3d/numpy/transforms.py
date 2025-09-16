@@ -1331,7 +1331,10 @@ def transform(x: ndarray, *Ts: ndarray) -> ndarray:
     # returns (T3 @ T2 @ T1 @ x.mT).mT
     ```
     """
+    D = x.shape[-1]
     x = np.concatenate([x, np.ones((*x.shape[:-1], 1), dtype=x.dtype)], axis=-1)
+    pad = np.array([0] * D + [1], dtype=x.dtype)
+    Ts = [np.concatenate([T, np.broadcast_to(pad, (*T.shape[:-2], 1, -1))], axis=-2) if T.shape[-2] == D else T for T in Ts]
     total_numel = sum(t.size for t in Ts) + x.size
     if total_numel > 1000:
         # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path

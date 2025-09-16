@@ -1280,7 +1280,10 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
     # returns (T3 @ T2 @ T1 @ x.mT).mT
     ```
     """
+    D = x.shape[-1]
     x = torch.cat([x, torch.ones((*x.shape[:-1], 1), dtype=x.dtype, device=x.device)], dim=-1)
+    pad = torch.tensor([0] * D + [1], dtype=x.dtype, device=x.device)
+    Ts = [torch.cat([T, pad.expand(*T.shape[:-2], 1, -1)], dim=-2) if T.shape[-2] == D else T for T in Ts]
     total_numel = sum(t.numel() for t in Ts) + x.numel()
     if total_numel > 1000:
         # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
