@@ -151,7 +151,8 @@ def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, defaul
     result = index[inverse[key.shape[0]:]]
     if value is None:
         return np.where(result < key.shape[0], result, -1)
-    return np.where((result < key.shape[0])[:, *((None,) * (value.ndim - 1))], value[result.clip(0, key.shape[0] - 1)], default_value)
+    unsqueeze_slicing = tuple(slice(None), *((None,) * (value.ndim - 1)))
+    return np.where((result < key.shape[0])[unsqueeze_slicing], value[result.clip(0, key.shape[0] - 1)], default_value)
 
 
 def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:

@@ -813,17 +813,21 @@ def piecewise_interpolate_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: nu
 @overload
 def transform(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
     """Apply affine transformation(s) to a point or a set of points.
+It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+1. Automatically handle the homogeneous coordinate;
+2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
 
 ## Parameters
-- `x`: ndarray, shape (..., D): the point or a set of points to be transformed.
-- `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
+- `x`: ndarray, shape `(..., N, D)`: the points to be transformed.
+- `Ts`: ndarray, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
     If more than one transformation is given, they will be applied in corresponding order.
 ## Returns
-- `y`: ndarray, shape (..., D): the transformed point or a set of points.
+- `y`: ndarray, shape `(..., N, D)`: the transformed point or a set of points.
 
 ## Example Usage
 ```
 y = transform(x, T1, T2, T3)
+# returns (T3 @ T2 @ T1 @ x.mT).mT
 ```"""
     utils3d.numpy.transforms.transform
 
@@ -2281,17 +2285,21 @@ def scale_2d(scale: Union[float, torch_.Tensor], center: torch_.Tensor = None):
 @overload
 def transform(x: torch_.Tensor, *Ts: torch_.Tensor) -> torch_.Tensor:
     """Apply affine transformation(s) to a point or a set of points.
+It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+1. Automatically handle the homogeneous coordinate;
+2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
 
 ## Parameters
-- `x`: Tensor, shape (..., D): the point or a set of points to be transformed.
-- `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
+- `x`: Tensor, shape `(..., N, D)`: the points to be transformed.
+- `Ts`: Tensor, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
     If more than one transformation is given, they will be applied in corresponding order.
 ## Returns
-- `y`: Tensor, shape (..., D): the transformed point or a set of points.
+- `y`: Tensor, shape `(..., N, D)`: the transformed point or a set of points.
 
 ## Example Usage
 ```
 y = transform(x, T1, T2, T3)
+# returns (T3 @ T2 @ T1 @ x.mT).mT
 ```"""
     utils3d.torch.transforms.transform
 

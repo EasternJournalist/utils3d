@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import ndarray
 from typing import *
+import itertools
 from numbers import Number
 from ._helpers import toarray, batched
 from .._helpers import no_warnings
@@ -1313,24 +1314,52 @@ def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapo
 def transform(x: ndarray, *Ts: ndarray) -> ndarray:
     """
     Apply affine transformation(s) to a point or a set of points.
+    It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+    1. Automatically handle the homogeneous coordinate;
+    2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
 
     ## Parameters
-    - `x`: ndarray, shape (..., D): the point or a set of points to be transformed.
-    - `Ts`: ndarray, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
+    - `x`: ndarray, shape `(..., N, D)`: the points to be transformed.
+    - `Ts`: ndarray, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
-    - `y`: ndarray, shape (..., D): the transformed point or a set of points.
+    - `y`: ndarray, shape `(..., N, D)`: the transformed point or a set of points.
 
     ## Example Usage
     ```
     y = transform(x, T1, T2, T3)
+    # returns (T3 @ T2 @ T1 @ x.mT).mT
     ```
     """
-    y = np.concatenate([x, np.ones_like(x[..., :1])], axis=-1)[..., None]
-    for T in Ts:
-        y = T @ y
-    return y[..., :3, 0]
-
+    x = np.concatenate([x, np.ones((*x.shape[:-1], 1), dtype=x.dtype)], axis=-1)
+    total_numel = sum(t.size for t in Ts) + x.size
+    if total_numel > 1000:
+        # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
+        operands = [x, *(T.mT for T in Ts)]
+        offset = len(operands) + 1
+        batch_shape = np.broadcast_shapes(*(m.shape[:-2] for m in operands))
+        batch_subscripts = tuple(range(offset, offset + len(batch_shape)))
+        # Broadcasted size 1 dimensions can be squeezed to avoid redundant broadcasting in einsum
+        subscripts, squeezed_operands = [], []
+        for i, m in enumerate(operands):
+            squeezable = tuple(b_m == 1 and b > 1 for b_m, b in zip(m.shape[:-2], batch_shape[len(batch_shape) - (m.ndim - 2):]))
+            squeezed_operands.append(
+                m.squeeze(axis=tuple(j for j, s in enumerate(squeezable) if s))
+            )
+            subscripts.append(
+                (*tuple(j for j, s in zip(batch_subscripts[len(batch_shape) - (m.ndim - 2):], squeezable) if not s), i, i + 1)
+            )
+        y = np.einsum(
+            *itertools.chain(*zip(squeezed_operands, subscripts)), 
+            (*range(offset, offset + len(batch_shape)), 0, len(operands)), 
+            optimize="optimal"
+        )
+    else:
+        y = x
+        for T in Ts:
+            y = y @ T.mT
+    return y[..., :-1]
+    
 
 def angle_between(v1: ndarray, v2: ndarray):
     """

@@ -1,5 +1,6 @@
 from typing import *
 from numbers import Number 
+import itertools
 
 import torch
 from torch import Tensor
@@ -1262,23 +1263,50 @@ def scale_2d(scale: Union[float, Tensor], center: Tensor = None):
 def transform(x: Tensor, *Ts: Tensor) -> Tensor:
     """
     Apply affine transformation(s) to a point or a set of points.
+    It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+    1. Automatically handle the homogeneous coordinate;
+    2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
 
     ## Parameters
-    - `x`: Tensor, shape (..., D): the point or a set of points to be transformed.
-    - `Ts`: Tensor, shape (..., D + 1, D + 1): the affine transformation matrix (matrices)
+    - `x`: Tensor, shape `(..., N, D)`: the points to be transformed.
+    - `Ts`: Tensor, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
-    - `y`: Tensor, shape (..., D): the transformed point or a set of points.
+    - `y`: Tensor, shape `(..., N, D)`: the transformed point or a set of points.
 
     ## Example Usage
     ```
     y = transform(x, T1, T2, T3)
+    # returns (T3 @ T2 @ T1 @ x.mT).mT
     ```
     """
-    y = torch.cat([x, torch.ones_like(x[..., :1])], dim=-1)[..., None]
-    for T in Ts:
-        y = T @ y
-    return y[..., :3, 0]
+    x = torch.cat([x, torch.ones((*x.shape[:-1], 1), dtype=x.dtype, device=x.device)], dim=-1)
+    total_numel = sum(t.numel() for t in Ts) + x.numel()
+    if total_numel > 1000:
+        # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
+        operands = [x, *(T.mT for T in Ts)]
+        offset = len(operands) + 1
+        batch_shape = torch.broadcast_shapes(*(m.shape[:-2] for m in operands))
+        batch_subscripts = tuple(range(offset, offset + len(batch_shape)))
+        # Broadcasted size 1 dimensions can be squeezed to avoid redundant broadcasting in einsum
+        subscripts, squeezed_operands = [], []
+        for i, m in enumerate(operands):
+            squeezable = tuple(b_m == 1 and b > 1 for b_m, b in zip(m.shape[:-2], batch_shape[len(batch_shape) - (m.ndim - 2):]))
+            squeezed_operands.append(
+                m.squeeze(axis=tuple(j for j, s in enumerate(squeezable) if s))
+            )
+            subscripts.append(
+                (*tuple(j for j, s in zip(batch_subscripts[len(batch_shape) - (m.ndim - 2):], squeezable) if not s), i, i + 1)
+            )
+        y = torch.einsum(
+            *itertools.chain(*zip(squeezed_operands, subscripts)), 
+            (*range(offset, offset + len(batch_shape)), 0, len(operands)), 
+        )
+    else:
+        y = x
+        for T in Ts:
+            y = y @ T.mT
+    return y[..., :-1]
 
 
 def angle_between(v1: Tensor, v2: Tensor, eps: float = 1e-8) -> Tensor:

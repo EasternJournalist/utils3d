@@ -892,8 +892,8 @@ def mesh_adjacency_graph(
         if isinstance(faces, csr_array):
             f2v = faces
         else:
-            vertices_ids, faces = np.unique(faces.reshape(-1), return_inverse=True)
-            faces = faces.reshape(-1, faces.shape[1])
+            vertices_ids, inv = np.unique(faces.reshape(-1), return_inverse=True)
+            faces = inv.reshape(-1, faces.shape[1])
             f2v = csr_matrix_from_dense_indices(faces, len(vertices_ids))
         f2v2f = (f2v @ f2v.transpose()).tocsr()
         if not self_loop:

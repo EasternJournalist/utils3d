@@ -139,7 +139,8 @@ def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_v
     result = index.index_select(0, inverse[key.shape[0]:])
     if value is None:
         return torch.where(result < key.shape[0], result, -1)
-    return torch.where((result < key.shape[0])[:, *((None,) * (value.ndim - 1))], value[result.clamp(0, key.shape[0] - 1)], default_value)
+    unsqueeze_slicing = tuple(slice(None), *((None,) * (value.ndim - 1)))
+    return torch.where((result < key.shape[0])[unsqueeze_slicing], value[result.clamp(0, key.shape[0] - 1)], default_value)
 
 
 def csr_matrix_from_dense_indices(indices: Tensor, n_cols: int) -> Tensor:
