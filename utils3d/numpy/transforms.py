@@ -1314,16 +1314,16 @@ def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapo
 def transform(x: ndarray, *Ts: ndarray) -> ndarray:
     """
     Apply affine transformation(s) to a point or a set of points.
-    It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+    It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
     1. Automatically handle the homogeneous coordinate;
     2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
 
     ## Parameters
-    - `x`: ndarray, shape `(..., N, D)`: the points to be transformed.
+    - `x`: ndarray, shape `(..., D)`: the points to be transformed.
     - `Ts`: ndarray, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
-    - `y`: ndarray, shape `(..., N, D)`: the transformed point or a set of points.
+    - `y`: ndarray, shape `(..., D)`: the transformed point or a set of points.
 
     ## Example Usage
     ```
@@ -1338,7 +1338,7 @@ def transform(x: ndarray, *Ts: ndarray) -> ndarray:
     total_numel = sum(t.size for t in Ts) + x.size
     if total_numel > 1000:
         # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
-        operands = [x, *(T.mT for T in Ts)]
+        operands = [*reversed(Ts), x[..., None]]
         offset = len(operands) + 1
         batch_shape = np.broadcast_shapes(*(m.shape[:-2] for m in operands))
         batch_subscripts = tuple(range(offset, offset + len(batch_shape)))
@@ -1357,10 +1357,12 @@ def transform(x: ndarray, *Ts: ndarray) -> ndarray:
             (*range(offset, offset + len(batch_shape)), 0, len(operands)), 
             optimize="optimal"
         )
+        y = y.squeeze(-1)
     else:
-        y = x
+        y = x[..., None]
         for T in Ts:
-            y = y @ T.mT
+            y = T @ y
+        y = y.squeeze(-1)
     return y[..., :-1]
     
 

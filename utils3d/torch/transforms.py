@@ -1263,16 +1263,16 @@ def scale_2d(scale: Union[float, Tensor], center: Tensor = None):
 def transform(x: Tensor, *Ts: Tensor) -> Tensor:
     """
     Apply affine transformation(s) to a point or a set of points.
-    It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+    It is like `(Tn @ ... @ T2 @ T1 @ x[:, None])`, but: 
     1. Automatically handle the homogeneous coordinate;
     2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
 
     ## Parameters
-    - `x`: Tensor, shape `(..., N, D)`: the points to be transformed.
+    - `x`: Tensor, shape `(..., D)`: the points to be transformed.
     - `Ts`: Tensor, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
-    - `y`: Tensor, shape `(..., N, D)`: the transformed point or a set of points.
+    - `y`: Tensor, shape `(..., D)`: the transformed point or a set of points.
 
     ## Example Usage
     ```
@@ -1287,7 +1287,7 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
     total_numel = sum(t.numel() for t in Ts) + x.numel()
     if total_numel > 1000:
         # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
-        operands = [x, *(T.mT for T in Ts)]
+        operands = [*reversed(Ts), x[:, None]]
         offset = len(operands) + 1
         batch_shape = torch.broadcast_shapes(*(m.shape[:-2] for m in operands))
         batch_subscripts = tuple(range(offset, offset + len(batch_shape)))
@@ -1305,10 +1305,12 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
             *itertools.chain(*zip(squeezed_operands, subscripts)), 
             (*range(offset, offset + len(batch_shape)), 0, len(operands)), 
         )
+        y = y.squeeze(-1)
     else:
-        y = x
+        y = x[:, None]
         for T in Ts:
-            y = y @ T.mT
+            y = T @ y
+        y = y.squeeze(-1)
     return y[..., :-1]
 
 
