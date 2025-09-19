@@ -1314,7 +1314,7 @@ def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapo
 def transform_points(x: ndarray, *Ts: ndarray) -> ndarray:
     """
     Apply transformation(s) to a point or a set of points.
-    It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
+    It is like `(Tn @ ... @ T2 @ T1 @ x[:, None]).squeeze(0)`, but: 
     1. Automatically handle the homogeneous coordinate;
             - x will be padded with homogeneous coordinate 1.
             - Each T will be padded by identity matrix to match the dimension. 
@@ -1328,9 +1328,24 @@ def transform_points(x: ndarray, *Ts: ndarray) -> ndarray:
     - `y`: ndarray, shape `(..., D)`: the transformed point or a set of points.
 
     ## Example Usage
-    ```
-    y = transform(x, T1, T2, T3) # Apply T1, then T2, then T3 to x.
-    ```
+    
+    - Just linear transformation
+
+        ```
+        y = transform(x_3, mat_3x3) 
+        ```
+
+    - Affine transformation
+
+        ```
+        y = transform(x_3, mat_3x4)
+        ```
+
+    - Chain multiple transformations
+
+        ```
+        y = transform(x_3, T1_4x4, T2_3x4, T3_3x4)
+        ```
     """
     input_dim = x.shape[-1]
     pad_dim = max(max(max(T.shape[-2:]) for T in Ts), x.shape[-1])
