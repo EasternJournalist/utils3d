@@ -60,7 +60,7 @@ __all__ = ["sliding_window",
 "interpolate_se3_matrix", 
 "piecewise_lerp", 
 "piecewise_interpolate_se3_matrix", 
-"transform", 
+"transform_points", 
 "angle_between", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -487,10 +487,10 @@ def piecewise_interpolate_se3_matrix(*args, **kwargs):
     return _call_based_on_args('piecewise_interpolate_se3_matrix', args, kwargs)
 
 @suppress_traceback
-def transform(*args, **kwargs):
+def transform_points(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.transform, utils3d.torch.transform
-    return _call_based_on_args('transform', args, kwargs)
+        utils3d.numpy.transform_points, utils3d.torch.transform_points
+    return _call_based_on_args('transform_points', args, kwargs)
 
 @suppress_traceback
 def angle_between(*args, **kwargs):

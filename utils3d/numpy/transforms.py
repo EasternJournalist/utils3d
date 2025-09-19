@@ -56,7 +56,7 @@ __all__ = [
     'interpolate_se3_matrix',
     'piecewise_lerp',
     'piecewise_interpolate_se3_matrix',
-    'transform',
+    'transform_points',
     'angle_between'
 ]
 
@@ -1311,30 +1311,38 @@ def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapo
     return T
 
 
-def transform(x: ndarray, *Ts: ndarray) -> ndarray:
+def transform_points(x: ndarray, *Ts: ndarray) -> ndarray:
     """
-    Apply affine transformation(s) to a point or a set of points.
+    Apply transformation(s) to a point or a set of points.
     It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
     1. Automatically handle the homogeneous coordinate;
-    2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
-
+            - x will be padded with homogeneous coordinate 1.
+            - Each T will be padded by identity matrix to match the dimension. 
+    2. Using efficient contraction path when array sizes are large, based on `einsum`.
+    
     ## Parameters
     - `x`: ndarray, shape `(..., D)`: the points to be transformed.
-    - `Ts`: ndarray, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
+    - `Ts`: ndarray, shape `(..., D1, D2)`: the affine transformation matrix (matrices)
         If more than one transformation is given, they will be applied in corresponding order.
     ## Returns
     - `y`: ndarray, shape `(..., D)`: the transformed point or a set of points.
 
     ## Example Usage
     ```
-    y = transform(x, T1, T2, T3)
-    # returns (T3 @ T2 @ T1 @ x.mT).mT
+    y = transform(x, T1, T2, T3) # Apply T1, then T2, then T3 to x.
     ```
     """
-    D = x.shape[-1]
-    x = np.concatenate([x, np.ones((*x.shape[:-1], 1), dtype=x.dtype)], axis=-1)
-    pad = np.array([0] * D + [1], dtype=x.dtype)
-    Ts = [np.concatenate([T, np.broadcast_to(pad, (*T.shape[:-2], 1, -1))], axis=-2) if T.shape[-2] == D else T for T in Ts]
+    input_dim = x.shape[-1]
+    pad_dim = max(max(max(T.shape[-2:]) for T in Ts), x.shape[-1])
+    x = np.concatenate([x, np.ones((*x.shape[:-1], pad_dim - x.shape[-1]), dtype=x.dtype)], axis=-1)
+    I = np.eye(pad_dim, dtype=x.dtype)
+    Ts = [
+        np.concatenate([
+            np.concatenate([T, np.broadcast_to(I[:T.shape[-2], T.shape[-1]:], (*T.shape[:-2], T.shape[-2], pad_dim - T.shape[-1]))], axis=-1),
+            np.broadcast_to(I[T.shape[-2]:, :], (*T.shape[:-2], pad_dim - T.shape[-2], pad_dim))
+        ], axis=-2)
+        for T in Ts
+    ]
     total_numel = sum(t.size for t in Ts) + x.size
     if total_numel > 1000:
         # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
@@ -1363,7 +1371,7 @@ def transform(x: ndarray, *Ts: ndarray) -> ndarray:
         for T in Ts:
             y = T @ y
         y = y.squeeze(-1)
-    return y[..., :-1]
+    return y[..., :input_dim]
     
 
 def angle_between(v1: ndarray, v2: ndarray):

@@ -57,7 +57,7 @@ __all__ = [
     'rotate_2d',
     'translate_2d',
     'scale_2d',
-    'transform',
+    'transform_points',
     'angle_between'
 ]
 
@@ -1260,12 +1260,14 @@ def scale_2d(scale: Union[float, Tensor], center: Tensor = None):
     ], dim=-2)
 
 
-def transform(x: Tensor, *Ts: Tensor) -> Tensor:
+def transform_points(x: Tensor, *Ts: Tensor) -> Tensor:
     """
-    Apply affine transformation(s) to a point or a set of points.
-    It is like `(Tn @ ... @ T2 @ T1 @ x[:, None])`, but: 
+    Apply transformation(s) to a point or a set of points.
+    It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
     1. Automatically handle the homogeneous coordinate;
-    2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
+            - x will be padded with homogeneous coordinate 1.
+            - Each T will be padded by identity matrix to match the dimension. 
+    2. Using efficient contraction path when array sizes are large, based on `einsum`.
 
     ## Parameters
     - `x`: Tensor, shape `(..., D)`: the points to be transformed.
@@ -1280,10 +1282,17 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
     # returns (T3 @ T2 @ T1 @ x.mT).mT
     ```
     """
-    D = x.shape[-1]
-    x = torch.cat([x, torch.ones((*x.shape[:-1], 1), dtype=x.dtype, device=x.device)], dim=-1)
-    pad = torch.tensor([0] * D + [1], dtype=x.dtype, device=x.device)
-    Ts = [torch.cat([T, pad.expand(*T.shape[:-2], 1, -1)], dim=-2) if T.shape[-2] == D else T for T in Ts]
+    input_dim = x.shape[-1]
+    pad_dim = max(max(max(T.shape[-2:]) for T in Ts), x.shape[-1])
+    x = torch.cat([x, torch.ones((*x.shape[:-1], pad_dim - x.shape[-1]), dtype=x.dtype, device=x.device)], dim=-1)
+    I = torch.eye(pad_dim, dtype=x.dtype, device=x.device)
+    Ts = [
+        torch.cat([
+            torch.cat([T, I[:T.shape[-2], T.shape[-1]:].expand(*T.shape[:-2], -1, -1)], dim=-1),
+            I[T.shape[-2]:, :].expand(*T.shape[:-2], -1, -1)
+        ], dim=-2)
+        for T in Ts
+    ]
     total_numel = sum(t.numel() for t in Ts) + x.numel()
     if total_numel > 1000:
         # Only use einsum when the total number of elements is large enough to benefit from optimized contraction path
@@ -1311,7 +1320,7 @@ def transform(x: Tensor, *Ts: Tensor) -> Tensor:
         for T in Ts:
             y = T @ y
         y = y.squeeze(-1)
-    return y[..., :-1]
+    return y[..., :input_dim]
 
 
 def angle_between(v1: Tensor, v2: Tensor, eps: float = 1e-8) -> Tensor:

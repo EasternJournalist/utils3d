@@ -63,7 +63,7 @@ __all__ = ["sliding_window",
 "interpolate_se3_matrix", 
 "piecewise_lerp", 
 "piecewise_interpolate_se3_matrix", 
-"transform", 
+"transform_points", 
 "angle_between", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -811,25 +811,26 @@ def piecewise_interpolate_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: nu
     utils3d.numpy.transforms.piecewise_interpolate_se3_matrix
 
 @overload
-def transform(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
-    """Apply affine transformation(s) to a point or a set of points.
-It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+def transform_points(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
+    """Apply transformation(s) to a point or a set of points.
+It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
 1. Automatically handle the homogeneous coordinate;
-2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
+        - x will be padded with homogeneous coordinate 1.
+        - Each T will be padded by identity matrix to match the dimension. 
+2. Using efficient contraction path when array sizes are large, based on `einsum`.
 
 ## Parameters
-- `x`: ndarray, shape `(..., N, D)`: the points to be transformed.
-- `Ts`: ndarray, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
+- `x`: ndarray, shape `(..., D)`: the points to be transformed.
+- `Ts`: ndarray, shape `(..., D1, D2)`: the affine transformation matrix (matrices)
     If more than one transformation is given, they will be applied in corresponding order.
 ## Returns
-- `y`: ndarray, shape `(..., N, D)`: the transformed point or a set of points.
+- `y`: ndarray, shape `(..., D)`: the transformed point or a set of points.
 
 ## Example Usage
 ```
-y = transform(x, T1, T2, T3)
-# returns (T3 @ T2 @ T1 @ x.mT).mT
+y = transform(x, T1, T2, T3) # Apply T1, then T2, then T3 to x.
 ```"""
-    utils3d.numpy.transforms.transform
+    utils3d.numpy.transforms.transform_points
 
 @overload
 def angle_between(v1: numpy_.ndarray, v2: numpy_.ndarray):
@@ -2283,25 +2284,27 @@ def scale_2d(scale: Union[float, torch_.Tensor], center: torch_.Tensor = None):
     utils3d.torch.transforms.scale_2d
 
 @overload
-def transform(x: torch_.Tensor, *Ts: torch_.Tensor) -> torch_.Tensor:
-    """Apply affine transformation(s) to a point or a set of points.
-It is like `(Tn @ ... @ T2 @ T1 @ x.mT).mT`, but: 
+def transform_points(x: torch_.Tensor, *Ts: torch_.Tensor) -> torch_.Tensor:
+    """Apply transformation(s) to a point or a set of points.
+It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
 1. Automatically handle the homogeneous coordinate;
-2. Using efficient contraction path when array sizes are large, based on `np.einsum`.
+        - x will be padded with homogeneous coordinate 1.
+        - Each T will be padded by identity matrix to match the dimension. 
+2. Using efficient contraction path when array sizes are large, based on `einsum`.
 
 ## Parameters
-- `x`: Tensor, shape `(..., N, D)`: the points to be transformed.
+- `x`: Tensor, shape `(..., D)`: the points to be transformed.
 - `Ts`: Tensor, shape `(..., D + 1, D + 1)`: the affine transformation matrix (matrices)
     If more than one transformation is given, they will be applied in corresponding order.
 ## Returns
-- `y`: Tensor, shape `(..., N, D)`: the transformed point or a set of points.
+- `y`: Tensor, shape `(..., D)`: the transformed point or a set of points.
 
 ## Example Usage
 ```
 y = transform(x, T1, T2, T3)
 # returns (T3 @ T2 @ T1 @ x.mT).mT
 ```"""
-    utils3d.torch.transforms.transform
+    utils3d.torch.transforms.transform_points
 
 @overload
 def angle_between(v1: torch_.Tensor, v2: torch_.Tensor, eps: float = 1e-08) -> torch_.Tensor:

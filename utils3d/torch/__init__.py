@@ -62,7 +62,7 @@ __modules_all__ = {
         'rotate_2d',
         'translate_2d',
         'scale_2d',
-        'transform',
+        'transform_points',
         'angle_between'
     ],
     'mesh': [

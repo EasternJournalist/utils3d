@@ -67,7 +67,7 @@ __modules_all__ = {
         'interpolate_se3_matrix',
         'piecewise_lerp',
         'piecewise_interpolate_se3_matrix',
-        'transform',
+        'transform_points',
         'angle_between'
     ],
     'mesh':[
