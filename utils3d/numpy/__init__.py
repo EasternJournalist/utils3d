@@ -57,6 +57,7 @@ __modules_all__ = {
         'matrix_to_axis_angle',
         'matrix_to_euler_angles',
         'quaternion_to_axis_angle',
+        'random_rotation_matrix',
         'skew_symmetric',
         'rotation_matrix_from_vectors',
         'ray_intersection',

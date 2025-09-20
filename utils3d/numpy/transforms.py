@@ -50,6 +50,7 @@ __all__ = [
     'rotation_matrix_from_vectors',
     'ray_intersection',
     'make_affine_matrix',
+    'random_rotation_matrix',
     'lerp',
     'slerp',
     'slerp_rotation_matrix',
@@ -779,7 +780,7 @@ def unproject(
         raise ValueError("Invalid combination of input parameters.")
 
 
-def quaternion_to_matrix(quaternion: ndarray, eps: float = 1e-12) -> ndarray:
+def quaternion_to_matrix(quaternion: ndarray) -> ndarray:
     """Converts a batch of quaternions (w, x, y, z) to rotation matrices
     
     ## Parameters
@@ -789,7 +790,7 @@ def quaternion_to_matrix(quaternion: ndarray, eps: float = 1e-12) -> ndarray:
         ndarray: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
-    quaternion = quaternion / np.linalg.norm(quaternion, axis=-1, keepdims=True).clip(min=eps)
+    quaternion = quaternion / np.maximum(np.linalg.norm(quaternion, axis=-1, keepdims=True), np.finfo(quaternion.dtype).tiny)
     w, x, y, z = quaternion[..., 0], quaternion[..., 1], quaternion[..., 2], quaternion[..., 3]
     zeros = np.zeros_like(w)
     I = np.eye(3, dtype=quaternion.dtype)
@@ -804,7 +805,7 @@ def quaternion_to_matrix(quaternion: ndarray, eps: float = 1e-12) -> ndarray:
     return rot_mat
 
 
-def matrix_to_quaternion(rot_mat: ndarray, eps: float = 1e-12) -> ndarray:
+def matrix_to_quaternion(rot_mat: ndarray) -> ndarray:
     """Convert 3x3 rotation matrix to quaternion (w, x, y, z)
 
     ## Parameters
@@ -846,11 +847,11 @@ def matrix_to_quaternion(rot_mat: ndarray, eps: float = 1e-12) -> ndarray:
         )
     )
     quat = sign * wxyz
-    quat = quat / np.linalg.norm(quat, axis=-1, keepdims=True).clip(min=eps)
+    quat = quat / np.maximum(np.linalg.norm(quat, axis=-1, keepdims=True), np.finfo(quat.dtype).tiny)
     return quat
 
 
-def quaternion_to_axis_angle(quaternion: ndarray, eps: float = 1e-12) -> ndarray:
+def quaternion_to_axis_angle(quaternion: ndarray) -> ndarray:
     """Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector)
 
     ## Parameters
@@ -861,12 +862,12 @@ def quaternion_to_axis_angle(quaternion: ndarray, eps: float = 1e-12) -> ndarray
     """
     assert quaternion.shape[-1] == 4
     norm = np.linalg.norm(quaternion[..., 1:], axis=-1, keepdims=True)
-    axis = quaternion[..., 1:] / np.maximum(norm, eps)
+    axis = quaternion[..., 1:] / np.maximum(norm, np.finfo(quaternion.dtype).tiny)
     angle = 2 * np.atan2(norm, quaternion[..., 0:1])
     return angle * axis
 
 
-def matrix_to_axis_angle(rot_mat: ndarray, eps: float = 1e-12) -> ndarray:
+def matrix_to_axis_angle(rot_mat: ndarray) -> ndarray:
     """Convert a batch of 3x3 rotation matrices to axis-angle representation (rotation vector)
 
     ## Parameters
@@ -876,7 +877,7 @@ def matrix_to_axis_angle(rot_mat: ndarray, eps: float = 1e-12) -> ndarray:
         ndarray: shape (..., 3), the axis-angle vectors corresponding to the given rotation matrices
     """
     quat = matrix_to_quaternion(rot_mat)
-    axis_angle = quaternion_to_axis_angle(quat, eps=eps)
+    axis_angle = quaternion_to_axis_angle(quat)
     return axis_angle
 
 
@@ -983,7 +984,7 @@ def rotation_matrix_from_vectors(v1: ndarray, v2: ndarray):
     return R
 
 
-def axis_angle_to_matrix(axis_angle: ndarray, eps: float = 1e-12) -> ndarray:
+def axis_angle_to_matrix(axis_angle: ndarray) -> ndarray:
     """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
 
     ## Parameters
@@ -996,7 +997,7 @@ def axis_angle_to_matrix(axis_angle: ndarray, eps: float = 1e-12) -> ndarray:
     dtype = axis_angle.dtype
 
     angle = np.linalg.norm(axis_angle, axis=-1, keepdims=True) 
-    axis = axis_angle / (angle + eps)
+    axis = axis_angle / np.maximum(angle, np.finfo(dtype).tiny)
 
     cos = np.cos(angle)[..., None, :]
     sin = np.sin(angle)[..., None, :]
@@ -1010,7 +1011,7 @@ def axis_angle_to_matrix(axis_angle: ndarray, eps: float = 1e-12) -> ndarray:
     return rot_mat
 
 
-def axis_angle_to_quaternion(axis_angle: ndarray, eps: float = 1e-12) -> ndarray:
+def axis_angle_to_quaternion(axis_angle: ndarray) -> ndarray:
     """Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z)
 
     ## Parameters
@@ -1020,7 +1021,7 @@ def axis_angle_to_quaternion(axis_angle: ndarray, eps: float = 1e-12) -> ndarray
         ndarray: shape (..., 4) The quaternions for the given axis-angle parameters
     """
     angle = np.linalg.norm(axis_angle, axis=-1, keepdims=True)
-    axis = axis_angle / (angle + eps)
+    axis = axis_angle / np.maximum(angle, np.finfo(axis_angle.dtype).tiny)
     quat = np.concatenate([np.cos(angle / 2), np.sin(angle / 2) * axis], axis=-1)
     return quat
 
@@ -1094,6 +1095,22 @@ def matrix_to_euler_angles(matrix: ndarray, convention: str) -> ndarray:
         ),
     ]
     return np.stack([o[convention.index(c)] for c in 'XYZ'], -1)
+
+
+def random_rotation_matrix(*size: np.ndarray, dtype=np.float32) -> ndarray:
+    """
+    Generate random 3D rotation matrix.
+
+    ## Parameters
+        dtype: The data type of the output rotation matrix.
+
+    ## Returns
+        ndarray: `(*size, 3, 3)` random rotation matrix.
+    """
+    if len(size) == 1 and isinstance(size[0], (tuple, list)):
+        size = size[0]
+    rand_quat = np.random.randn(*size, 4).astype(dtype)
+    return quaternion_to_matrix(rand_quat)
 
 
 def ray_intersection(p1: ndarray, d1: ndarray, p2: ndarray, d2: ndarray):
@@ -1201,14 +1218,14 @@ def slerp(v1: ndarray, v2: ndarray, t: ndarray) -> ndarray:
     ## Returns
         ndarray: `(..., N, D)` interpolated unit vector
     """
-    v1 = v1 / np.maximum(np.linalg.norm(v1, axis=-1, keepdims=True), np.finfo(v1.dtype).eps)
-    v2 = v2 / np.maximum(np.linalg.norm(v2, axis=-1, keepdims=True), np.finfo(v2.dtype).eps)
+    v1 = v1 / np.maximum(np.linalg.norm(v1, axis=-1, keepdims=True), np.finfo(v1.dtype).tiny)
+    v2 = v2 / np.maximum(np.linalg.norm(v2, axis=-1, keepdims=True), np.finfo(v2.dtype).tiny)
     cos = np.sum(v1 * v2, axis=-1)
     v_ortho1 = v2 - v1 * cos[..., None]
     v_ortho2 = v1 - v2 * cos[..., None]
     sin = np.minimum(np.linalg.norm(v_ortho1, axis=-1), np.linalg.norm(v_ortho2, axis=-1))
     theta = np.atan2(sin, cos)[..., None] * t
-    v_ortho1 = v_ortho1 / np.maximum(np.linalg.norm(v_ortho1, axis=-1, keepdims=True), np.finfo(v1.dtype).eps)
+    v_ortho1 = v_ortho1 / np.maximum(np.linalg.norm(v_ortho1, axis=-1, keepdims=True), np.finfo(v1.dtype).tiny)
     v = v1[..., None, :] * np.cos(theta)[..., None] + v_ortho1[..., None, :] * np.sin(theta)[..., None]
     return v
 

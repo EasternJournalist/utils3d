@@ -53,6 +53,7 @@ __all__ = ["sliding_window",
 "matrix_to_axis_angle", 
 "matrix_to_euler_angles", 
 "quaternion_to_axis_angle", 
+"random_rotation_matrix", 
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
@@ -579,7 +580,7 @@ def screen_coord_to_view_coord(screen_coord: numpy_.ndarray, projection: numpy_.
     utils3d.numpy.transforms.screen_coord_to_view_coord
 
 @overload
-def quaternion_to_matrix(quaternion: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def quaternion_to_matrix(quaternion: numpy_.ndarray) -> numpy_.ndarray:
     """Converts a batch of quaternions (w, x, y, z) to rotation matrices
 
 ## Parameters
@@ -590,7 +591,7 @@ def quaternion_to_matrix(quaternion: numpy_.ndarray, eps: float = 1e-12) -> nump
     utils3d.numpy.transforms.quaternion_to_matrix
 
 @overload
-def axis_angle_to_matrix(axis_angle: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def axis_angle_to_matrix(axis_angle: numpy_.ndarray) -> numpy_.ndarray:
     """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
 
 ## Parameters
@@ -601,7 +602,7 @@ def axis_angle_to_matrix(axis_angle: numpy_.ndarray, eps: float = 1e-12) -> nump
     utils3d.numpy.transforms.axis_angle_to_matrix
 
 @overload
-def matrix_to_quaternion(rot_mat: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def matrix_to_quaternion(rot_mat: numpy_.ndarray) -> numpy_.ndarray:
     """Convert 3x3 rotation matrix to quaternion (w, x, y, z)
 
 ## Parameters
@@ -623,7 +624,7 @@ def extrinsics_to_essential(extrinsics: numpy_.ndarray):
     utils3d.numpy.transforms.extrinsics_to_essential
 
 @overload
-def axis_angle_to_quaternion(axis_angle: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def axis_angle_to_quaternion(axis_angle: numpy_.ndarray) -> numpy_.ndarray:
     """Convert axis-angle representation (rotation vector) to quaternion (w, x, y, z)
 
 ## Parameters
@@ -659,7 +660,7 @@ def euler_angles_to_matrix(euler_angles: numpy_.ndarray, convention: str = 'XYZ'
     utils3d.numpy.transforms.euler_angles_to_matrix
 
 @overload
-def matrix_to_axis_angle(rot_mat: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def matrix_to_axis_angle(rot_mat: numpy_.ndarray) -> numpy_.ndarray:
     """Convert a batch of 3x3 rotation matrices to axis-angle representation (rotation vector)
 
 ## Parameters
@@ -683,7 +684,7 @@ NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), inste
     utils3d.numpy.transforms.matrix_to_euler_angles
 
 @overload
-def quaternion_to_axis_angle(quaternion: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def quaternion_to_axis_angle(quaternion: numpy_.ndarray) -> numpy_.ndarray:
     """Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector)
 
 ## Parameters
@@ -692,6 +693,17 @@ def quaternion_to_axis_angle(quaternion: numpy_.ndarray, eps: float = 1e-12) -> 
 ## Returns
     ndarray: shape (..., 3), the axis-angle vectors corresponding to the given quaternions"""
     utils3d.numpy.transforms.quaternion_to_axis_angle
+
+@overload
+def random_rotation_matrix(*size: numpy_.ndarray, dtype=numpy_.float32) -> numpy_.ndarray:
+    """Generate random 3D rotation matrix.
+
+## Parameters
+    dtype: The data type of the output rotation matrix.
+
+## Returns
+    ndarray: `(*size, 3, 3)` random rotation matrix."""
+    utils3d.numpy.transforms.random_rotation_matrix
 
 @overload
 def skew_symmetric(v: numpy_.ndarray):
@@ -813,7 +825,7 @@ def piecewise_interpolate_se3_matrix(T: numpy_.ndarray, t: numpy_.ndarray, s: nu
 @overload
 def transform_points(x: numpy_.ndarray, *Ts: numpy_.ndarray) -> numpy_.ndarray:
     """Apply transformation(s) to a point or a set of points.
-It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
+It is like `(Tn @ ... @ T2 @ T1 @ x[:, None]).squeeze(0)`, but: 
 1. Automatically handle the homogeneous coordinate;
         - x will be padded with homogeneous coordinate 1.
         - Each T will be padded by identity matrix to match the dimension. 
@@ -827,9 +839,24 @@ It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but:
 - `y`: ndarray, shape `(..., D)`: the transformed point or a set of points.
 
 ## Example Usage
-```
-y = transform(x, T1, T2, T3) # Apply T1, then T2, then T3 to x.
-```"""
+
+- Just linear transformation
+
+    ```
+    y = transform(x_3, mat_3x3) 
+    ```
+
+- Affine transformation
+
+    ```
+    y = transform(x_3, mat_3x4)
+    ```
+
+- Chain multiple transformations
+
+    ```
+    y = transform(x_3, T1_4x4, T2_3x4, T3_3x4)
+    ```"""
     utils3d.numpy.transforms.transform_points
 
 @overload
@@ -2149,6 +2176,17 @@ def quaternion_to_axis_angle(quaternion: torch_.Tensor, eps: float = 1e-12) -> t
     utils3d.torch.transforms.quaternion_to_axis_angle
 
 @overload
+def random_rotation_matrix(*size: torch_.Tensor, dtype=torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+    """Generate random 3D rotation matrix.
+
+## Parameters
+    dtype: The data type of the output rotation matrix.
+
+## Returns
+    Tensor: `(*size, 3, 3)` random rotation matrix."""
+    utils3d.torch.transforms.random_rotation_matrix
+
+@overload
 def make_affine_matrix(M: torch_.Tensor, t: torch_.Tensor):
     """Make an affine transformation matrix from a linear matrix and a translation vector.
 
@@ -2286,7 +2324,7 @@ def scale_2d(scale: Union[float, torch_.Tensor], center: torch_.Tensor = None):
 @overload
 def transform_points(x: torch_.Tensor, *Ts: torch_.Tensor) -> torch_.Tensor:
     """Apply transformation(s) to a point or a set of points.
-It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but: 
+It is like `(Tn @ ... @ T2 @ T1 @ x[:, None]).squeeze(0)`, but: 
 1. Automatically handle the homogeneous coordinate;
         - x will be padded with homogeneous coordinate 1.
         - Each T will be padded by identity matrix to match the dimension. 
@@ -2300,10 +2338,24 @@ It is like `(Tn @ ... @ T2 @ T1 @ x[:, None].squeeze(0)`, but:
 - `y`: Tensor, shape `(..., D)`: the transformed point or a set of points.
 
 ## Example Usage
-```
-y = transform(x, T1, T2, T3)
-# returns (T3 @ T2 @ T1 @ x.mT).mT
-```"""
+
+- Just linear transformation
+
+    ```
+    y = transform(x_3, mat_3x3) 
+    ```
+
+- Affine transformation
+
+    ```
+    y = transform(x_3, mat_3x4)
+    ```
+
+- Chain multiple transformations
+
+    ```
+    y = transform(x_3, T1_4x4, T2_3x4, T3_3x4)
+    ```"""
     utils3d.torch.transforms.transform_points
 
 @overload

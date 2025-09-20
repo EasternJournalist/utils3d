@@ -50,6 +50,7 @@ __all__ = ["sliding_window",
 "matrix_to_axis_angle", 
 "matrix_to_euler_angles", 
 "quaternion_to_axis_angle", 
+"random_rotation_matrix", 
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
@@ -425,6 +426,12 @@ def quaternion_to_axis_angle(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.quaternion_to_axis_angle, utils3d.torch.quaternion_to_axis_angle
     return _call_based_on_args('quaternion_to_axis_angle', args, kwargs)
+
+@suppress_traceback
+def random_rotation_matrix(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.random_rotation_matrix, utils3d.torch.random_rotation_matrix
+    return _call_based_on_args('random_rotation_matrix', args, kwargs)
 
 @suppress_traceback
 def skew_symmetric(*args, **kwargs):

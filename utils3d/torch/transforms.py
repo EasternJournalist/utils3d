@@ -48,6 +48,7 @@ __all__ = [
     'axis_angle_to_quaternion',
     'quaternion_to_axis_angle',
     'make_affine_matrix',
+    'random_rotation_matrix',
     'lerp',
     'slerp',
     'slerp_rotation_matrix',
@@ -1031,6 +1032,22 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
     ], dim=-1).unflatten(-1, (3, 3))
     rot_mat = I + 2 * (A + w[..., None, None] * B)
     return rot_mat
+
+
+def random_rotation_matrix(*size: Tensor, dtype=torch.float32, device: torch.device = None) -> Tensor:
+    """
+    Generate random 3D rotation matrix.
+
+    ## Parameters
+        dtype: The data type of the output rotation matrix.
+
+    ## Returns
+        Tensor: `(*size, 3, 3)` random rotation matrix.
+    """
+    if len(size) == 1 and isinstance(size[0], (tuple, list)):
+        size = size[0]
+    rand_quat = torch.randn((*size, 4), dtype=dtype, device=device)
+    return quaternion_to_matrix(rand_quat)
 
 
 @totensor(_others=torch.float32)

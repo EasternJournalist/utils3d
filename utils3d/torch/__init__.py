@@ -52,6 +52,7 @@ __modules_all__ = {
         'axis_angle_to_matrix',
         'axis_angle_to_quaternion',
         'quaternion_to_axis_angle',
+        'random_rotation_matrix',
         'make_affine_matrix',
         'lerp',
         'slerp',
