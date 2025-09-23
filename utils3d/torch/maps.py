@@ -536,7 +536,7 @@ def masked_area_resize(
         assert x.shape[:mask.ndim] == mask.shape, "Image and mask should have the same batch shape and spatial shape"
         expand_channels = (slice(None),) * (x.ndim - mask.ndim)
         x = torch.where(mask[(..., *expand_channels)], x, 0)
-        x = x.reshape(*x.shape[:mask.ndim - 2], height * width, *x.shape[mask.ndim:])[*((slice(None),) * (mask.ndim - 2)), target_window_indices]                   # (..., target_height, tgt_width, filter_size, ...)
+        x = x.reshape(*x.shape[:mask.ndim - 2], height * width, *x.shape[mask.ndim:])[(*((slice(None),) * (mask.ndim - 2)), target_window_indices)]                   # (..., target_height, tgt_width, filter_size, ...)
         x = (x * target_window_area[(..., *expand_channels)]).sum(dim=mask.ndim) / torch.maximum(target_area[(..., *expand_channels)], torch.finfo(torch.float32).eps)  # (..., target_height, tgt_width, ...)
         outputs.append(x)
 
