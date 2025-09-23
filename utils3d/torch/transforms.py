@@ -1034,7 +1034,7 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
     return rot_mat
 
 
-def random_rotation_matrix(*size: Tensor, dtype=torch.float32, device: torch.device = None) -> Tensor:
+def random_rotation_matrix(*size: int, dtype=torch.float32, device: torch.device = None) -> Tensor:
     """
     Generate random 3D rotation matrix.
 

@@ -1097,7 +1097,7 @@ def matrix_to_euler_angles(matrix: ndarray, convention: str) -> ndarray:
     return np.stack([o[convention.index(c)] for c in 'XYZ'], -1)
 
 
-def random_rotation_matrix(*size: np.ndarray, dtype=np.float32) -> ndarray:
+def random_rotation_matrix(*size: int, dtype=np.float32) -> ndarray:
     """
     Generate random 3D rotation matrix.
 

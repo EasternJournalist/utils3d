@@ -695,7 +695,7 @@ def quaternion_to_axis_angle(quaternion: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.quaternion_to_axis_angle
 
 @overload
-def random_rotation_matrix(*size: numpy_.ndarray, dtype=numpy_.float32) -> numpy_.ndarray:
+def random_rotation_matrix(*size: int, dtype=numpy_.float32) -> numpy_.ndarray:
     """Generate random 3D rotation matrix.
 
 ## Parameters
@@ -2176,7 +2176,7 @@ def quaternion_to_axis_angle(quaternion: torch_.Tensor, eps: float = 1e-12) -> t
     utils3d.torch.transforms.quaternion_to_axis_angle
 
 @overload
-def random_rotation_matrix(*size: torch_.Tensor, dtype=torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+def random_rotation_matrix(*size: int, dtype=torch_.float32, device: torch_.device = None) -> torch_.Tensor:
     """Generate random 3D rotation matrix.
 
 ## Parameters
