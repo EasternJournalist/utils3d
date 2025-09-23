@@ -450,7 +450,7 @@ def masked_nearest_resize(
     mask: ndarray, 
     size: Tuple[int, int], 
     return_index: bool = False
-) -> Tuple[*Tuple[ndarray, ...], ndarray, Tuple[ndarray, ...]]:
+) -> Tuple[Unpack[Tuple[ndarray, ...]], ndarray, Tuple[ndarray, ...]]:
     """
     Resize image(s) by nearest sampling with mask awareness. 
 
@@ -519,7 +519,7 @@ def masked_area_resize(
     *image: ndarray,
     mask: ndarray, 
     size: Tuple[int, int]
-) -> Tuple[*Tuple[ndarray, ...], ndarray]:
+) -> Tuple[Unpack[Tuple[ndarray, ...]], ndarray]:
     """
     Resize 2D map by area sampling with mask awareness.
 
