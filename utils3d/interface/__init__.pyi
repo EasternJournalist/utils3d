@@ -31,6 +31,7 @@ __all__ = ["sliding_window",
 "extrinsics_to_view", 
 "view_to_extrinsics", 
 "normalize_intrinsics", 
+"denormalize_intrinsics", 
 "crop_intrinsics", 
 "pixel_to_uv", 
 "pixel_to_ndc", 
@@ -360,7 +361,7 @@ def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.N
     """Normalize intrinsics from pixel cooridnates to uv coordinates
 
 ## Parameters
-- `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics(s) to normalize
+- `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to normalize
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
 - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
@@ -369,6 +370,21 @@ def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.N
 ## Returns
     `(ndarray)`: `(..., 3, 3)` normalized camera intrinsics(s)"""
     utils3d.numpy.transforms.normalize_intrinsics
+
+@overload
+def denormalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: Literal['corner', 'center'] = 'corner') -> numpy_.ndarray:
+    """Denormalize intrinsics from uv cooridnates to pixel coordinates
+
+## Parameters
+- `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to denormalize
+- `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
+
+## Returns
+    `(ndarray)`: `(..., 3, 3)` denormalized camera intrinsics in pixel coordinates"""
+    utils3d.numpy.transforms.denormalize_intrinsics
 
 @overload
 def crop_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], cropped_top: Union[numbers.Number, numpy_.ndarray], cropped_left: Union[numbers.Number, numpy_.ndarray], cropped_height: Union[numbers.Number, numpy_.ndarray], cropped_width: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
@@ -1854,18 +1870,33 @@ def view_to_extrinsics(view: torch_.Tensor) -> torch_.Tensor:
 
 @overload
 def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
-    """Normalize camera intrinsics(s) to uv space
+    """Normalize camera intrinsics to uv space
 
 ## Parameters
-- `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics(s) to normalize
+- `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics to normalize
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
 - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
-    (Tensor): [..., 3, 3] normalized camera intrinsics(s)"""
+    (Tensor): [..., 3, 3] normalized camera intrinsics"""
     utils3d.torch.transforms.normalize_intrinsics
+
+@overload
+def denormalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+    """Denormalize camera intrinsics(s) from uv space to pixel space
+
+## Parameters
+- `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics
+- `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+    or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - For more definitions, please refer to `pixel_coord_map()`
+
+## Returns
+    (Tensor): [..., 3, 3] denormalized camera intrinsics in pixel space"""
+    utils3d.torch.transforms.denormalize_intrinsics
 
 @overload
 def crop_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], cropped_top: Union[numbers.Number, torch_.Tensor], cropped_left: Union[numbers.Number, torch_.Tensor], cropped_height: Union[numbers.Number, torch_.Tensor], cropped_width: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:

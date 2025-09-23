@@ -29,6 +29,7 @@ __modules_all__ = {
         'extrinsics_to_view',
         'view_to_extrinsics',
         'normalize_intrinsics',
+        'denormalize_intrinsics',
         'crop_intrinsics',
         'pixel_to_uv',
         'pixel_to_ndc',

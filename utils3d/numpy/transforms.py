@@ -23,6 +23,7 @@ __all__ = [
     'extrinsics_to_view',
     'view_to_extrinsics',
     'normalize_intrinsics',
+    'denormalize_intrinsics',
     'crop_intrinsics',
     'pixel_to_uv',
     'pixel_to_ndc',
@@ -368,7 +369,7 @@ def normalize_intrinsics(
     Normalize intrinsics from pixel cooridnates to uv coordinates
 
     ## Parameters
-    - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics(s) to normalize
+    - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to normalize
     - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
     - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
@@ -397,6 +398,46 @@ def normalize_intrinsics(
         ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
+
+@toarray(None, 'intrinsics')
+@batched(2, 1)
+def denormalize_intrinsics(
+    intrinsics: ndarray,
+    size: Union[Tuple[Number, Number], ndarray],
+    pixel_definition: Literal['corner', 'center'] = 'corner',
+) -> ndarray:
+    """
+    Denormalize intrinsics from uv cooridnates to pixel coordinates
+
+    ## Parameters
+    - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to denormalize
+    - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
+        or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+        - For more definitions, please refer to `pixel_coord_map()`
+
+    ## Returns
+        `(ndarray)`: `(..., 3, 3)` denormalized camera intrinsics in pixel coordinates
+    """
+    if isinstance(size, tuple):
+        size = np.array(size, dtype=intrinsics.dtype)
+        size = np.broadcast_to(size, (*intrinsics.shape[:-2], 2))
+    height, width = size[..., 0], size[..., 1]
+    zeros = np.zeros_like(width)
+    ones = np.ones_like(width)
+    if pixel_definition == 'corner':
+        transform = np.stack([
+            width, zeros, -0.5 * ones,
+            zeros, height, -0.5 * ones,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
+    elif pixel_definition == 'center':
+        transform = np.stack([
+            width, zeros, zeros,
+            zeros, height, zeros,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
+    return transform @ intrinsics
 
 @toarray(None, _others='intrinsics')
 @batched(2, 1, _others=0)

@@ -27,6 +27,7 @@ __all__ = ["sliding_window",
 "extrinsics_to_view", 
 "view_to_extrinsics", 
 "normalize_intrinsics", 
+"denormalize_intrinsics", 
 "crop_intrinsics", 
 "pixel_to_uv", 
 "pixel_to_ndc", 
@@ -288,6 +289,12 @@ def normalize_intrinsics(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.normalize_intrinsics, utils3d.torch.normalize_intrinsics
     return _call_based_on_args('normalize_intrinsics', args, kwargs)
+
+@suppress_traceback
+def denormalize_intrinsics(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.denormalize_intrinsics, utils3d.torch.denormalize_intrinsics
+    return _call_based_on_args('denormalize_intrinsics', args, kwargs)
 
 @suppress_traceback
 def crop_intrinsics(*args, **kwargs):

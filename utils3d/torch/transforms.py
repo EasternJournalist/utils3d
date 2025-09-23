@@ -24,6 +24,7 @@ __all__ = [
     'extrinsics_to_view',
     'view_to_extrinsics',
     'normalize_intrinsics',
+    'denormalize_intrinsics',
     'crop_intrinsics',
     'pixel_to_uv',
     'pixel_to_ndc',
@@ -353,17 +354,17 @@ def normalize_intrinsics(
     pixel_definition: Literal['corner', 'center'] = 'corner',
 ) -> Tensor:
     """
-    Normalize camera intrinsics(s) to uv space
+    Normalize camera intrinsics to uv space
 
     ## Parameters
-    - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics(s) to normalize
+    - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics to normalize
     - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
     - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
-        (Tensor): [..., 3, 3] normalized camera intrinsics(s)
+        (Tensor): [..., 3, 3] normalized camera intrinsics
     """
     if isinstance(size, tuple):
         size = torch.tensor(size, dtype=intrinsics.dtype, device=intrinsics.device)
@@ -381,6 +382,47 @@ def normalize_intrinsics(
         transform = torch.stack([
             1 / width, zeros, zeros,
             zeros, 1 / height, zeros,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
+    return transform @ intrinsics
+
+
+@totensor(None, 'intrinsics')
+@batched(2, 1)
+def denormalize_intrinsics(
+    intrinsics: Tensor,
+    size: Union[Tuple[Number, Number], Tensor],
+    pixel_definition: Literal['corner', 'center'] = 'corner',
+) -> Tensor:
+    """
+    Denormalize camera intrinsics(s) from uv space to pixel space
+
+    ## Parameters
+    - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics
+    - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
+        or an array of shape `(..., 2)` corresponding to the multiple image size(s)
+    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+        - For more definitions, please refer to `pixel_coord_map()`
+
+    ## Returns
+        (Tensor): [..., 3, 3] denormalized camera intrinsics in pixel space
+    """
+    if isinstance(size, tuple):
+        size = torch.tensor(size, dtype=intrinsics.dtype, device=intrinsics.device)
+        size = size.expand(*intrinsics.shape[:-2], 2)
+    height, width = size.unbind(-1)
+    zeros = torch.zeros_like(width)
+    ones = torch.ones_like(width)
+    if pixel_definition == 'corner':
+        transform = torch.stack([
+            width, zeros, -0.5 * ones,
+            zeros, height, -0.5 * ones,
+            zeros, zeros, ones
+        ]).reshape(*zeros.shape, 3, 3)
+    elif pixel_definition == 'center':
+        transform = torch.stack([
+            width, zeros, zeros,
+            zeros, height, zeros,
             zeros, zeros, ones
         ]).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
