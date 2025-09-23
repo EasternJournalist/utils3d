@@ -75,7 +75,7 @@ def pixel_coord_map(
     *size: Union[int, Tuple[int, int]],
     top: int = 0,
     left: int = 0,
-    definition: Literal['corner', 'center'] = 'corner',
+    convention: Literal['integer-center', 'integer-corner'] = 'integer-center',
     dtype: np.dtype = np.float32
 ) -> ndarray:
     """
@@ -85,25 +85,27 @@ def pixel_coord_map(
     - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
     - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
     - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
-    - `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
-        - 'corner': coordinates range in [0, width - 1], [0, height - 1]
-        - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
+    - `convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+        - `'integer-center'`: `pixel[i][j]` has integer coordinates `(j, i)` as its center, and occupies square area `[j - 0.5, j + 0.5) × [i - 0.5, i + 0.5)`. 
+            The top-left corner of the top-left pixel is `(-0.5, -0.5)`, and the bottom-right corner of the bottom-right pixel is `(width - 0.5, height - 0.5)`.
+        - `'integer-corner'`: `pixel[i][j]` has coordinates `(j + 0.5, i + 0.5)` as its center, and occupies square area `[j, j + 1) × [i, i + 1)`.
+            The top-left corner of the top-left pixel is `(0, 0)`, and the bottom-right corner of the bottom-right pixel is `(width, height)`.
     - `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
 
     ## Returns
         ndarray: shape (height, width, 2)
     
-    >>> pixel_coord_map(10, 10, definition='center', dtype=np.float32):
-    [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
-     [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
-      ...             ...                  ...
-    [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
-
-    >>> pixel_coord_map(10, 10, definition='corner', dtype=np.int32):
+    >>> pixel_coord_map(10, 10, convention='integer-center', dtype=int):
     [[[0, 0], [1, 0], ..., [9, 0]],
      [[0, 1], [1, 1], ..., [9, 1]],
         ...      ...         ...
      [[0, 9], [1, 9], ..., [9, 9]]]
+
+    >>> pixel_coord_map(10, 10, convention='integer-corner', dtype=np.float32):
+    [[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
+     [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
+      ...             ...                  ...
+    [[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
     """
     if len(size) == 1 and isinstance(size[0], tuple):
         height, width = size[0]
@@ -111,8 +113,8 @@ def pixel_coord_map(
         height, width = size
     u = np.arange(left, left + width, dtype=dtype)
     v = np.arange(top, top + height, dtype=dtype)
-    if definition == 'center':
-        assert np.issubdtype(dtype, np.floating), "dtype should be a floating point type when definition is 'center'"
+    if convention == 'integer-corner':
+        assert np.issubdtype(dtype, np.floating), "dtype should be a floating point type when convention is 'integer-corner'"
         u = u + 0.5
         v = v + 0.5
     u, v = np.meshgrid(u, v, indexing='xy')
@@ -478,7 +480,7 @@ def masked_nearest_resize(
     padding_shape = ((padding_h, padding_h), (padding_w, padding_w))
     
     # Window the original mask and uv
-    pixels = pixel_coord_map(height, width, definition='center', dtype=np.float32)
+    pixels = pixel_coord_map(height, width, convention='integer-corner', dtype=np.float32)
     indices = np.arange(height * width, dtype=np.int32).reshape(height, width)
     window_pixels = sliding_window(pixels, window_size=filter_shape, pad_size=padding_shape, axis=(0, 1))
     window_indices = sliding_window(indices, window_size=filter_shape, pad_size=padding_shape, axis=(0, 1))
@@ -545,7 +547,7 @@ def masked_area_resize(
     padding_shape = ((padding_h, padding_h), (padding_w, padding_w))
     
     # Window the original mask and uv (non-copy)
-    pixels = pixel_coord_map((height, width), definition='center', dtype=np.float32)
+    pixels = pixel_coord_map((height, width), convention='integer-corner', dtype=np.float32)
     indices = np.arange(height * width, dtype=np.int32).reshape(height, width)
     window_pixels = sliding_window(pixels, window_size=filter_shape, pad_size=padding_shape, axis=(0, 1))
     window_indices = sliding_window(indices, window_size=filter_shape, pad_size=padding_shape, axis=(0, 1))

@@ -357,14 +357,14 @@ def view_to_extrinsics(view: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: Literal['corner', 'center'] = 'corner') -> numpy_.ndarray:
+def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Normalize intrinsics from pixel cooridnates to uv coordinates
 
 ## Parameters
 - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to normalize
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -372,14 +372,14 @@ def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.N
     utils3d.numpy.transforms.normalize_intrinsics
 
 @overload
-def denormalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: Literal['corner', 'center'] = 'corner') -> numpy_.ndarray:
+def denormalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Denormalize intrinsics from uv cooridnates to pixel coordinates
 
 ## Parameters
 - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to denormalize
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -404,14 +404,14 @@ def crop_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number
     utils3d.numpy.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
+def pixel_to_uv(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Convert pixel space coordiantes to UV space coordinates.
 
 ## Parameters
 - `pixel` (ndarray): `(..., 2)` pixel coordinrates 
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -419,14 +419,14 @@ def pixel_to_uv(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers
     utils3d.numpy.transforms.pixel_to_uv
 
 @overload
-def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
+def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Convert pixel coordinates to NDC (Normalized Device Coordinates).
 
 ## Parameters
 - `pixel` (ndarray): `(..., 2)` pixel coordinrates.
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -434,14 +434,14 @@ def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, number
     utils3d.numpy.transforms.pixel_to_ndc
 
 @overload
-def uv_to_pixel(uv: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_definition: str = 'corner') -> numpy_.ndarray:
+def uv_to_pixel(uv: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Convert UV space coordinates to pixel space coordinates.
 
 ## Parameters
 - `uv` (ndarray): `(..., 2)` uv coordinrates.
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -1237,32 +1237,34 @@ This is commonly used as normalized image coordinates in texture mapping (when i
     utils3d.numpy.maps.uv_map
 
 @overload
-def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, definition: Literal['corner', 'center'] = 'corner', dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, convention: Literal['integer-center', 'integer-corner'] = 'integer-center', dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
 
 ## Parameters
 - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
 - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
 - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
-- `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
-    - 'corner': coordinates range in [0, width - 1], [0, height - 1]
-    - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
+- `convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `'integer-center'`: `pixel[i][j]` has integer coordinates `(j, i)` as its center, and occupies square area `[j - 0.5, j + 0.5) × [i - 0.5, i + 0.5)`. 
+        The top-left corner of the top-left pixel is `(-0.5, -0.5)`, and the bottom-right corner of the bottom-right pixel is `(width - 0.5, height - 0.5)`.
+    - `'integer-corner'`: `pixel[i][j]` has coordinates `(j + 0.5, i + 0.5)` as its center, and occupies square area `[j, j + 1) × [i, i + 1)`.
+        The top-left corner of the top-left pixel is `(0, 0)`, and the bottom-right corner of the bottom-right pixel is `(width, height)`.
 - `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to np.float32.
 
 ## Returns
     ndarray: shape (height, width, 2)
 
->>> pixel_coord_map(10, 10, definition='center', dtype=np.float32):
-[[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
- [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
-  ...             ...                  ...
-[[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
-
->>> pixel_coord_map(10, 10, definition='corner', dtype=np.int32):
+>>> pixel_coord_map(10, 10, convention='integer-center', dtype=int):
 [[[0, 0], [1, 0], ..., [9, 0]],
  [[0, 1], [1, 1], ..., [9, 1]],
     ...      ...         ...
- [[0, 9], [1, 9], ..., [9, 9]]]"""
+ [[0, 9], [1, 9], ..., [9, 9]]]
+
+>>> pixel_coord_map(10, 10, convention='integer-corner', dtype=np.float32):
+[[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
+ [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
+  ...             ...                  ...
+[[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]"""
     utils3d.numpy.maps.pixel_coord_map
 
 @overload
@@ -1869,14 +1871,14 @@ def view_to_extrinsics(view: torch_.Tensor) -> torch_.Tensor:
     utils3d.torch.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """Normalize camera intrinsics to uv space
 
 ## Parameters
 - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics to normalize
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -1884,14 +1886,14 @@ def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Nu
     utils3d.torch.transforms.normalize_intrinsics
 
 @overload
-def denormalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+def denormalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> torch_.Tensor:
     """Denormalize camera intrinsics(s) from uv space to pixel space
 
 ## Parameters
 - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -1916,12 +1918,12 @@ def crop_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number,
     utils3d.torch.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+def pixel_to_uv(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """## Parameters
 - `pixel` (Tensor): `(..., 2)` pixel coordinrates 
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -1929,14 +1931,14 @@ def pixel_to_uv(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.
     utils3d.torch.transforms.pixel_to_uv
 
 @overload
-def pixel_to_ndc(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+def pixel_to_ndc(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """Convert pixel coordinates to NDC (Normalized Device Coordinates).
 
 ## Parameters
 - `pixel` (Tensor): `(..., 2)` pixel coordinrates.
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -1944,14 +1946,14 @@ def pixel_to_ndc(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers
     utils3d.torch.transforms.pixel_to_ndc
 
 @overload
-def uv_to_pixel(uv: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_definition: Literal['corner', 'center'] = 'corner') -> torch_.Tensor:
+def uv_to_pixel(uv: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """Convert UV space coordinates to pixel space coordinates.
 
 ## Parameters
 - `uv` (Tensor): `(..., 2)` uv coordinrates.
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -2750,32 +2752,34 @@ This is commonly used as normalized image coordinates in texture mapping (when i
     utils3d.torch.maps.uv_map
 
 @overload
-def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, definition: Literal['corner', 'center'] = 'corner', dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
-    """Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
+def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, convention: Literal['integer-center', 'integer-corner'] = 'integer-center', dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+    """Get image pixel coordinates map. Support two conventions: `'integer-center'` and `'integer-corner'`.
 
 ## Parameters
 - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
 - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
 - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
-- `definition`: `str`, optional 'corner' or 'center', whether the coordinates represent the corner or the center of the pixel. Defaults to 'corner'.
-    - 'corner': coordinates range in [0, width - 1], [0, height - 1]
-    - 'center': coordinates range in [0.5, width - 0.5], [0.5, height - 0.5]
-- `dtype`: `np.dtype`, optional data type of the output pixel coord map. Defaults to torch.float32.
+- `convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `'integer-center'`: `pixel[i][j]` has integer coordinates `(j, i)` as its center, and occupies square area `[j - 0.5, j + 0.5) × [i - 0.5, i + 0.5)`. 
+        The top-left corner of the top-left pixel is `(-0.5, -0.5)`, and the bottom-right corner of the bottom-right pixel is `(width - 0.5, height - 0.5)`.
+    - `'integer-corner'`: `pixel[i][j]` has coordinates `(j + 0.5, i + 0.5)` as its center, and occupies square area `[j, j + 1) × [i, i + 1)`.
+        The top-left corner of the top-left pixel is `(0, 0)`, and the bottom-right corner of the bottom-right pixel is `(width, height)`.
+- `dtype`: `torch.dtype`, optional data type of the output pixel coord map. Defaults to torch.float32.
 
 ## Returns
     Tensor: shape (height, width, 2)
 
->>> pixel_coord_map(10, 10, definition='center', dtype=torch.float32):
-[[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
- [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
-  ...             ...                  ...
-[[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]
-
->>> pixel_coord_map(10, 10, definition='corner', dtype=torch.long):
+>>> pixel_coord_map(10, 10, convention='integer-center', dtype=torch.long):
 [[[0, 0], [1, 0], ..., [9, 0]],
  [[0, 1], [1, 1], ..., [9, 1]],
     ...      ...         ...
- [[0, 9], [1, 9], ..., [9, 9]]]"""
+ [[0, 9], [1, 9], ..., [9, 9]]]
+
+>>> pixel_coord_map(10, 10, convention='integer-corner', dtype=torch.float32):
+[[[0.5, 0.5], [1.5, 0.5], ..., [9.5, 0.5]],
+ [[0.5, 1.5], [1.5, 1.5], ..., [9.5, 1.5]],
+  ...             ...                  ...
+[[0.5, 9.5], [1.5, 9.5], ..., [9.5, 9.5]]]"""
     utils3d.torch.maps.pixel_coord_map
 
 @overload

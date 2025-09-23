@@ -363,7 +363,7 @@ def view_to_extrinsics(view: ndarray) -> ndarray:
 def normalize_intrinsics(
     intrinsics: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
-    pixel_definition: Literal['corner', 'center'] = 'corner',
+    pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center',
 ) -> ndarray:
     """
     Normalize intrinsics from pixel cooridnates to uv coordinates
@@ -372,7 +372,7 @@ def normalize_intrinsics(
     - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to normalize
     - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -384,13 +384,13 @@ def normalize_intrinsics(
     height, width = size[..., 0], size[..., 1]
     zeros = np.zeros_like(width)
     ones = np.ones_like(width)
-    if pixel_definition == 'corner':
+    if pixel_convention == 'integer-center':
         transform = np.stack([
             1 / width, zeros, 0.5 / width,
             zeros, 1 / height, 0.5 / height,
             zeros, zeros, ones
         ]).reshape(*zeros.shape, 3, 3)
-    elif pixel_definition == 'center':
+    elif pixel_convention == 'integer-corner':
         transform = np.stack([
             1 / width, zeros, zeros,
             zeros, 1 / height, zeros,
@@ -404,7 +404,7 @@ def normalize_intrinsics(
 def denormalize_intrinsics(
     intrinsics: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
-    pixel_definition: Literal['corner', 'center'] = 'corner',
+    pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center',
 ) -> ndarray:
     """
     Denormalize intrinsics from uv cooridnates to pixel coordinates
@@ -413,7 +413,7 @@ def denormalize_intrinsics(
     - `intrinsics` (ndarray): `(..., 3, 3)` camera intrinsics to denormalize
     - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -425,13 +425,13 @@ def denormalize_intrinsics(
     height, width = size[..., 0], size[..., 1]
     zeros = np.zeros_like(width)
     ones = np.ones_like(width)
-    if pixel_definition == 'corner':
+    if pixel_convention == 'integer-center':
         transform = np.stack([
             width, zeros, -0.5 * ones,
             zeros, height, -0.5 * ones,
             zeros, zeros, ones
         ]).reshape(*zeros.shape, 3, 3)
-    elif pixel_definition == 'center':
+    elif pixel_convention == 'integer-corner':
         transform = np.stack([
             width, zeros, zeros,
             zeros, height, zeros,
@@ -478,7 +478,7 @@ def crop_intrinsics(
 def pixel_to_uv(
     pixel: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
-    pixel_definition: str = 'corner'
+    pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center',
 ) -> ndarray:
     """
     Convert pixel space coordiantes to UV space coordinates.
@@ -487,7 +487,7 @@ def pixel_to_uv(
     - `pixel` (ndarray): `(..., 2)` pixel coordinrates 
     - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -495,7 +495,7 @@ def pixel_to_uv(
     """
     if not np.issubdtype(pixel.dtype, np.floating):
         pixel = pixel.astype(np.float32)
-    if pixel_definition == 'corner':
+    if pixel_convention == 'integer-center':
         pixel = pixel + 0.5
     uv = pixel / np.flip(size, axis=-1)
     return uv
@@ -504,7 +504,7 @@ def pixel_to_uv(
 def uv_to_pixel(
     uv: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
-    pixel_definition: str = 'corner'
+    pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center',
 ) -> ndarray:
     """
     Convert UV space coordinates to pixel space coordinates.
@@ -513,14 +513,14 @@ def uv_to_pixel(
     - `uv` (ndarray): `(..., 2)` uv coordinrates.
     - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
         (ndarray): `(..., 2)` pixel coordinrates
     """
     pixel = uv * np.flip(size, axis=-1)
-    if pixel_definition == 'corner':
+    if pixel_convention == 'integer-center':
         pixel = pixel - 0.5
     return pixel
 
@@ -528,7 +528,7 @@ def uv_to_pixel(
 def pixel_to_ndc(
     pixel: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
-    pixel_definition: str = 'corner'
+    pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center',
 ) -> ndarray:
     """
     Convert pixel coordinates to NDC (Normalized Device Coordinates).
@@ -537,7 +537,7 @@ def pixel_to_ndc(
     - `pixel` (ndarray): `(..., 2)` pixel coordinrates.
     - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_definition` (str): `str`, optional `'corner'` or `'center'`, whether the coordinates represent the corner or the center of the pixel. Defaults to `'corner'`.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -546,7 +546,7 @@ def pixel_to_ndc(
     if not np.issubdtype(pixel.dtype, np.floating):
         pixel = pixel.astype(np.float32)
     dtype = pixel.dtype
-    if pixel_definition == 'corner':
+    if pixel_convention == 'integer-center':
         pixel = pixel + 0.5
     ndc = pixel / (np.flip(size, axis=-1) * np.array([2, -2], dtype=dtype)) \
         + np.array([-1, 1], dtype=dtype)
