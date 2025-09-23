@@ -757,7 +757,7 @@ def lerp(x1: numpy_.ndarray, x2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.nd
 
 @overload
 def slerp(v1: numpy_.ndarray, v2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
-    """Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+    """Spherical linear interpolation between two (unit) vectors.
 
 ## Parameters
 - `v1` (ndarray): `(..., D)` (unit) vector 1
@@ -2213,7 +2213,7 @@ def lerp(v1: torch_.Tensor, v2: torch_.Tensor, t: torch_.Tensor) -> torch_.Tenso
 
 @overload
 def slerp(v1: torch_.Tensor, v2: torch_.Tensor, t: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
-    """Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+    """Spherical linear interpolation between two (unit) vectors. 
 
 ## Parameters
     `v1` (Tensor): `(..., D)` (unit) vector 1

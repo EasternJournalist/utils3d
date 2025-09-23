@@ -1071,7 +1071,7 @@ def lerp(v1: torch.Tensor, v2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
 @batched(1, 1, 1)
 def slerp(v1: Tensor, v2: Tensor, t: Tensor, eps: float = 1e-12) -> Tensor:
     """
-    Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+    Spherical linear interpolation between two (unit) vectors. 
 
     ## Parameters
         `v1` (Tensor): `(..., D)` (unit) vector 1

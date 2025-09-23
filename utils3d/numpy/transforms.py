@@ -1177,38 +1177,12 @@ def lerp(x1: ndarray, x2: ndarray, t: ndarray) -> ndarray:
     return x1[..., None, :] + t[..., None] * (x2 - x1)[..., None, :]
 
 
-def slerp_quaternion(q1: ndarray, q2: ndarray, t: ndarray) -> ndarray:
-    """
-    Spherical linear interpolation between two unit quaternions.
-
-    ## Parameters
-        q1 (ndarray): [..., d] unit vector 1
-        q2 (ndarray): [..., d] unit vector 2
-        t (ndarray): [...] interpolation parameter in [0, 1]
-
-    ## Returns
-        ndarray: [..., 3] interpolated unit vector
-    """
-    q1 = q1 / np.linalg.norm(q1, axis=-1, keepdims=True)
-    q2 = q2 / np.linalg.norm(q2, axis=-1, keepdims=True)
-    dot = np.sum(q1 * q2, axis=-1, keepdims=True)
-
-    dot = np.where(dot < 0, -dot, dot)  # handle negative dot product
-
-    dot = np.minimum(dot, 1.)
-    theta = np.arccos(dot) * t
-
-    q_ortho = q2 - q1 * dot
-    q_ortho = q_ortho / np.maximum(np.linalg.norm(q_ortho, axis=-1, keepdims=True), 1e-12)
-    q = q1 * np.cos(theta) + q_ortho * np.sin(theta)
-    return q
-
 
 @toarray(_others=np.float32)
 @batched(1, 1, 1)
 def slerp(v1: ndarray, v2: ndarray, t: ndarray) -> ndarray:
     """
-    Spherical linear interpolation between two unit vectors. The vectors are assumed to be normalized.
+    Spherical linear interpolation between two (unit) vectors.
 
     ## Parameters
     - `v1` (ndarray): `(..., D)` (unit) vector 1
@@ -1246,7 +1220,7 @@ def slerp_rotation_matrix(R1: ndarray, R2: ndarray, t: ndarray) -> ndarray:
     """
     quat1 = matrix_to_quaternion(R1)
     quat2 = matrix_to_quaternion(R2)
-    quat = slerp_quaternion(quat1, quat2, t)
+    quat = slerp(quat1, quat2, t)
     return quaternion_to_matrix(quat)
 
 
