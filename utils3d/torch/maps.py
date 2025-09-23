@@ -88,7 +88,7 @@ def pixel_coord_map(
     - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
     - `top`: `int`, optional top boundary of the pixel coord map. Defaults to 0.
     - `left`: `int`, optional left boundary of the pixel coord map. Defaults to 0.
-    - `convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
         - `'integer-center'`: `pixel[i][j]` has integer coordinates `(j, i)` as its center, and occupies square area `[j - 0.5, j + 0.5) × [i - 0.5, i + 0.5)`. 
             The top-left corner of the top-left pixel is `(-0.5, -0.5)`, and the bottom-right corner of the bottom-right pixel is `(width - 0.5, height - 0.5)`.
         - `'integer-corner'`: `pixel[i][j]` has coordinates `(j + 0.5, i + 0.5)` as its center, and occupies square area `[j, j + 1) × [i, i + 1)`.

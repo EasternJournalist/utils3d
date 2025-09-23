@@ -360,7 +360,7 @@ def normalize_intrinsics(
     - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics to normalize
     - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -401,7 +401,7 @@ def denormalize_intrinsics(
     - `intrinsics` (Tensor): `(..., 3, 3)` camera intrinsics
     - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -474,7 +474,7 @@ def pixel_to_uv(
     - `pixel` (Tensor): `(..., 2)` pixel coordinrates 
     - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -500,7 +500,7 @@ def uv_to_pixel(
     - `uv` (Tensor): `(..., 2)` uv coordinrates.
     - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
@@ -524,7 +524,7 @@ def pixel_to_ndc(
     - `pixel` (Tensor): `(..., 2)` pixel coordinrates.
     - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
         or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether to use integer coordinates as pixel centers or corners. Defaults to 'integer-center'.
+    - `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
         - For more definitions, please refer to `pixel_coord_map()`
 
     ## Returns
