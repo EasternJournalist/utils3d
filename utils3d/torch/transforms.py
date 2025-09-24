@@ -6,7 +6,7 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 
-from ._helpers import batched, totensor
+from .helpers import batched, totensor
 
 
 __all__ = [

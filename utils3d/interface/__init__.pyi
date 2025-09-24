@@ -55,11 +55,11 @@ __all__ = ["sliding_window",
 "matrix_to_axis_angle", 
 "matrix_to_euler_angles", 
 "quaternion_to_axis_angle", 
-"random_rotation_matrix", 
 "skew_symmetric", 
 "rotation_matrix_from_vectors", 
 "ray_intersection", 
 "make_affine_matrix", 
+"random_rotation_matrix", 
 "lerp", 
 "slerp", 
 "slerp_rotation_matrix", 
@@ -113,6 +113,13 @@ __all__ = ["sliding_window",
 "rasterize_point_cloud", 
 "sample_texture", 
 "test_rasterization", 
+"read_extrinsics_from_colmap", 
+"read_intrinsics_from_colmap", 
+"write_extrinsics_as_colmap", 
+"write_intrinsics_as_colmap", 
+"read_obj", 
+"write_obj", 
+"write_simple_obj", 
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
@@ -712,17 +719,6 @@ def quaternion_to_axis_angle(quaternion: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.quaternion_to_axis_angle
 
 @overload
-def random_rotation_matrix(*size: int, dtype=numpy_.float32) -> numpy_.ndarray:
-    """Generate random 3D rotation matrix.
-
-## Parameters
-    dtype: The data type of the output rotation matrix.
-
-## Returns
-    ndarray: `(*size, 3, 3)` random rotation matrix."""
-    utils3d.numpy.transforms.random_rotation_matrix
-
-@overload
 def skew_symmetric(v: numpy_.ndarray):
     """Skew symmetric matrix from a 3D vector"""
     utils3d.numpy.transforms.skew_symmetric
@@ -758,6 +754,17 @@ def make_affine_matrix(M: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
 ## Returns
     ndarray: [..., D + 1, D + 1] affine transformation matrix"""
     utils3d.numpy.transforms.make_affine_matrix
+
+@overload
+def random_rotation_matrix(*size: int, dtype=numpy_.float32) -> numpy_.ndarray:
+    """Generate random 3D rotation matrix.
+
+## Parameters
+    dtype: The data type of the output rotation matrix.
+
+## Returns
+    ndarray: `(*size, 3, 3)` random rotation matrix."""
+    utils3d.numpy.transforms.random_rotation_matrix
 
 @overload
 def lerp(x1: numpy_.ndarray, x2: numpy_.ndarray, t: numpy_.ndarray) -> numpy_.ndarray:
@@ -1445,7 +1452,7 @@ def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple
     utils3d.numpy.maps.masked_area_resize
 
 @overload
-def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near: float = None, far: float = None, cmap: str = 'Spectral') -> numpy_.ndarray:
+def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near: Optional[float] = None, far: Optional[float] = None, cmap: str = 'Spectral') -> numpy_.ndarray:
     """Colorize depth map for visualization.
 
 ## Parameters
@@ -1639,6 +1646,93 @@ def sample_texture(ctx: utils3d.numpy.rasterization.RastContext, uv_map: numpy_.
 def test_rasterization(ctx: Optional[utils3d.numpy.rasterization.RastContext] = None):
     """Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file."""
     utils3d.numpy.rasterization.test_rasterization
+
+@overload
+def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
+    """Read extrinsics from colmap `images.txt` file. 
+## Parameters
+    file: Path to `images.txt` file.
+## Returns
+    extrinsics: (N, 4, 4) array of extrinsics.
+    camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap typically starts from 1.
+    image_names: List of str, image names. Length is N."""
+    utils3d.numpy.io.colmap.read_extrinsics_from_colmap
+
+@overload
+def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
+    """Read intrinsics from colmap `cameras.txt` file.
+## Parameters
+    file: Path to `cameras.txt` file.
+    normalize: Whether to normalize the intrinsics. If True, the intrinsics will be normalized. (mapping coordinates to [0, 1] range)
+## Returns
+    camera_ids: List of int, camera ids. Length is N. Note that camera ids in colmap typically starts from 1.
+    intrinsics: (N, 3, 3) array of intrinsics.
+    distortions: (N, 5) array of distortions."""
+    utils3d.numpy.io.colmap.read_intrinsics_from_colmap
+
+@overload
+def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
+    """Write extrinsics to colmap `images.txt` file.
+## Parameters
+    file: Path to `images.txt` file.
+    extrinsics: (N, 4, 4) array of extrinsics.
+    image_names: str or List of str, image names. Length is N. 
+        If str, it should be a format string with `i` as the index. (i starts from 1, in correspondence with IMAGE_ID in colmap)
+    camera_ids: List of int, camera ids. Length is N.
+        If None, it will be set to [1, 2, ..., N]."""
+    utils3d.numpy.io.colmap.write_extrinsics_as_colmap
+
+@overload
+def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
+    """Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
+## Parameters
+    file: Path to `cameras.txt` file.
+    intrinsics: (N, 3, 3) array of intrinsics.
+    width: Image width.
+    height: Image height.
+    normalized: Whether the intrinsics are normalized. If True, the intrinsics will unnormalized for writing."""
+    utils3d.numpy.io.colmap.write_intrinsics_as_colmap
+
+@overload
+def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False):
+    """Read wavefront .obj file, without preprocessing.
+
+Why bothering having this read_obj() while we already have other libraries like `trimesh`? 
+This function read the raw format from .obj file and keeps the order of vertices and faces, 
+while trimesh which involves modification like merge/split vertices, which could break the orders of vertices and faces,
+Those libraries are commonly aiming at geometry processing and rendering supporting various formats.
+If you want mesh geometry processing, you may turn to `trimesh` for more features.
+
+### Parameters
+    `file` (str, Path, TextIOWrapper): filepath or file object
+    encoding (str, optional): 
+
+### Returns
+    obj (dict): A dict containing .obj components
+    {   
+        'mtllib': [],
+        'v': [[0,1, 0.2, 1.0], [1.2, 0.0, 0.0], ...],
+        'vt': [[0.5, 0.5], ...],
+        'vn': [[0., 0.7, 0.7], [0., -0.7, 0.7], ...],
+        'f': [[0, 1, 2], [2, 3, 4],...],
+        'usemtl': [{'name': 'mtl1', 'f': 7}]
+    }"""
+    utils3d.numpy.io.obj.read_obj
+
+@overload
+def write_obj(file: Union[str, pathlib._local.Path], obj: Dict[str, Any], encoding: Optional[str] = None):
+    utils3d.numpy.io.obj.write_obj
+
+@overload
+def write_simple_obj(file: Union[str, pathlib._local.Path], vertices: numpy_.ndarray, faces: numpy_.ndarray, encoding: Optional[str] = None):
+    """Write wavefront .obj file, without preprocessing.
+
+## Parameters
+    vertices (np.ndarray): [N, 3]
+    faces (np.ndarray): [T, 3]
+    file (Any): filepath
+    encoding (str, optional): """
+    utils3d.numpy.io.obj.write_simple_obj
 
 @overload
 def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
@@ -2211,17 +2305,6 @@ def quaternion_to_axis_angle(quaternion: torch_.Tensor, eps: float = 1e-12) -> t
     utils3d.torch.transforms.quaternion_to_axis_angle
 
 @overload
-def random_rotation_matrix(*size: int, dtype=torch_.float32, device: torch_.device = None) -> torch_.Tensor:
-    """Generate random 3D rotation matrix.
-
-## Parameters
-    dtype: The data type of the output rotation matrix.
-
-## Returns
-    Tensor: `(*size, 3, 3)` random rotation matrix."""
-    utils3d.torch.transforms.random_rotation_matrix
-
-@overload
 def make_affine_matrix(M: torch_.Tensor, t: torch_.Tensor):
     """Make an affine transformation matrix from a linear matrix and a translation vector.
 
@@ -2232,6 +2315,17 @@ def make_affine_matrix(M: torch_.Tensor, t: torch_.Tensor):
 ## Returns
     Tensor: [..., D + 1, D + 1] affine transformation matrix"""
     utils3d.torch.transforms.make_affine_matrix
+
+@overload
+def random_rotation_matrix(*size: int, dtype=torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+    """Generate random 3D rotation matrix.
+
+## Parameters
+    dtype: The data type of the output rotation matrix.
+
+## Returns
+    Tensor: `(*size, 3, 3)` random rotation matrix."""
+    utils3d.torch.transforms.random_rotation_matrix
 
 @overload
 def lerp(v1: torch_.Tensor, v2: torch_.Tensor, t: torch_.Tensor) -> torch_.Tensor:

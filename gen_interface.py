@@ -9,7 +9,7 @@ import functools
 from pathlib import Path
 import shutil
 
-from utils3d._helpers import suppress_traceback
+from utils3d.helpers import suppress_traceback
 
 
 def _contains_tensor(obj):
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             import sys
             from typing import TYPE_CHECKING
             import utils3d
-            from .._helpers import suppress_traceback
+            from ..helpers import suppress_traceback
             """
         ))
         f.write("\n\n")

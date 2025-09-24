@@ -4,7 +4,7 @@ import torch
 import nvdiffrast.torch as dr
 
 from . import utils, transforms, mesh
-from ._helpers import batched
+from .helpers import batched
 
 
 __all__ = [

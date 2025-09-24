@@ -2,7 +2,7 @@ from typing import *
 from pathlib import Path
 
 import numpy as np
-from ..numpy.transforms import matrix_to_quaternion
+from ..transforms import matrix_to_quaternion
 
 
 __all__ = ['read_extrinsics_from_colmap', 'read_intrinsics_from_colmap', 'write_extrinsics_as_colmap', 'write_intrinsics_as_colmap']

@@ -8,7 +8,7 @@ import sys
 import functools
 from pathlib import Path
 
-from utils3d._helpers import suppress_traceback
+from utils3d.helpers import suppress_traceback
 
 
 def get_simple_signature(func):
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     numpy_impl = utils3d.numpy
     torch_impl = utils3d.torch
 
-    modules = ["transforms", "maps", "mesh", "rasterization", "utils"]
+    modules = ["transforms", "maps", "mesh", "rasterization", "utils", "io"]
     
 
     with open("_doc.md", "w", encoding="utf-8") as f:
@@ -63,8 +63,8 @@ if __name__ == "__main__":
             f.write(f"### {module_name.capitalize()}\n\n")
             f.write("| Function | Numpy | Pytorch |\n")
             f.write("| ---- | ---- | ---- |\n")
-            numpy_funcs = {name: getattr(utils3d.numpy, name) for name in utils3d.numpy.__modules_all__[module_name]}
-            torch_funcs = {name: getattr(utils3d.torch, name) for name in utils3d.torch.__modules_all__[module_name]}
+            numpy_funcs = {name: getattr(utils3d.numpy, name) for name in utils3d.numpy.module_members.get(module_name, [])}
+            torch_funcs = {name: getattr(utils3d.torch, name) for name in utils3d.torch.module_members.get(module_name, [])}
             for fname in sorted(set(numpy_funcs) | set(torch_funcs)):
                 doc_column_function = f'`utils3d.{fname}`'
                 doc_column_description = ""

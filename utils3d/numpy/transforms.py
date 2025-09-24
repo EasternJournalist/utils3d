@@ -3,8 +3,8 @@ from numpy import ndarray
 from typing import *
 import itertools
 from numbers import Number
-from ._helpers import toarray, batched
-from .._helpers import no_warnings
+from .helpers import toarray, batched
+from ..helpers import no_warnings
 
 
 __all__ = [

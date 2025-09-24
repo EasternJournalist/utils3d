@@ -5,7 +5,7 @@ from numbers import Number
 import inspect
 from typing import *
 from functools import wraps
-from .._helpers import suppress_traceback
+from ..helpers import suppress_traceback
 
 
 __all__ = [

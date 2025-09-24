@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from .mesh import remove_unused_vertices, triangulate_mesh
 from .transforms import unproject_cv
 from .utils import masked_max, masked_min, sliding_window
-from ._helpers import batched
+from .helpers import batched
 
 __all__ = [
     'uv_map',

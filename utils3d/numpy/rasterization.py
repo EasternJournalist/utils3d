@@ -6,7 +6,6 @@ from contextlib import contextmanager
 import numpy as np
 import moderngl
 
-
 __all__ = [
     'RastContext',
     'rasterize_triangles',
@@ -16,14 +15,6 @@ __all__ = [
     'sample_texture',
     'test_rasterization',
 ]
-
-
-@contextmanager
-def timeit():
-    start_t = time.time()
-    yield
-    end_t = time.time()
-    print(f"Elapsed time: {end_t - start_t:.4f} seconds")
 
 
 def map_np_dtype(dtype) -> str:

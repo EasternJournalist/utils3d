@@ -5,7 +5,7 @@ import inspect
 from functools import wraps
 from typing import *
 from types import EllipsisType
-from .._helpers import suppress_traceback
+from ..helpers import suppress_traceback
 
 __all__ = [
     'toarray',

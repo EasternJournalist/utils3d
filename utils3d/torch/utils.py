@@ -6,8 +6,8 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 
-from ._helpers import batched
-from .._helpers import no_warnings
+from .helpers import batched
+from ..helpers import no_warnings
 
 
 __all__ = [

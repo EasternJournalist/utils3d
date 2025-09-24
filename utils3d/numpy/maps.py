@@ -5,7 +5,7 @@ import math
 import numpy as np
 from numpy import ndarray
 
-from .._helpers import no_warnings
+from ..helpers import no_warnings
 from .utils import max_pool_2d, sliding_window
 from .transforms import angle_between, unproject_cv
 from .mesh import triangulate_mesh, remove_unused_vertices
