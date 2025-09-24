@@ -426,7 +426,7 @@ def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, number
 - `pixel` (ndarray): `(..., 2)` pixel coordinrates.
 - `size` (tuple | ndarray): A tuple `(height, width)` of the image size,
     or an array of shape `(..., 2)` corresponding to the multiple image size(s)
-- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates correspond to pixel centers or corners. Defaults to 'integer-center'.
+- `pixel_convention`: `str`, optional `'integer-center'` or `'integer-corner'`, whether integer coordinates represent pixel centers or corners. Defaults to 'integer-center'.
     - For more definitions, please refer to `pixel_coord_map()`
 
 ## Returns
@@ -1445,13 +1445,14 @@ def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple
     utils3d.numpy.maps.masked_area_resize
 
 @overload
-def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, normalize: bool = True, cmap: str = 'Spectral') -> numpy_.ndarray:
+def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near: float = None, far: float = None, cmap: str = 'Spectral') -> numpy_.ndarray:
     """Colorize depth map for visualization.
 
 ## Parameters
     - `depth` (ndarray): shape (H, W), linear depth map
     - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
-    - `normalize` (bool, optional): whether to normalize the disparity values to [0, 1]. Defaults to True.
+    - `near` (float, optional): near plane for depth normalization. If None, use the 0.1% quantile of valid depth values. Defaults to None.
+    - `far` (float, optional): far plane for depth normalization. If None, use the 99.9% quantile of valid depth values. Defaults to None.
     - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'Spectral'.
 
 ## Returns

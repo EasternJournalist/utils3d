@@ -586,13 +586,14 @@ def masked_area_resize(
     return *outputs, target_mask
 
 
-def colorize_depth_map(depth: ndarray, mask: ndarray = None, normalize: bool = True, cmap: str = 'Spectral') -> ndarray:
+def colorize_depth_map(depth: ndarray, mask: ndarray = None, near: Optional[float] = None, far: Optional[float] = None, cmap: str = 'Spectral') -> ndarray:
     """Colorize depth map for visualization.
 
     ## Parameters
         - `depth` (ndarray): shape (H, W), linear depth map
         - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
-        - `normalize` (bool, optional): whether to normalize the disparity values to [0, 1]. Defaults to True.
+        - `near` (float, optional): near plane for depth normalization. If None, use the 0.1% quantile of valid depth values. Defaults to None.
+        - `far` (float, optional): far plane for depth normalization. If None, use the 99.9% quantile of valid depth values. Defaults to None.
         - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'Spectral'.
     
     ## Returns
@@ -604,10 +605,12 @@ def colorize_depth_map(depth: ndarray, mask: ndarray = None, normalize: bool = T
         depth = np.where(depth > 0, depth, np.nan)
     else:
         depth = np.where((depth > 0) & mask, depth, np.nan)
-    disp = 1 / depth
-    if normalize:
-        min_disp, max_disp = np.nanquantile(disp, 0.001), np.nanquantile(disp, 0.999)
-        disp = (disp - min_disp) / (max_disp - min_disp)
+    if near is None:
+        near = np.nanquantile(depth, 0.001)
+    if far is None:
+        far = np.nanquantile(depth, 0.999)
+    
+    disp = (1 / depth - 1 / far) / (1 / near - 1 / far)
     colored = np.nan_to_num(matplotlib.colormaps[cmap](1.0 - disp)[..., :3], 0)
     colored = np.ascontiguousarray((colored.clip(0, 1) * 255).astype(np.uint8))
     return colored
