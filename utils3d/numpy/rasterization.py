@@ -1162,7 +1162,6 @@ def rasterize_point_cloud(
         projection = np.eye(4, dtype=np.float32) 
 
     # Get program
-    prog = ctx.get_program_point_cloud(return_point_id=return_point_id, point_shape=point_shape)
     program_name = f'rasterize_point_cloud(return_point_id={return_point_id}, point_shape={point_shape})'
     num_point_shape_vertices = {'triangle': 3, 'square': 4, 'pentagon': 5, 'hexagon': 6, 'circle': 4}.get(point_shape)
     if (prog := ctx.programs.get(program_name, None)) is None:
