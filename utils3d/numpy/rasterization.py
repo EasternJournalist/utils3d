@@ -473,9 +473,9 @@ def rasterize_triangles(
         elif attributes_domain == 'face':
             attributes = attributes[:, None, :].repeat(3, axis=1)
     if view is None:
-        view = np.eye(4, np.float32)
+        view = np.eye(4, dtype=np.float32)
     if projection is None:
-        projection = np.eye(4, np.float32) 
+        projection = np.eye(4, dtype=np.float32) 
     if background_image is not None:
         background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
 
@@ -706,9 +706,9 @@ def rasterize_triangles_peeling(
         elif attributes_domain == 'face':
             attributes = attributes[:, None, :].repeat(3, axis=1)
     if view is None:
-        view = np.eye(4, np.float32)
+        view = np.eye(4, dtype=np.float32)
     if projection is None:
-        projection = np.eye(4, np.float32) 
+        projection = np.eye(4, dtype=np.float32) 
     
     # Get program
     flat = attributes_domain == 'face'
@@ -947,9 +947,9 @@ def rasterize_lines(
         elif attributes_domain == 'line':
             attributes = attributes[:, None, :].repeat(2, axis=1)
     if view is None:
-        view = np.eye(4, np.float32)
+        view = np.eye(4, dtype=np.float32)
     if projection is None:
-        projection = np.eye(4, np.float32) 
+        projection = np.eye(4, dtype=np.float32) 
     if background_image is not None:
         background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
 
@@ -1157,9 +1157,9 @@ def rasterize_point_cloud(
     if background_image is not None:
         background_image = np.concatenate([background_image, np.ones((height, width, 4 - background_image.shape[-1]), dtype=background_image.dtype)], axis=-1) if background_image.shape[-1] < 4 else background_image
     if view is None:
-        view = np.eye(4, np.float32)
+        view = np.eye(4, dtype=np.float32)
     if projection is None:
-        projection = np.eye(4, np.float32) 
+        projection = np.eye(4, dtype=np.float32) 
 
     # Get program
     prog = ctx.get_program_point_cloud(return_point_id=return_point_id, point_shape=point_shape)

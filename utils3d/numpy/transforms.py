@@ -501,6 +501,7 @@ def pixel_to_uv(
     return uv
 
 
+@toarray(size='uv')
 def uv_to_pixel(
     uv: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
@@ -525,6 +526,7 @@ def uv_to_pixel(
     return pixel
 
 
+@toarray(size=np.float32)
 def pixel_to_ndc(
     pixel: ndarray,
     size: Union[Tuple[Number, Number], ndarray],
