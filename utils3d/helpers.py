@@ -110,7 +110,7 @@ def lazy_import_all_from(globals: Dict[str, Any], module: str) -> List[str]:
     current_dir = Path(current_file).parent if current_file else Path().cwd()
 
     # Get all members
-    meta_filepath = Path(current_dir, f"{module}.__all__.py")
+    meta_filepath = Path(current_dir, f"{module.replace('.', '_')}.__all__.py")
     if meta_filepath.exists():
         # Read all members from meta file
         namespace = {}
