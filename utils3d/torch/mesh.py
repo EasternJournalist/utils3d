@@ -31,44 +31,6 @@ __all__ = [
 ]
 
 
-def _group(
-    values: Tensor,
-    required_group_size: Optional[int] = None,
-    return_values: bool = False
-) -> Tuple[Union[List[Tensor], Tensor], Optional[Tensor]]:
-    """
-    Group values into groups with identical values.
-    
-    ## Parameters
-        values (Tensor): [N] values to group
-        required_group_size (int, optional): required group size. Defaults to None.
-        return_values (bool, optional): return values of groups. Defaults to False.
-        
-    ## Returns
-        group (Union[List[Tensor], Tensor]): list of groups or group indices. It will be a list of groups if required_group_size is None, otherwise a tensor of group indices.
-        group_values (Optional[Tensor]): values of groups. Only returned if return_values is True.
-    """
-    sorted_values, indices = torch.sort(values)
-    nondupe = torch.cat([torch.tensor([True], dtype=torch.bool, device=values.device), sorted_values[1:] != sorted_values[:-1]])
-    nondupe_indices = torch.cumsum(nondupe, dim=0) - 1
-    counts = torch.bincount(nondupe_indices)
-    if required_group_size is None:
-        groups = torch.split(indices, counts.tolist())
-        if return_values:
-            group_values = sorted_values[nondupe]
-            return groups, group_values
-        else:
-            return groups
-    else:
-        counts = counts[nondupe_indices]
-        groups = indices[counts == required_group_size].reshape(-1, required_group_size)
-        if return_values:
-            group_values = sorted_values[nondupe][counts[nondupe] == required_group_size]
-            return groups, group_values
-        else:
-            return groups
-
-
 def triangulate_mesh(
     faces: Tensor,
     vertices: Tensor = None,

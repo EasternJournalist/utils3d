@@ -7,5 +7,6 @@ __all__ = [
     'segment_roll',
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
-    'split_groups_by_labels',
+    'group',
+    'group_as_segments',
 ]

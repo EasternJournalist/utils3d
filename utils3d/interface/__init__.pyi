@@ -14,7 +14,8 @@ __all__ = ["sliding_window",
 "lookup", 
 "segment_roll", 
 "csr_matrix_from_dense_indices", 
-"split_groups_by_labels", 
+"group", 
+"group_as_segments", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -232,20 +233,39 @@ def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> scipy
     utils3d.numpy.utils.csr_matrix_from_dense_indices
 
 @overload
-def split_groups_by_labels(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def group(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
     """Split the data into groups based on the provided labels.
 
 ## Parameters
-    - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
-    - `data` (ndarray, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
-        If None, return the indices in each group instead.
+- `labels` `(ndarray)` shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+- `data`: `(ndarray, optional)` shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+    If None, return the indices in each group instead.
 
 ## Returns
-    - groups (List[Tuple[ndarray, ndarray]]): List of length G. Each element is a tuple of (label, data_in_group).
-        - `label` (ndarray): shape (*label_dims,) the label of the group.
-        - `data_in_group` (ndarray): shape (M, *data_dims) the data points in the group.
-        If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
-    utils3d.numpy.utils.split_groups_by_labels
+- `groups` `(List[Tuple[ndarray, ndarray]])`: List of each group, a tuple of `(label, data_in_group)`.
+    - `label` (ndarray): shape `(*label_dims,)` the label of the group.
+    - `data_in_group` (ndarray): shape `(length_of_group, *data_dims)` the data points in the group.
+    If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
+    utils3d.numpy.utils.group
+
+@overload
+def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
+    """Group as segments by labels
+
+## Parameters
+- `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+- `data` (ndarray, optional): shape `(N, *data_dims)` array.
+    If None, return the indices in each group instead.
+
+## Returns
+Assuming there are `M` difference labels:
+
+- `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
+- `data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+- `offsets`: `(ndarray)` shape `(M + 1,)`
+
+`data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
+    utils3d.numpy.utils.group_as_segments
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
@@ -1316,8 +1336,7 @@ def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = 
 
 ## Returns
     faces (ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-    *attributes (ndarray): vertex attributes in corresponding order with input maps
-    indices (ndarray, optional): indices of vertices in the original mesh"""
+    *attributes (ndarray): vertex attributes in corresponding order with input maps"""
     utils3d.numpy.maps.build_mesh_from_map
 
 @overload
@@ -1835,20 +1854,41 @@ def csr_eliminate_zeros(input: torch_.Tensor):
     utils3d.torch.utils.csr_eliminate_zeros
 
 @overload
-def split_groups_by_labels(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
+def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
     """Split the data into groups based on the provided labels.
 
 ## Parameters
-    - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
-    - `data` (Tensor, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
-        If None, return the indices in each group instead.
+- `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+- `data` (Tensor, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+    If None, return the indices in each group instead.
 
 ## Returns
-    - groups (List[Tuple[Tensor, Tensor]]): List of length G. Each element is a tuple of (label, data_in_group).
-        - `label` (Tensor): shape (*label_dims,) the label of the group.
-        - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
-        If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
-    utils3d.torch.utils.split_groups_by_labels
+- `groups` (List[Tuple[Tensor, Tensor]]): List of each group, a tuple of `(label, data_in_group)`.
+    - `label` (Tensor): shape (*label_dims,) the label of the group.
+    - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
+    If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
+    utils3d.torch.utils.group
+
+@overload
+def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
+    """Group as segments by labels
+
+## Parameters
+
+- `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+- `data` (Tensor, optional): shape `(N, *data_dims)` array.
+    If None, return the indices in each group instead.
+
+## Returns
+
+Assuming there are `M` difference labels:
+
+- `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
+- `data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+- `offsets`: `(Tensor)` shape `(M + 1,)`
+
+`data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
+    utils3d.torch.utils.group_as_segments
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:

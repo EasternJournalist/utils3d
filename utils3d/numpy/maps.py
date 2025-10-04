@@ -169,7 +169,6 @@ def build_mesh_from_map(
     ## Returns
         faces (ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
         *attributes (ndarray): vertex attributes in corresponding order with input maps
-        indices (ndarray, optional): indices of vertices in the original mesh
     """
     assert (len(maps) > 0) or (mask is not None), "At least one of maps or mask should be provided"
     height, width = maps[0].shape[:2] if mask is None else mask.shape

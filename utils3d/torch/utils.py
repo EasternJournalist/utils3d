@@ -18,7 +18,8 @@ __all__ = [
     'segment_roll',
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
-    'split_groups_by_labels'
+    'group',
+    'group_as_segments'
 ]
 
 
@@ -208,23 +209,51 @@ def csr_roll_col_indices(input: Tensor, shift: int):
     return torch.sparse_csr_tensor(input.crow_indices(), col_indices, values, input.size())
 
 
-def split_groups_by_labels(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, Tensor]]:
+def group(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, Tensor]]:
     """
     Split the data into groups based on the provided labels.
 
     ## Parameters
-        - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
-        - `data` (Tensor, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
-            If None, return the indices in each group instead.
+    - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+    - `data` (Tensor, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+        If None, return the indices in each group instead.
 
     ## Returns
-        - groups (List[Tuple[Tensor, Tensor]]): List of length G. Each element is a tuple of (label, data_in_group).
-            - `label` (Tensor): shape (*label_dims,) the label of the group.
-            - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
-            If `data` is None, `data_in_group` will be the indices of the data points in the original array.
+    - `groups` (List[Tuple[Tensor, Tensor]]): List of each group, a tuple of `(label, data_in_group)`.
+        - `label` (Tensor): shape (*label_dims,) the label of the group.
+        - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
+        If `data` is None, `data_in_group` will be the indices of the data points in the original array.
     """
     group_labels, inv, counts = torch.unique(labels, return_inverse=True, return_counts=True, dim=0)
     if data is None:
         data = torch.arange(labels.shape[0], device=labels.device)
     data_groups = torch.split(data[torch.argsort(inv)], counts.tolist())
     return list(zip(group_labels, data_groups))
+
+
+def group_as_segments(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, Tensor]]:
+    """
+    Group as segments by labels
+
+    ## Parameters
+    
+    - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+    - `data` (Tensor, optional): shape `(N, *data_dims)` array.
+        If None, return the indices in each group instead.
+
+    ## Returns
+
+    Assuming there are `M` difference labels:
+
+    - `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
+    - `data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+    - `offsets`: `(Tensor)` shape `(M + 1,)`
+    
+    `data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
+    """
+    group_labels, inv, counts = torch.unique(labels, return_inverse=True, return_counts=True, dim=0)
+    if data is None:
+        data = torch.arange(labels.shape[0], device=labels.device)
+    offsets = torch.cat([torch.tensor([0], dtype=counts.dtype, device=counts.device), torch.cumsum(counts, dim=0)])
+    data = data[torch.argsort(inv)]
+    return group_labels, data, offsets

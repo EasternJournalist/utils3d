@@ -10,7 +10,8 @@ __all__ = ["sliding_window",
 "lookup", 
 "segment_roll", 
 "csr_matrix_from_dense_indices", 
-"split_groups_by_labels", 
+"group", 
+"group_as_segments", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -195,10 +196,16 @@ def csr_matrix_from_dense_indices(*args, **kwargs):
     return _call_based_on_args('csr_matrix_from_dense_indices', args, kwargs)
 
 @suppress_traceback
-def split_groups_by_labels(*args, **kwargs):
+def group(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.split_groups_by_labels, utils3d.torch.split_groups_by_labels
-    return _call_based_on_args('split_groups_by_labels', args, kwargs)
+        utils3d.numpy.group, utils3d.torch.group
+    return _call_based_on_args('group', args, kwargs)
+
+@suppress_traceback
+def group_as_segments(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.group_as_segments, utils3d.torch.group_as_segments
+    return _call_based_on_args('group_as_segments', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):

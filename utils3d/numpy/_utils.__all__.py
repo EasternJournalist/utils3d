@@ -6,5 +6,6 @@ __all__ = [
     'lookup',
     'segment_roll',
     'csr_matrix_from_dense_indices',
-    'split_groups_by_labels',
+    'group',
+    'group_as_segments',
 ]

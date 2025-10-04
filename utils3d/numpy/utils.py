@@ -15,7 +15,8 @@ __all__ = [
     'lookup',
     'segment_roll',
     'csr_matrix_from_dense_indices',
-    'split_groups_by_labels'
+    'group',
+    'group_as_segments'
 ]
 
 
@@ -249,20 +250,20 @@ def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> csr_array:
     ), shape=(indices.shape[0], n_cols))
 
 
-def split_groups_by_labels(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndarray, ndarray]]:
+def group(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndarray, ndarray]]:
     """
     Split the data into groups based on the provided labels.
 
     ## Parameters
-        - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
-        - `data` (ndarray, optional): shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
-            If None, return the indices in each group instead.
+    - `labels` `(ndarray)` shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+    - `data`: `(ndarray, optional)` shape `(N, *data_dims)` dense tensor. Each one in `N` has `D` features.
+        If None, return the indices in each group instead.
 
     ## Returns
-        - groups (List[Tuple[ndarray, ndarray]]): List of length G. Each element is a tuple of (label, data_in_group).
-            - `label` (ndarray): shape (*label_dims,) the label of the group.
-            - `data_in_group` (ndarray): shape (M, *data_dims) the data points in the group.
-            If `data` is None, `data_in_group` will be the indices of the data points in the original array.
+    - `groups` `(List[Tuple[ndarray, ndarray]])`: List of each group, a tuple of `(label, data_in_group)`.
+        - `label` (ndarray): shape `(*label_dims,)` the label of the group.
+        - `data_in_group` (ndarray): shape `(length_of_group, *data_dims)` the data points in the group.
+        If `data` is None, `data_in_group` will be the indices of the data points in the original array.
     """
     group_labels, inv, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
     if data is None:
@@ -270,3 +271,29 @@ def split_groups_by_labels(labels: ndarray, data: Optional[np.ndarray] = None) -
     sections = np.cumsum(counts, axis=0)[:-1]
     data_groups = np.split(data[np.argsort(inv)], sections)
     return list(zip(group_labels, data_groups))
+
+
+def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndarray, ndarray]]:
+    """
+    Group as segments by labels
+
+    ## Parameters
+    - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+    - `data` (ndarray, optional): shape `(N, *data_dims)` array.
+        If None, return the indices in each group instead.
+
+    ## Returns
+    Assuming there are `M` difference labels:
+
+    - `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
+    - `data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+    - `offsets`: `(ndarray)` shape `(M + 1,)`
+    
+    `data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
+    """
+    group_labels, inv, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
+    if data is None:
+        data = np.arange(labels.shape[0])
+    offsets = np.concatenate([[0], np.cumsum(counts, axis=0)])
+    data = data[np.argsort(inv)]
+    return group_labels, data, offsets
