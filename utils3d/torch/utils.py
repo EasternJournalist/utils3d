@@ -231,7 +231,7 @@ def group(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, T
     return list(zip(group_labels, data_groups))
 
 
-def group_as_segments(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, Tensor]]:
+def group_as_segments(labels: Tensor, data: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Group as segments by labels
 

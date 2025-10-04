@@ -249,7 +249,7 @@ def group(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List
     utils3d.numpy.utils.group
 
 @overload
-def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Group as segments by labels
 
 ## Parameters
@@ -1870,7 +1870,7 @@ def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[T
     utils3d.torch.utils.group
 
 @overload
-def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
+def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Group as segments by labels
 
 ## Parameters

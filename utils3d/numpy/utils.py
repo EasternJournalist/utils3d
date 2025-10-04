@@ -273,7 +273,7 @@ def group(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndar
     return list(zip(group_labels, data_groups))
 
 
-def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndarray, ndarray]]:
+def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tuple[ndarray, ndarray, ndarray]:
     """
     Group as segments by labels
 
