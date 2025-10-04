@@ -9,9 +9,8 @@ from . import numpy, torch
 import utils3d.numpy, utils3d.torch
 
 __all__ = ["sliding_window", 
-"max_pool_1d", 
+"pooling", 
 "max_pool_2d", 
-"max_pool_nd", 
 "lookup", 
 "segment_roll", 
 "csr_matrix_from_dense_indices", 
@@ -141,7 +140,7 @@ __all__ = ["sliding_window",
 
 @overload
 def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
-    """Get a sliding window of the input array.
+    """Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s).
 This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
 
 ## Parameters
@@ -169,16 +168,32 @@ This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with
     utils3d.numpy.utils.sliding_window
 
 @overload
-def max_pool_1d(x: numpy_.ndarray, kernel_size: int, stride: int, padding: int = 0, axis: int = -1):
-    utils3d.numpy.utils.max_pool_1d
+def pooling(x: numpy_.ndarray, kernel_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, padding: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, axis: Union[int, Tuple[int, ...], NoneType] = None, mode: Literal['min', 'max', 'sum', 'mean'] = 'max') -> numpy_.ndarray:
+    """Compute the pooling of the input array. 
+NOTE: NaNs will be ignored.
+
+## Parameters
+    - `x` (ndarray): Input array.
+    - `kernel_size` (int or Tuple[int,...]): Size of the pooling window.
+    - `stride` (Optional[Tuple[int,...]]): Stride of the pooling window. If None,
+        no stride is applied. If int is provided, the same stride is used for all specified axes.
+    - `padding` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before pooling.
+        Corresponding to `axis`.
+        - General format is `((before_1, after_1), (before_2, after_2), ...)`.
+        - Shortcut formats: 
+            - `int` -> same padding before and after for all axes;
+            - `(int, int)` -> same padding before and after for each axis;
+            - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
+    - `axis` (Optional[Tuple[int,...]]): Axes to apply the pooling. If None, all axes are used.
+    - `mode` (str): Pooling mode. One of 'min', 'max', 'sum', 'mean'.
+
+## Returns
+    - (ndarray): Pooled array with the same number of dimensions as input array."""
+    utils3d.numpy.utils.pooling
 
 @overload
 def max_pool_2d(x: numpy_.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
     utils3d.numpy.utils.max_pool_2d
-
-@overload
-def max_pool_nd(x: numpy_.ndarray, kernel_size: Tuple[int, ...], stride: Tuple[int, ...], padding: Tuple[int, ...], axis: Tuple[int, ...]) -> numpy_.ndarray:
-    utils3d.numpy.utils.max_pool_nd
 
 @overload
 def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Union[numbers.Number, numpy_.ndarray] = 0) -> numpy_.ndarray:
@@ -1306,7 +1321,7 @@ def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = 
     utils3d.numpy.maps.build_mesh_from_map
 
 @overload
-def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = 0.05, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = None, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
 ## Parameters
@@ -1314,8 +1329,8 @@ def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray
     extrinsics (ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
     intrinsics (ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
     *other_maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
-    atol (float, optional): absolute tolerance. Defaults to None.
-    rtol (float, optional): relative tolerance. Defaults to None.
+    atol (float, optional): absolute tolerance of difference. Defaults to None.
+    rtol (float, optional): relative tolerance of difference. Defaults to None.
         triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
     remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
     return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
@@ -1328,13 +1343,14 @@ def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray
     utils3d.numpy.maps.build_mesh_from_depth_map
 
 @overload
-def depth_map_edge(depth: numpy_.ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+def depth_map_edge(depth: numpy_.ndarray, atol: Optional[float] = None, rtol: Optional[float] = None, ltol: Optional[float] = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
     """Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
 
 ## Parameters
     depth (ndarray): shape (..., height, width), linear depth map
     atol (float): absolute tolerance
     rtol (float): relative tolerance
+    ltol (float): relative tolerance of inverse depth laplacian
 
 ## Returns
     edge (ndarray): shape (..., height, width) of dtype torch.bool"""

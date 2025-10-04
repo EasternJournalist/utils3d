@@ -6,7 +6,7 @@ import numpy as np
 from numpy import ndarray
 
 from ..helpers import no_warnings
-from .utils import max_pool_2d, sliding_window
+from .utils import max_pool_2d, sliding_window, pooling
 from .transforms import angle_between, unproject_cv
 from .mesh import triangulate_mesh, remove_unused_vertices
 
@@ -193,7 +193,7 @@ def build_mesh_from_depth_map(
     intrinsics: ndarray,
     extrinsics: Optional[ndarray] = None,
     atol: Optional[float] = None,
-    rtol: Optional[float] = 0.05,
+    rtol: Optional[float] = None,
     tri: bool = False,
 ) -> Tuple[ndarray, ...]:
     """
@@ -204,8 +204,8 @@ def build_mesh_from_depth_map(
         extrinsics (ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
         intrinsics (ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
         *other_maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
-        atol (float, optional): absolute tolerance. Defaults to None.
-        rtol (float, optional): relative tolerance. Defaults to None.
+        atol (float, optional): absolute tolerance of difference. Defaults to None.
+        rtol (float, optional): relative tolerance of difference. Defaults to None.
             triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
         remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
         return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
@@ -230,7 +230,14 @@ def build_mesh_from_depth_map(
 
 
 @no_warnings(category=RuntimeWarning)
-def depth_map_edge(depth: ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: ndarray = None) -> ndarray:
+def depth_map_edge(
+    depth: ndarray, 
+    atol: Optional[float] = None, 
+    rtol: Optional[float] = None, 
+    ltol: Optional[float] = None,
+    kernel_size: int = 3, 
+    mask: ndarray = None
+) -> ndarray:
     """
     Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
     
@@ -238,21 +245,32 @@ def depth_map_edge(depth: ndarray, atol: float = None, rtol: float = None, kerne
         depth (ndarray): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
+        ltol (float): relative tolerance of inverse depth laplacian
 
     ## Returns
         edge (ndarray): shape (..., height, width) of dtype torch.bool
     """
-    if mask is None:
+    if mask is not None:
+        depth = np.where(mask, depth, np.nan)
+    
+    if atol is not None or rtol is not None:
         diff = (max_pool_2d(depth, kernel_size, stride=1, padding=kernel_size // 2) + max_pool_2d(-depth, kernel_size, stride=1, padding=kernel_size // 2))
-    else:
-        diff = (max_pool_2d(np.where(mask, depth, -np.inf), kernel_size, stride=1, padding=kernel_size // 2) + max_pool_2d(np.where(mask, -depth, -np.inf), kernel_size, stride=1, padding=kernel_size // 2))
-
+    
     edge = np.zeros_like(depth, dtype=bool)
+    
     if atol is not None:
         edge |= diff > atol
-    
     if rtol is not None:
         edge |= diff / depth > rtol
+
+    if ltol is not None:
+        disp = 1 / depth
+        disp_mean_pooling = pooling(disp, kernel_size, stride=1, padding=kernel_size // 2, axis=(-2, -1), mode='mean')
+        laplacian = (disp - disp_mean_pooling) / disp
+        laplacian_window_max = pooling(laplacian, kernel_size, stride=1, padding=kernel_size // 2, axis=(-2, -1), mode='max')
+        laplacian_window_min = pooling(laplacian, kernel_size, stride=1, padding=kernel_size // 2, axis=(-2, -1), mode='min')
+        edge |= (laplacian_window_max > ltol) & (laplacian_window_min < -ltol)
+
     return edge
 
 

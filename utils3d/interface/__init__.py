@@ -5,9 +5,8 @@ import utils3d
 from ..helpers import suppress_traceback
 
 __all__ = ["sliding_window", 
-"max_pool_1d", 
+"pooling", 
 "max_pool_2d", 
-"max_pool_nd", 
 "lookup", 
 "segment_roll", 
 "csr_matrix_from_dense_indices", 
@@ -166,22 +165,16 @@ def sliding_window(*args, **kwargs):
     return _call_based_on_args('sliding_window', args, kwargs)
 
 @suppress_traceback
-def max_pool_1d(*args, **kwargs):
+def pooling(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.max_pool_1d, None
-    return _call_based_on_args('max_pool_1d', args, kwargs)
+        utils3d.numpy.pooling, None
+    return _call_based_on_args('pooling', args, kwargs)
 
 @suppress_traceback
 def max_pool_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.max_pool_2d, None
     return _call_based_on_args('max_pool_2d', args, kwargs)
-
-@suppress_traceback
-def max_pool_nd(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.max_pool_nd, None
-    return _call_based_on_args('max_pool_nd', args, kwargs)
 
 @suppress_traceback
 def lookup(*args, **kwargs):
