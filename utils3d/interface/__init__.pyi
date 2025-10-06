@@ -12,7 +12,10 @@ __all__ = ["sliding_window",
 "pooling", 
 "max_pool_2d", 
 "lookup", 
+"lookup_get", 
+"lookup_set", 
 "segment_roll", 
+"segment_take", 
 "csr_matrix_from_dense_indices", 
 "group", 
 "group_as_segments", 
@@ -197,28 +200,61 @@ def max_pool_2d(x: numpy_.ndarray, kernel_size: Union[int, Tuple[int, int]], str
     utils3d.numpy.utils.max_pool_2d
 
 @overload
-def lookup(key: numpy_.ndarray, query: numpy_.ndarray, value: Optional[numpy_.ndarray] = None, default_value: Union[numbers.Number, numpy_.ndarray] = 0) -> numpy_.ndarray:
-    """Look up `query` in `key` like a dictionary.  Useful for COO indexing.
+def lookup(key: numpy_.ndarray, query: numpy_.ndarray) -> numpy_.ndarray:
+    """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
 ## Parameters
-    `key` (ndarray): shape `(K, *qk_shape)`, the array to search in
-    `query` (ndarray): shape `(Q, *qk_shape)`, the array to search for
-    `value` (Optional[ndarray]): shape `(K, *v_shape)`, the array to get values from
-    `default_value` (Optional[ndarray]): shape `(*v_shape)`, default values to return if query is not found
+- `key` (ndarray): shape `(K, ...)`, the array to search in
+- `query` (ndarray): shape `(Q, ...)`, the array to search for
 
 ## Returns
-    If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
-    If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+- `indices` (ndarray): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
 
 ## NOTE
 `O((Q + K) * log(Q + K))` complexity."""
     utils3d.numpy.utils.lookup
 
 @overload
+def lookup_get(key: numpy_.ndarray, value: numpy_.ndarray, get_key: numpy_.ndarray, default_value: Union[numbers.Number, numpy_.ndarray] = 0) -> numpy_.ndarray:
+    """Dictionary-like get for arrays
+
+## Parameters
+- `key` (ndarray): shape `(N, *key_shape)`, the key array of the dictionary to get from
+- `value` (ndarray): shape `(N, *value_shape)`, the value array of the dictionary to get from
+- `get_key` (ndarray): shape `(M, *key_shape)`, the key array to get for
+
+## Returns
+    `get_value` (ndarray): shape `(M, *value_shape)`, result values corresponding to `get_key`"""
+    utils3d.numpy.utils.lookup_get
+
+@overload
+def lookup_set(key: numpy_.ndarray, value: numpy_.ndarray, set_key: numpy_.ndarray, set_value: numpy_.ndarray, append: bool = False, inplace: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Dictionary-like set for arrays.
+
+## Parameters
+- `key` (ndarray): shape `(N, *key_shape)`, the key array of the dictionary to set
+- `value` (ndarray): shape `(N, *value_shape)`, the value array of the dictionary to set
+- `set_key` (ndarray): shape `(M, *key_shape)`, the key array to set for
+- `set_value` (ndarray): shape `(M, *value_shape)`, the value array to set as
+- `append` (bool): If True, append the (key, value) pairs in (set_key, set_value) that are not in (key, value) to the result.
+- `inplace` (bool): If True, modify the input `value` array
+
+## Returns
+- `result_key` (ndarray): shape `(N_new, *value_shape)`. N_new = N + number of new keys added if append is True, else N.
+- `result_value (ndarray): shape `(N_new, *value_shape)` """
+    utils3d.numpy.utils.lookup_set
+
+@overload
 def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> numpy_.ndarray:
-    """Roll the data tensor within each segment defined by offsets.
+    """Roll the data within each segment.
     """
     utils3d.numpy.utils.segment_roll
+
+@overload
+def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Take some segments from a segmented array
+    """
+    utils3d.numpy.utils.segment_take
 
 @overload
 def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.sparse._csr.csr_array:
@@ -1811,28 +1847,61 @@ def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, k
     utils3d.torch.utils.masked_max
 
 @overload
-def lookup(key: torch_.Tensor, query: torch_.Tensor, value: Optional[torch_.Tensor] = None, default_value: Union[numbers.Number, torch_.Tensor] = 0) -> torch_.LongTensor:
+def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
 ## Parameters
-- `key` (Tensor): shape `(K, *qk_shape)`, the array to search in
-- `query` (Tensor): shape `(Q, *qk_shape)`, the array to search for
-- `value` (Optional[Tensor]): shape `(K, *v_shape)`, the array to get values from
-- `default_value` (Optional[Tensor]): shape `(*v_shape)`, default values to return if query is not found
+- `key` (Tensor): shape `(K, ...)`, the array to search in
+- `query` (Tensor): shape `(Q, ...)`, the array to search for
 
 ## Returns
-    If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
-    If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+- `indices` (Tensor): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
 
 ## NOTE
 `O((Q + K) * log(Q + K))` complexity."""
     utils3d.torch.utils.lookup
 
 @overload
+def lookup_get(key: torch_.Tensor, value: torch_.Tensor, get_key: torch_.Tensor, default_value: Union[numbers.Number, torch_.Tensor] = 0) -> torch_.Tensor:
+    """Dictionary-like get for arrays
+
+## Parameters
+- `key` (Tensor): shape `(N, *key_shape)`, the key array of the dictionary to get from
+- `value` (Tensor): shape `(N, *value_shape)`, the value array of the dictionary to get from
+- `get_key` (Tensor): shape `(M, *key_shape)`, the key array to get for
+
+## Returns
+    `get_value` (Tensor): shape `(M, *value_shape)`, result values corresponding to `get_key`"""
+    utils3d.torch.utils.lookup_get
+
+@overload
+def lookup_set(key: torch_.Tensor, value: torch_.Tensor, set_key: torch_.Tensor, set_value: torch_.Tensor, append: bool = False, inplace: bool = False) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Dictionary-like set for arrays.
+
+## Parameters
+- `key` (Tensor): shape `(N, *key_shape)`, the key array of the dictionary to set
+- `value` (Tensor): shape `(N, *value_shape)`, the value array of the dictionary to set
+- `set_key` (Tensor): shape `(M, *key_shape)`, the key array to set for
+- `set_value` (Tensor): shape `(M, *value_shape)`, the value array to set as
+- `append` (bool): If True, append the (key, value) pairs in (set_key, set_value) that are not in (key, value) to the result.
+- `inplace` (bool): If True, modify the input `value` array
+
+## Returns
+- `result_key` (Tensor): shape `(N_new, *value_shape)`. N_new = N + number of new keys added if append is True, else N.
+- `result_value (Tensor): shape `(N_new, *value_shape)` """
+    utils3d.torch.utils.lookup_set
+
+@overload
 def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int) -> torch_.Tensor:
-    """Roll the data tensor within each segment defined by offsets.
+    """Roll the data within each segment.
     """
     utils3d.torch.utils.segment_roll
+
+@overload
+def segment_take(data: torch_.Tensor, offsets: torch_.Tensor, taking: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Take some segments from a segmented array
+    """
+    utils3d.torch.utils.segment_take
 
 @overload
 def csr_matrix_from_dense_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:

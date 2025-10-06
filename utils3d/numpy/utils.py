@@ -13,7 +13,10 @@ __all__ = [
     'pooling',
     'max_pool_2d',
     'lookup',
+    'lookup_get',
+    'lookup_set',
     'segment_roll',
+    'segment_take',
     'csr_matrix_from_dense_indices',
     'group',
     'group_as_segments'
@@ -193,19 +196,15 @@ def max_pool_2d(x: ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Un
     return pooling(x, kernel_size, stride, padding, axis, 'max')
 
 
-def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, default_value: Union[Number, ndarray] = 0) -> ndarray:
-    """
-    Look up `query` in `key` like a dictionary.  Useful for COO indexing.
+def lookup(key: ndarray, query: ndarray) -> ndarray:
+    """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
     ## Parameters
-        `key` (ndarray): shape `(K, *qk_shape)`, the array to search in
-        `query` (ndarray): shape `(Q, *qk_shape)`, the array to search for
-        `value` (Optional[ndarray]): shape `(K, *v_shape)`, the array to get values from
-        `default_value` (Optional[ndarray]): shape `(*v_shape)`, default values to return if query is not found
+    - `key` (ndarray): shape `(K, ...)`, the array to search in
+    - `query` (ndarray): shape `(Q, ...)`, the array to search for
 
     ## Returns
-        If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
-        If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+    - `indices` (ndarray): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
 
     ## NOTE
     `O((Q + K) * log(Q + K))` complexity.
@@ -217,20 +216,76 @@ def lookup(key: ndarray, query: ndarray, value: Optional[ndarray] = None, defaul
         return_inverse=True
     )
     result = index[inverse[key.shape[0]:]]
-    if value is None:
-        return np.where(result < key.shape[0], result, -1)
-    unsqueeze_slicing = tuple(slice(None), *((None,) * (value.ndim - 1)))
-    return np.where((result < key.shape[0])[unsqueeze_slicing], value[result.clip(0, key.shape[0] - 1)], default_value)
+    return np.where(result < key.shape[0], result, -1)
+
+
+def lookup_get(key: ndarray, value: ndarray, get_key: ndarray, default_value: Union[Number, ndarray] = 0) -> ndarray:
+    """Dictionary-like get for arrays
+
+    ## Parameters
+    - `key` (ndarray): shape `(N, *key_shape)`, the key array of the dictionary to get from
+    - `value` (ndarray): shape `(N, *value_shape)`, the value array of the dictionary to get from
+    - `get_key` (ndarray): shape `(M, *key_shape)`, the key array to get for
+
+    ## Returns
+        `get_value` (ndarray): shape `(M, *value_shape)`, result values corresponding to `get_key`
+    """
+    indices = lookup(key, get_key)
+    return np.where(
+        (indices >= 0)[(slice(None), *((None,) * (value.ndim - 1)))], 
+        value[indices.clip(0, key.shape[0] - 1)], 
+        default_value
+    )
+
+
+def lookup_set(key: ndarray, value: ndarray, set_key: ndarray, set_value: ndarray, append: bool = False, inplace: bool = False) -> Tuple[ndarray, ndarray]:
+    """Dictionary-like set for arrays.
+
+    ## Parameters
+    - `key` (ndarray): shape `(N, *key_shape)`, the key array of the dictionary to set
+    - `value` (ndarray): shape `(N, *value_shape)`, the value array of the dictionary to set
+    - `set_key` (ndarray): shape `(M, *key_shape)`, the key array to set for
+    - `set_value` (ndarray): shape `(M, *value_shape)`, the value array to set as
+    - `append` (bool): If True, append the (key, value) pairs in (set_key, set_value) that are not in (key, value) to the result.
+    - `inplace` (bool): If True, modify the input `value` array
+
+    ## Returns
+    - `result_key` (ndarray): shape `(N_new, *value_shape)`. N_new = N + number of new keys added if append is True, else N.
+    - `result_value (ndarray): shape `(N_new, *value_shape)` 
+    """
+    set_indices = lookup(key, set_key)
+    if inplace:
+        assert append is False, "Cannot append when inplace is True"
+    else:
+        value = value.copy()
+    hit = np.where(set_indices >= 0)
+    value[set_indices[hit]] = set_value[hit]
+    if append:
+        missing = np.where(set_indices < 0)
+        key = np.concatenate([key, set_key[missing]], axis=0)
+        value = np.concatenate([value, set_value[missing]], axis=0)
+    return key, value
 
 
 def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:
-    """Roll the data tensor within each segment defined by offsets.
+    """Roll the data within each segment.
     """
     lengths = offsets[1:] - offsets[:-1]
     start = np.repeat(offsets[:-1], lengths)
     elem_indices = start + (np.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % np.repeat(lengths, lengths)
     data = data[elem_indices]
     return data
+
+
+def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndarray, ndarray]:
+    """Take some segments from a segmented array
+    """
+    lengths = offsets[1:] - offsets[:-1]
+    new_lengths = lengths[taking]
+    new_offsets = np.concatenate([[0], np.cumsum(lengths)])
+    indices = np.arange(new_offsets[-1]) - np.repeat(offsets[taking] - new_offsets[:-1], new_lengths)
+    new_data = data[indices]
+    return new_data, new_offsets
 
 
 def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> csr_array:

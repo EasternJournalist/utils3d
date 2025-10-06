@@ -15,7 +15,10 @@ __all__ = [
     'masked_min',
     'masked_max',
     'lookup',
+    'lookup_get',
+    'lookup_set',
     'segment_roll',
+    'segment_take',
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
     'group',
@@ -113,19 +116,15 @@ def masked_max(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: 
         return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max(dim=dim, keepdim=keepdim)
     
 
-def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_value: Union[Number, Tensor] = 0) -> torch.LongTensor:
-    """
-    Look up `query` in `key` like a dictionary. Useful for COO indexing.
+def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
+    """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
     ## Parameters
-    - `key` (Tensor): shape `(K, *qk_shape)`, the array to search in
-    - `query` (Tensor): shape `(Q, *qk_shape)`, the array to search for
-    - `value` (Optional[Tensor]): shape `(K, *v_shape)`, the array to get values from
-    - `default_value` (Optional[Tensor]): shape `(*v_shape)`, default values to return if query is not found
+    - `key` (Tensor): shape `(K, ...)`, the array to search in
+    - `query` (Tensor): shape `(Q, ...)`, the array to search for
 
     ## Returns
-        If `value` is None, return the indices `(Q,)` of `query` in `key`, or -1. If a query is not found in key, the corresponding index will be -1.
-        If `value` is provided, return the corresponding values `(Q, *v_shape)`, or default_value if not found.
+    - `indices` (Tensor): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
 
     ## NOTE
     `O((Q + K) * log(Q + K))` complexity.
@@ -138,10 +137,76 @@ def lookup(key: Tensor, query: Tensor, value: Optional[Tensor] = None, default_v
     index = torch.full((unique.shape[0],), -1, dtype=torch.long, device=key.device)
     index.scatter_(0, inverse[:key.shape[0]], torch.arange(key.shape[0], device=key.device))
     result = index.index_select(0, inverse[key.shape[0]:])
-    if value is None:
-        return torch.where(result < key.shape[0], result, -1)
-    unsqueeze_slicing = tuple(slice(None), *((None,) * (value.ndim - 1)))
-    return torch.where((result < key.shape[0])[unsqueeze_slicing], value[result.clamp(0, key.shape[0] - 1)], default_value)
+    return torch.where(result < key.shape[0], result, -1)
+
+
+def lookup_get(key: Tensor, value: Tensor, get_key: Tensor, default_value: Union[Number, Tensor] = 0) -> Tensor:
+    """Dictionary-like get for arrays
+
+    ## Parameters
+    - `key` (Tensor): shape `(N, *key_shape)`, the key array of the dictionary to get from
+    - `value` (Tensor): shape `(N, *value_shape)`, the value array of the dictionary to get from
+    - `get_key` (Tensor): shape `(M, *key_shape)`, the key array to get for
+
+    ## Returns
+        `get_value` (Tensor): shape `(M, *value_shape)`, result values corresponding to `get_key`
+    """
+    indices = lookup(key, get_key)
+    return torch.where(
+        (indices >= 0)[(slice(None), *((None,) * (value.ndim - 1)))], 
+        value[indices.clip(0, key.shape[0] - 1)], 
+        default_value
+    )
+
+
+def lookup_set(key: Tensor, value: Tensor, set_key: Tensor, set_value: Tensor, append: bool = False, inplace: bool = False) -> Tuple[Tensor, Tensor]:
+    """Dictionary-like set for arrays.
+
+    ## Parameters
+    - `key` (Tensor): shape `(N, *key_shape)`, the key array of the dictionary to set
+    - `value` (Tensor): shape `(N, *value_shape)`, the value array of the dictionary to set
+    - `set_key` (Tensor): shape `(M, *key_shape)`, the key array to set for
+    - `set_value` (Tensor): shape `(M, *value_shape)`, the value array to set as
+    - `append` (bool): If True, append the (key, value) pairs in (set_key, set_value) that are not in (key, value) to the result.
+    - `inplace` (bool): If True, modify the input `value` array
+
+    ## Returns
+    - `result_key` (Tensor): shape `(N_new, *value_shape)`. N_new = N + number of new keys added if append is True, else N.
+    - `result_value (Tensor): shape `(N_new, *value_shape)` 
+    """
+    set_indices = lookup(key, set_key)
+    if inplace:
+        assert append is False, "Cannot append when inplace is True"
+    else:
+        value = value.clone()
+    hit = torch.where(set_indices >= 0)
+    value[set_indices[hit]] = set_value[hit]
+    if append:
+        missing = torch.where(set_indices < 0)
+        key = torch.cat([key, set_key[missing]], axis=0)
+        value = torch.cat([value, set_value[missing]], axis=0)
+    return key, value
+
+
+def segment_roll(data: torch.Tensor, offsets: torch.Tensor, shift: int) -> Tensor:
+    """Roll the data within each segment.
+    """
+    lengths = offsets[1:] - offsets[:-1]
+    start = offsets[:-1].repeat_interleave(lengths)
+    elem_indices = start + (torch.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % lengths.repeat_interleave(lengths)
+    data = data.gather(0, elem_indices)
+    return data
+
+
+def segment_take(data: Tensor, offsets: Tensor, taking: Tensor) -> Tuple[Tensor, Tensor]:
+    """Take some segments from a segmented array
+    """
+    lengths = offsets[1:] - offsets[:-1]
+    new_lengths = lengths[taking]
+    new_offsets = torch.cat([torch.tensor([0], dtype=lengths.dtype, device=lengths.device), torch.cumsum(lengths, dim=0)])
+    indices = torch.arange(new_offsets[-1]) - torch.repeat_interleave(offsets[taking] - new_offsets[:-1], new_lengths)
+    new_data = data.index_select(0, indices)
+    return new_data, new_offsets
 
 
 def csr_matrix_from_dense_indices(indices: Tensor, n_cols: int) -> Tensor:
@@ -178,17 +243,6 @@ def csr_eliminate_zeros(input: Tensor):
     col_indices = input.col_indices()[nonzero_element_indices]
     values = input.values()[nonzero_element_indices]
     return torch.sparse_csr_tensor(crow_indices, col_indices, values, input.size())
-
-
-def segment_roll(data: torch.Tensor, offsets: torch.Tensor, shift: int) -> Tensor:
-    """Roll the data tensor within each segment defined by offsets.
-    """
-    lengths = offsets[1:] - offsets[:-1]
-    start = offsets[:-1].repeat_interleave(lengths)
-    elem_indices = start + (torch.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % lengths.repeat_interleave(lengths)
-    data = data.gather(0, elem_indices)
-    return data
-
 
 def csr_roll_col_indices(input: Tensor, shift: int):
     """Roll the order of column indices of a sparse CSR tensor.

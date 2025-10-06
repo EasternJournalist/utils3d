@@ -8,7 +8,10 @@ __all__ = ["sliding_window",
 "pooling", 
 "max_pool_2d", 
 "lookup", 
+"lookup_get", 
+"lookup_set", 
 "segment_roll", 
+"segment_take", 
 "csr_matrix_from_dense_indices", 
 "group", 
 "group_as_segments", 
@@ -184,10 +187,28 @@ def lookup(*args, **kwargs):
     return _call_based_on_args('lookup', args, kwargs)
 
 @suppress_traceback
+def lookup_get(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.lookup_get, utils3d.torch.lookup_get
+    return _call_based_on_args('lookup_get', args, kwargs)
+
+@suppress_traceback
+def lookup_set(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.lookup_set, utils3d.torch.lookup_set
+    return _call_based_on_args('lookup_set', args, kwargs)
+
+@suppress_traceback
 def segment_roll(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.segment_roll, utils3d.torch.segment_roll
     return _call_based_on_args('segment_roll', args, kwargs)
+
+@suppress_traceback
+def segment_take(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_take, utils3d.torch.segment_take
+    return _call_based_on_args('segment_take', args, kwargs)
 
 @suppress_traceback
 def csr_matrix_from_dense_indices(*args, **kwargs):
