@@ -20,17 +20,6 @@ lazy_import(globals(), '.numpy', 'np')
 lazy_import(globals(), '.torch', 'torch')
 lazy_import(globals(), '.torch', 'pt')
 
-# def __getattr__(name: str):
-#     if (module := globals().get(name, None)):
-#         return module
-#     if name == 'numpy' or name == 'np':
-#         module = importlib.import_module(f'.numpy', __package__)
-#         globals()['numpy'] = globals()['np'] = module
-#     if name == 'torch' or name == 'pt':
-#         module = importlib.import_module(f'.torch', __package__)
-#         globals()['torch'] = globals()['pt'] = module
-#     return module
-
 
 if TYPE_CHECKING:
     from . import numpy
