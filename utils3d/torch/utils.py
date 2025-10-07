@@ -90,7 +90,7 @@ def sliding_window(
         else:
             raise ValueError(f"Invalid pad_size {pad_size}")
         full_pad = [(0, 0) if i not in dim else pad_size[dim.index(i)] for i in range(x.ndim)]
-        full_pad = chain(*reversed(full_pad))
+        full_pad = tuple(chain(*reversed(full_pad)))
         x = F.pad(x, full_pad, mode=pad_mode, value=pad_value)
     
     for i in range(len(window_size)):
