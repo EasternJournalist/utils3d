@@ -12,6 +12,7 @@ __all__ = ["sliding_window",
 "lookup_set", 
 "segment_roll", 
 "segment_take", 
+"segment_concatenate", 
 "csr_matrix_from_dense_indices", 
 "group", 
 "group_as_segments", 
@@ -209,6 +210,12 @@ def segment_take(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.segment_take, utils3d.torch.segment_take
     return _call_based_on_args('segment_take', args, kwargs)
+
+@suppress_traceback
+def segment_concatenate(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_concatenate, None
+    return _call_based_on_args('segment_concatenate', args, kwargs)
 
 @suppress_traceback
 def csr_matrix_from_dense_indices(*args, **kwargs):

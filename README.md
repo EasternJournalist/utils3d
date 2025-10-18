@@ -37,6 +37,8 @@ The links below will take you to the source code of each function with detailed 
 
 ### Transforms
 
+### Transforms
+
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.angle_between`<br>Calculate the angle between two (batches of) vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1426) | [`utils3d.pt.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1399) | 
@@ -176,19 +178,20 @@ The links below will take you to the source code of each function with detailed 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.csr_eliminate_zeros`<br>Remove zero elements from a sparse CSR tensor. | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L231) | 
-| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L291) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L212) | 
-| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L308) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L266) | 
-| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/utils.py#L331) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/utils.py#L288) | 
-| `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L199) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L119) | 
-| `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L222) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L143) | 
-| `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L241) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L162) | 
+| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L324) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L212) | 
+| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L341) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L266) | 
+| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/utils.py#L364) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/utils.py#L288) | 
+| `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L200) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L119) | 
+| `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L223) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L143) | 
+| `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L242) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L162) | 
 | `utils3d.masked_max`<br>Similar to torch.max, but with mask | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L110) | 
 | `utils3d.masked_min`<br>Similar to torch.min, but with mask | - | [`utils3d.pt.masked_min(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L101) | 
-| `utils3d.max_pool_2d`<br> | [`utils3d.np.max_pool_2d(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L188) | - | 
-| `utils3d.pooling`<br>Compute the pooling of the input array.  | [`utils3d.np.pooling(x, kernel_size, stride, padding, axis, mode)`](utils3d/numpy/utils.py#L103) | - | 
-| `utils3d.segment_roll`<br>Roll the data within each segment. | [`utils3d.np.segment_roll(data, offsets, shift)`](utils3d/numpy/utils.py#L270) | [`utils3d.pt.segment_roll(data, offsets, shift)`](utils3d/torch/utils.py#L191) | 
-| `utils3d.segment_take`<br>Take some segments from a segmented array | [`utils3d.np.segment_take(data, offsets, taking)`](utils3d/numpy/utils.py#L280) | [`utils3d.pt.segment_take(data, offsets, taking)`](utils3d/torch/utils.py#L201) | 
-| `utils3d.sliding_window`<br>Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s). | [`utils3d.np.sliding_window(x, window_size, stride, pad_size, pad_mode, pad_value, axis)`](utils3d/numpy/utils.py#L26) | [`utils3d.pt.sliding_window(x, window_size, stride, pad_size, pad_mode, pad_value, dim)`](utils3d/torch/utils.py#L29) | 
+| `utils3d.max_pool_2d`<br> | [`utils3d.np.max_pool_2d(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L189) | - | 
+| `utils3d.pooling`<br>Compute the pooling of the input array.  | [`utils3d.np.pooling(x, kernel_size, stride, padding, axis, mode)`](utils3d/numpy/utils.py#L104) | - | 
+| `utils3d.segment_concatenate`<br>Concatenate a list of segmented arrays into a single segmented array | [`utils3d.np.segment_concatenate(segments)`](utils3d/numpy/utils.py#L301) | - | 
+| `utils3d.segment_roll`<br>Roll the data within each segment. | [`utils3d.np.segment_roll(data, offsets, shift)`](utils3d/numpy/utils.py#L271) | [`utils3d.pt.segment_roll(data, offsets, shift)`](utils3d/torch/utils.py#L191) | 
+| `utils3d.segment_take`<br>Take some segments from a segmented array | [`utils3d.np.segment_take(data, offsets, taking)`](utils3d/numpy/utils.py#L281) | [`utils3d.pt.segment_take(data, offsets, taking)`](utils3d/torch/utils.py#L201) | 
+| `utils3d.sliding_window`<br>Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s). | [`utils3d.np.sliding_window(x, window_size, stride, pad_size, pad_mode, pad_value, axis)`](utils3d/numpy/utils.py#L27) | [`utils3d.pt.sliding_window(x, window_size, stride, pad_size, pad_mode, pad_value, dim)`](utils3d/torch/utils.py#L29) | 
 
 
 ### Io

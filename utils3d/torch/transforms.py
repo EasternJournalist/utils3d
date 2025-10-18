@@ -311,7 +311,7 @@ def intrinsics_to_perspective(
     """
     device, dtype = intrinsics.device, intrinsics.dtype
     batch_shape = intrinsics.shape[:-2]
-    m = torch.tensor([[2, 0, -1], [0, -2, 1], [0, 0, 1]], dtype=intrinsics.dtype) @ intrinsics @ torch.diag(torch.tensor([1, -1, -1], dtype=intrinsics.dtype))
+    m = torch.tensor([[2, 0, -1], [0, -2, 1], [0, 0, 1]], dtype=dtype, device=device) @ intrinsics @ torch.diag(torch.tensor([1, -1, -1], dtype=dtype, device=device))
     perspective = torch.cat([
         torch.cat([m[..., :2, :], torch.zeros((*batch_shape, 2, 1), dtype=dtype, device=device)], dim=-1),
         torch.cat([torch.zeros((*batch_shape, 1, 2), dtype=dtype, device=device), ((near / far + 1) / (near / far - 1))[..., None, None], (2. * near / (near / far - 1))[..., None, None]], dim=-1),

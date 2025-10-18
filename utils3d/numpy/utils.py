@@ -17,6 +17,7 @@ __all__ = [
     'lookup_set',
     'segment_roll',
     'segment_take',
+    'segment_concatenate',
     'csr_matrix_from_dense_indices',
     'group',
     'group_as_segments'
@@ -279,6 +280,15 @@ def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:
 
 def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndarray, ndarray]:
     """Take some segments from a segmented array
+
+    ## Parameters
+    - `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+    - `taking`: (ndarray) shape `(K,)` the indices of segments to take
+
+    ## Returns
+    - `new_data`: (ndarray) shape `(N_new, *data_dims)`
+    - `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data
     """
     lengths = offsets[1:] - offsets[:-1]
     new_lengths = lengths[taking]
@@ -286,6 +296,29 @@ def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndar
     indices = np.arange(new_offsets[-1]) - np.repeat(offsets[taking] - new_offsets[:-1], new_lengths)
     new_data = data[indices]
     return new_data, new_offsets
+
+
+def segment_concatenate(segments: List[Tuple[ndarray, ndarray]]) -> Tuple[ndarray, ndarray]:
+    """Concatenate a list of segmented arrays into a single segmented array
+
+    ## Parameters
+    - `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
+        Each element is a tuple of `(data, offsets)`:
+        - `data`: (ndarray) shape `(N_i, *data_dims)` the
+        - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+
+    ## Returns
+    - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data
+    """
+    data_list = []
+    offsets_list = [np.array([0])]
+    for data, offsets in segments:
+        data_list.append(data)
+        offsets_list.append(offsets[1:] + offsets_list[-1][-1])
+    data = np.concatenate(data_list, axis=0)
+    offsets = np.concatenate(offsets_list, axis=0)
+    return data, offsets
 
 
 def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> csr_array:

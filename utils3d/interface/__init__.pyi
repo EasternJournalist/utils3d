@@ -16,6 +16,7 @@ __all__ = ["sliding_window",
 "lookup_set", 
 "segment_roll", 
 "segment_take", 
+"segment_concatenate", 
 "csr_matrix_from_dense_indices", 
 "group", 
 "group_as_segments", 
@@ -253,8 +254,31 @@ def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> n
 @overload
 def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Take some segments from a segmented array
-    """
+
+## Parameters
+- `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+- `taking`: (ndarray) shape `(K,)` the indices of segments to take
+
+## Returns
+- `new_data`: (ndarray) shape `(N_new, *data_dims)`
+- `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data"""
     utils3d.numpy.utils.segment_take
+
+@overload
+def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]]) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Concatenate a list of segmented arrays into a single segmented array
+
+## Parameters
+- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
+    Each element is a tuple of `(data, offsets)`:
+    - `data`: (ndarray) shape `(N_i, *data_dims)` the
+    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+
+## Returns
+- `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data"""
+    utils3d.numpy.utils.segment_concatenate
 
 @overload
 def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.sparse._csr.csr_array:
