@@ -625,7 +625,7 @@ def project_cv(
         linear_depth (Tensor): [..., N] linear depth
     """
     intrinsics = torch.cat([
-        torch.cat([intrinsics, torch.zeros((*intrinsics.shape[:-2], 1, 3), dtype=intrinsics.dtype, device=intrinsics.device)], dim=-1),
+        torch.cat([intrinsics, torch.zeros((*intrinsics.shape[:-2], 3, 1), dtype=intrinsics.dtype, device=intrinsics.device)], dim=-1),
         torch.tensor([[0, 0, 0, 1]], dtype=intrinsics.dtype, device=intrinsics.device).expand(*intrinsics.shape[:-2], 1, 4)
     ], dim=-2)
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics

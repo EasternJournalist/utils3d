@@ -37,8 +37,6 @@ The links below will take you to the source code of each function with detailed 
 
 ### Transforms
 
-### Transforms
-
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.angle_between`<br>Calculate the angle between two (batches of) vectors. | [`utils3d.np.angle_between(v1, v2)`](utils3d/numpy/transforms.py#L1426) | [`utils3d.pt.angle_between(v1, v2, eps)`](utils3d/torch/transforms.py#L1399) | 
@@ -178,9 +176,9 @@ The links below will take you to the source code of each function with detailed 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.csr_eliminate_zeros`<br>Remove zero elements from a sparse CSR tensor. | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L231) | 
-| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L324) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L212) | 
-| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L341) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L266) | 
-| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/utils.py#L364) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/utils.py#L288) | 
+| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L325) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L212) | 
+| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L342) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L266) | 
+| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/utils.py#L365) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/utils.py#L288) | 
 | `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L200) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L119) | 
 | `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L223) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L143) | 
 | `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L242) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L162) | 

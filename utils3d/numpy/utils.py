@@ -290,10 +290,10 @@ def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndar
     - `new_data`: (ndarray) shape `(N_new, *data_dims)`
     - `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data
     """
-    lengths = offsets[1:] - offsets[:-1]
+    lengths = np.diff(offsets)
     new_lengths = lengths[taking]
-    new_offsets = np.concatenate([[0], np.cumsum(lengths)])
-    indices = np.arange(new_offsets[-1]) - np.repeat(offsets[taking] - new_offsets[:-1], new_lengths)
+    new_offsets = np.concatenate([[0], np.cumsum(new_lengths)])
+    indices = np.arange(new_offsets[-1]) + np.repeat(offsets[taking] - new_offsets[:-1], new_lengths)
     new_data = data[indices]
     return new_data, new_offsets
 
@@ -314,8 +314,9 @@ def segment_concatenate(segments: List[Tuple[ndarray, ndarray]]) -> Tuple[ndarra
     data_list = []
     offsets_list = [np.array([0])]
     for data, offsets in segments:
-        data_list.append(data)
-        offsets_list.append(offsets[1:] + offsets_list[-1][-1])
+        if len(offsets) > 1:
+            data_list.append(data)
+            offsets_list.append(offsets[1:] + offsets_list[-1][-1])
     data = np.concatenate(data_list, axis=0)
     offsets = np.concatenate(offsets_list, axis=0)
     return data, offsets
@@ -380,8 +381,9 @@ def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tup
     `data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
     """
     group_labels, inv, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
-    if data is None:
-        data = np.arange(labels.shape[0])
     offsets = np.concatenate([[0], np.cumsum(counts, axis=0)])
-    data = data[np.argsort(inv)]
+    if data is None:
+        data = np.argsort(inv)
+    else:
+        data = data[np.argsort(inv)]
     return group_labels, data, offsets

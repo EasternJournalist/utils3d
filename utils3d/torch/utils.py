@@ -191,7 +191,7 @@ def lookup_set(key: Tensor, value: Tensor, set_key: Tensor, set_value: Tensor, a
 def segment_roll(data: torch.Tensor, offsets: torch.Tensor, shift: int) -> Tensor:
     """Roll the data within each segment.
     """
-    lengths = offsets[1:] - offsets[:-1]
+    lengths = torch.diff(offsets)
     start = offsets[:-1].repeat_interleave(lengths)
     elem_indices = start + (torch.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % lengths.repeat_interleave(lengths)
     data = data.gather(0, elem_indices)
@@ -201,10 +201,10 @@ def segment_roll(data: torch.Tensor, offsets: torch.Tensor, shift: int) -> Tenso
 def segment_take(data: Tensor, offsets: Tensor, taking: Tensor) -> Tuple[Tensor, Tensor]:
     """Take some segments from a segmented array
     """
-    lengths = offsets[1:] - offsets[:-1]
+    lengths = torch.diff(offsets)
     new_lengths = lengths[taking]
-    new_offsets = torch.cat([torch.tensor([0], dtype=lengths.dtype, device=lengths.device), torch.cumsum(lengths, dim=0)])
-    indices = torch.arange(new_offsets[-1]) - torch.repeat_interleave(offsets[taking] - new_offsets[:-1], new_lengths)
+    new_offsets = torch.cat([torch.tensor([0], dtype=lengths.dtype, device=lengths.device), torch.cumsum(new_lengths, dim=0)])
+    indices = torch.arange(new_offsets[-1]) + torch.repeat_interleave(offsets[taking] - new_offsets[:-1], new_lengths)
     new_data = data.index_select(0, indices)
     return new_data, new_offsets
 
