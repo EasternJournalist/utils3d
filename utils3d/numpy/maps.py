@@ -65,10 +65,10 @@ def uv_map(
         height, width = size[0]
     else:
         height, width = size
-    u = np.linspace(left + 0.5 / width, right - 0.5 / width, width, dtype=dtype)
-    v = np.linspace(top + 0.5 / height, bottom - 0.5 / height, height, dtype=dtype)
+    u = np.linspace(left + 0.5 / width * (right - left), right - 0.5 / width * (right - left), width, dtype=dtype)
+    v = np.linspace(top + 0.5 / height * (bottom - top), bottom - 0.5 / height * (bottom - top), height, dtype=dtype)
     u, v = np.meshgrid(u, v, indexing='xy')
-    return np.stack([u, v], axis=2)
+    return np.stack([u, v], axis=-1)
 
 
 def pixel_coord_map(

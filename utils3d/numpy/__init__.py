@@ -1,6 +1,3 @@
-"""
-3D utility functions workings with NumPy.
-"""
 import itertools
 from typing import TYPE_CHECKING
 from ..helpers import lazy_import_all_from

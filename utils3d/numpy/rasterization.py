@@ -2,8 +2,11 @@ import os
 import time
 from typing import *
 from contextlib import contextmanager
+import threading
+import weakref
 
 import numpy as np
+from numpy import ndarray
 import moderngl
 
 __all__ = [
@@ -246,6 +249,13 @@ void main() {
 class RastContext:
     """ Context for numpy-side rasterization. Based on moderngl.
     """
+    
+    _threading_local: threading.local = threading.local()
+    "Thread-local static variable to store default context."
+
+    programs: Dict[str, moderngl.Program]
+    "Cache of compiled moderngl programs."
+
     def __init__(self, *args, **kwargs):
         """Create context for numpy-side rasterization. Based on moderngl.
 
@@ -253,7 +263,6 @@ class RastContext:
             Leave empty to create context with default settings. Or refer to moderngl.create_context() for other parameters.
         """
         if len(args) == 0 and len(kwargs) == 0:
-            
             try:
                 # Default
                 self.mgl_ctx = moderngl.create_context()    
@@ -261,14 +270,14 @@ class RastContext:
                 pass
             if not hasattr(self, 'mgl_ctx'):
                 try:
-                    # Default standalone
-                    self.mgl_ctx = moderngl.create_context(standalone=True)     
+                    # EGL
+                    self.mgl_ctx = moderngl.create_context(standalone=True, backend='egl',)     
                 except:
                     pass
             if not hasattr(self, 'mgl_ctx'):
                 try:
-                    # EGL
-                    self.mgl_ctx = moderngl.create_context(standalone=True, backend='egl',)     
+                    # Default standalone
+                    self.mgl_ctx = moderngl.create_context(standalone=True)     
                 except:
                     pass
             if not hasattr(self, 'mgl_ctx'):
@@ -290,6 +299,13 @@ class RastContext:
             self.mgl_ctx = moderngl.create_context(*args, **kwargs)
         self.programs = {}
 
+    def __enter__(self):
+        self.mgl_ctx.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.mgl_ctx.__exit__(exc_type, exc_value, traceback)
+
     def __del__(self):
         try:
             self.mgl_ctx.release()
@@ -297,6 +313,14 @@ class RastContext:
                 prog.release()
         except:
             pass
+
+    @staticmethod
+    def get_default_context():
+        """ Get the default RastContext in current thread. Create one if not exists.
+        """
+        if not hasattr(RastContext._threading_local, 'default_context'):
+            RastContext._threading_local.default_context = RastContext()
+        return RastContext._threading_local.default_context
 
 
 def run_full_screen_program(
@@ -379,54 +403,59 @@ def depth_texture_linear_to_buffer(ctx: RastContext, linear_depth_tex: moderngl.
 
 
 def rasterize_triangles(
-    ctx: RastContext,
     size: Tuple[int, int],
     *,
-    vertices: np.ndarray,
-    attributes: Optional[np.ndarray] = None,
+    vertices: ndarray,
+    attributes: Optional[ndarray] = None,
     attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex',
-    faces: Optional[np.ndarray] = None,
-    view: np.ndarray = None,
-    projection: np.ndarray = None,
+    faces: Optional[ndarray] = None,
+    view: ndarray = None,
+    projection: ndarray = None,
     cull_backface: bool = False,
     return_depth: bool = False,
     return_interpolation: bool = False,
-    background_image: Optional[np.ndarray] = None,
-    background_depth: Optional[np.ndarray] = None,
-    background_interpolation_id: Optional[np.ndarray] = None,
-    background_interpolation_uv: Optional[np.ndarray] = None,
-) -> Dict[str, np.ndarray]:
+    background_image: Optional[ndarray] = None,
+    background_depth: Optional[ndarray] = None,
+    background_interpolation_id: Optional[ndarray] = None,
+    background_interpolation_uv: Optional[ndarray] = None,
+    ctx: Optional[RastContext] = None,
+) -> Dict[str, ndarray]:
     """
     Rasterize triangles.
 
-    ## Parameters
-    - `ctx` (RastContext): rasterization context. Created by `RastContext()`
+    Parameters
+    ----
     - `size` (Tuple[int, int]): (height, width) of the output image
-    - `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
-    - `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-    - `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    - `vertices` (ndarray): (N, 3) or (T, 3, 3)
+    - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
     - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
-    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `view` (ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
     - `cull_backface` (bool): whether to cull backface
-    - `background_image` (np.ndarray): (H, W, C) background image
-    - `background_depth` (np.ndarray): (H, W) background depth
-    - `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
-    - `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+    - `background_image` (ndarray): (H, W, C) background image
+    - `background_depth` (ndarray): (H, W) background depth
+    - `background_interpolation_id` (ndarray): (H, W) background triangle ID map
+    - `background_interpolation_uv` (ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+    - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Default to the thread-local default context.
 
-    ## Returns
+    Returns
+    ----
     A dictionary containing
     
     if attributes is not None
-    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+    - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
     if return_depth is True
-    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    - `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
 
     if return_interpolation is True
-    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+    - `interpolation_id` (ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
+    if ctx is None:
+        ctx = RastContext.get_default_context()
+
     height, width = size
     if faces is None:
         assert vertices.ndim == 3 and vertices.shape[1] == vertices.shape[2] == 3, "If faces is None, vertices must be an array with shape (T, 3, 3)"
@@ -610,49 +639,50 @@ def rasterize_triangles(
 
 @contextmanager
 def rasterize_triangles_peeling(
-    ctx: RastContext,
     size: Tuple[int, int],
     *,
-    vertices: np.ndarray,
-    attributes: np.ndarray,
+    vertices: ndarray,
+    attributes: ndarray,
     attributes_domain: Literal['vertex', 'face'] = 'vertex',
-    faces: Optional[np.ndarray] = None,
-    view: np.ndarray = None,
-    projection: np.ndarray = None,
+    faces: Optional[ndarray] = None,
+    view: ndarray = None,
+    projection: ndarray = None,
     cull_backface: bool = False,
     return_depth: bool = False,
     return_interpolation: bool = False,
-) -> Iterator[Iterator[Dict[str, np.ndarray]]]:
+    ctx: Optional[RastContext] = None,
+) -> Iterator[Iterator[Dict[str, ndarray]]]:
     """
     Rasterize triangles with depth peeling.
 
-    ## Parameters
-
-    - `ctx` (RastContext): rasterization context
+    Parameters
+    ----
     - `size` (Tuple[int, int]): (height, width) of the output image
-    - `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
-    - `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-    - `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    - `vertices` (ndarray): (N, 3) or (T, 3, 3)
+    - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
     - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
-    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `view` (ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
     - `cull_backface` (bool): whether to cull backface
+    - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Default to the thread-local default context.
 
-    ## Returns
-
+    Returns
+    ----
     A context manager of generator of dictionary containing
     
     if attributes is not None
-    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+    - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
     if return_depth is True
-    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    - `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
     
     if return_interpolation is True
-    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
-    
-    ## Example
+    - `interpolation_id` (ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+
+    Example
+    ----
     ```
     with rasterize_triangles_peeling(
         ctx, 
@@ -669,6 +699,9 @@ def rasterize_triangles_peeling(
                 print(f"  {key}: {value.shape}")
     ```
     """
+    if ctx is None:
+        ctx = RastContext.get_default_context()
+
     height, width = size
     if faces is None:
         assert vertices.ndim == 3 and vertices.shape[1] == vertices.shape[2] == 3, "If faces is None, vertices must be an array with shape (T, 3, 3)"
@@ -851,54 +884,55 @@ def rasterize_triangles_peeling(
 
 
 def rasterize_lines(
-    ctx: RastContext,
     size: Tuple[int, int],
     *,
-    vertices: np.ndarray,
-    lines: np.ndarray,
-    attributes: Optional[np.ndarray],
+    vertices: ndarray,
+    lines: ndarray,
+    attributes: Optional[ndarray],
     attributes_domain: Literal['vertex', 'line'] = 'vertex',
-    view: Optional[np.ndarray] = None,
-    projection: Optional[np.ndarray] = None,
+    view: Optional[ndarray] = None,
+    projection: Optional[ndarray] = None,
     line_width: float = 1.0,
     return_depth: bool = False,
     return_interpolation: bool = False,
-    background_image: Optional[np.ndarray] = None,
-    background_depth: Optional[np.ndarray] = None,
-    background_interpolation_id: Optional[np.ndarray] = None,
-    background_interpolation_uv: Optional[np.ndarray] = None
-) -> Tuple[np.ndarray, ...]:
+    background_image: Optional[ndarray] = None,
+    background_depth: Optional[ndarray] = None,
+    background_interpolation_id: Optional[ndarray] = None,
+    background_interpolation_uv: Optional[ndarray] = None,
+    ctx: Optional[RastContext] = None,
+) -> Tuple[ndarray, ...]:
     """
     Rasterize lines.
 
-    ## Parameters
-    - `ctx` (RastContext): rasterization context
+    Parameters
+    ----
     - `size` (Tuple[int, int]): (height, width) of the output image
-    - `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
-    - `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-    - `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+    - `vertices` (ndarray): (N, 3) or (T, 3, 3)
+    - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
     - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
-    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `view` (ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
     - `cull_backface` (bool): whether to cull backface
-    - `background_image` (np.ndarray): (H, W, C) background image
-    - `background_depth` (np.ndarray): (H, W) background depth
-    - `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
-    - `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+    - `background_image` (ndarray): (H, W, C) background image
+    - `background_depth` (ndarray): (H, W) background depth
+    - `background_interpolation_id` (ndarray): (H, W) background triangle ID map
+    - `background_interpolation_uv` (ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+    - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Defaults to the current default context.
 
-    ## Returns
-
+    Returns
+    ----
     A dictionary containing
     
     if attributes is not None
-    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+    - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
     if return_depth is True
-    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    - `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
     
     if return_interpolation is True
-    - `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-    - `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+    - `interpolation_id` (ndarray): (H, W) int32 triangle ID map
+    - `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
     height, width = size
     if lines is None:
@@ -1080,56 +1114,59 @@ def rasterize_lines(
 
 
 def rasterize_point_cloud(
-    ctx: RastContext,
     size: Tuple[int, int],
     *,
-    points: np.ndarray,
-    point_sizes: Union[float, np.ndarray] = 10,
+    points: ndarray,
+    point_sizes: Union[float, ndarray] = 10,
     point_size_in: Literal['2d', '3d'] = '2d',
     point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square',
-    attributes: Optional[np.ndarray] = None,
-    view: np.ndarray = None,
-    projection: np.ndarray = None,
+    attributes: Optional[ndarray] = None,
+    view: ndarray = None,
+    projection: ndarray = None,
     return_depth: bool = False,
     return_point_id: bool = False,
-    background_image: Optional[np.ndarray] = None,
-    background_depth: Optional[np.ndarray] = None,
-    background_point_id: Optional[np.ndarray] = None,
-) -> Dict[str, np.ndarray]:
+    background_image: Optional[ndarray] = None,
+    background_depth: Optional[ndarray] = None,
+    background_point_id: Optional[ndarray] = None,
+    ctx: Optional[RastContext] = None,
+) -> Dict[str, ndarray]:
     """
     Rasterize point cloud.
 
-    ## Parameters
-
-    - `ctx` (RastContext): rasterization context
+    Parameters
+    ----
     - `size` (Tuple[int, int]): (height, width) of the output image
-    - `points` (np.ndarray): (N, 3)
-    - `point_sizes` (np.ndarray): (N,) or float
+    - `points` (ndarray): (N, 3)
+    - `point_sizes` (ndarray): (N,) or float
     - `point_size_in`: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
     - `point_shape`: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
-    - `attributes` (np.ndarray): (N, C)
-    - `view` (np.ndarray): (4, 4) View matrix (world to camera).
-    - `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+    - `attributes` (ndarray): (N, C)
+    - `view` (ndarray): (4, 4) View matrix (world to camera).
+    - `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
     - `cull_backface` (bool): whether to cull backface,
     - `return_depth` (bool): whether to return depth map
     - `return_point_id` (bool): whether to return point ID map
-    - `background_image` (np.ndarray): (H, W, C) background image
-    - `background_depth` (np.ndarray): (H, W) background depth
-    - `background_point_id` (np.ndarray): (H, W) background point ID map
+    - `background_image` (ndarray): (H, W, C) background image
+    - `background_depth` (ndarray): (H, W) background depth
+    - `background_point_id` (ndarray): (H, W) background point ID map
+    - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Defaults to the current default context.
 
-    ## Returns
-
+    Returns
+    ----
     A dictionary containing
     
     if attributes is not None
-    - `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+    - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
     if return_depth is True
-    - `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+    - `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
     
     if return_point_id is True
-    - `point_id` (np.ndarray): (H, W) int32 point ID map
+    - `point_id` (ndarray): (H, W) int32 point ID map
     """
+    if ctx is None:
+        ctx = RastContext.get_default_context()
+
     height, width = size
     assert points.ndim == 2 and points.shape[1] == 3 and points.dtype == np.float32, f"Points should be a float32 array with shape (N, 3), but got {points.shape} {points.dtype}"
 
@@ -1148,7 +1185,7 @@ def rasterize_point_cloud(
     if background_point_id is not None:
         assert background_point_id.dtype == np.int32 and background_point_id.ndim == 2 and background_point_id.shape == (height, width), f"Point ID should be a int32 array with shape (H, W), but got {background_point_id.shape} {background_point_id.dtype}"
 
-    if not isinstance(point_sizes, np.ndarray):
+    if not isinstance(point_sizes, ndarray):
         point_sizes = np.full((points.shape[0],), point_sizes, dtype=np.float32)
 
     if attributes is not None:
@@ -1285,17 +1322,20 @@ def rasterize_point_cloud(
 
 
 def sample_texture(
-    ctx: RastContext,
-    uv_map: np.ndarray,
-    texture_map: np.ndarray,
+    uv_map: ndarray,
+    texture_map: ndarray,
     interpolation: Literal['linear', 'nearest'] = 'linear',
     mipmap_level: Union[int, Tuple[int, int]] = 0,
     repeat: Union[bool, Tuple[bool, bool]] = False,
-    anisotropic: float = 1.0
-) -> np.ndarray:
+    anisotropic: float = 1.0,
+    ctx: Optional[RastContext] = None
+) -> ndarray:
     """
     Sample from a texture map with a UV map.
     """
+    if ctx is None:
+        ctx = RastContext.get_default_context()
+
     assert len(texture_map.shape) == 3 and 1 <= texture_map.shape[2] <= 4
     assert uv_map.shape[2] == 2
     height, width = uv_map.shape[:2]
@@ -1355,40 +1395,40 @@ def sample_texture(
 
 # def warp_image_by_depth(
 #     ctx: RastContext,
-#     src_depth: np.ndarray,
-#     src_image: np.ndarray = None,
+#     src_depth: ndarray,
+#     src_image: ndarray = None,
 #     width: int = None,
 #     height: int = None,
 #     *,
-#     extrinsics_src: np.ndarray = None,
-#     extrinsics_tgt: np.ndarray = None,
-#     intrinsics_src: np.ndarray = None,
-#     intrinsics_tgt: np.ndarray = None,
+#     extrinsics_src: ndarray = None,
+#     extrinsics_tgt: ndarray = None,
+#     intrinsics_src: ndarray = None,
+#     intrinsics_tgt: ndarray = None,
 #     near: float = 0.1,
 #     far: float = 100.0,
 #     cull_backface: bool = True,
 #     ssaa: int = 1,
 #     return_depth: bool = False,
-# ) -> Tuple[np.ndarray, ...]:
+# ) -> Tuple[ndarray, ...]:
 #     """
 #     Warp image by depth map.
 
 #     ## Parameters
 #         ctx (RastContext): rasterizer context
-#         src_depth (np.ndarray): [H, W]
-#         src_image (np.ndarray, optional): [H, W, C]. The image to warp. Defaults to None (use uv coordinates).
+#         src_depth (ndarray): [H, W]
+#         src_image (ndarray, optional): [H, W, C]. The image to warp. Defaults to None (use uv coordinates).
 #         width (int, optional): width of the output image. None to use depth map width. Defaults to None.
 #         height (int, optional): height of the output image. None to use depth map height. Defaults to None.
-#         extrinsics_src (np.ndarray, optional): extrinsics matrix of the source camera. Defaults to None (identity).
-#         extrinsics_tgt (np.ndarray, optional): extrinsics matrix of the target camera. Defaults to None (identity).
-#         intrinsics_src (np.ndarray, optional): intrinsics matrix of the source camera. Defaults to None (use the same as intrinsics_tgt).
-#         intrinsics_tgt (np.ndarray, optional): intrinsics matrix of the target camera. Defaults to None (use the same as intrinsics_src).
+#         extrinsics_src (ndarray, optional): extrinsics matrix of the source camera. Defaults to None (identity).
+#         extrinsics_tgt (ndarray, optional): extrinsics matrix of the target camera. Defaults to None (identity).
+#         intrinsics_src (ndarray, optional): intrinsics matrix of the source camera. Defaults to None (use the same as intrinsics_tgt).
+#         intrinsics_tgt (ndarray, optional): intrinsics matrix of the target camera. Defaults to None (use the same as intrinsics_src).
 #         cull_backface (bool, optional): whether to cull backface. Defaults to True.
 #         ssaa (int, optional): super sampling anti-aliasing. Defaults to 1.
     
 #     ## Returns
-#         tgt_image (np.ndarray): [H, W, C] warped image (or uv coordinates if image is None).
-#         tgt_depth (np.ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None.
+#         tgt_image (ndarray): [H, W, C] warped image (or uv coordinates if image is None).
+#         tgt_depth (ndarray): [H, W] screen space depth, ranging from 0 to 1. If return_depth is False, it is None.
 #     """
 #     assert src_depth.ndim == 2
 
@@ -1455,7 +1495,7 @@ def test_rasterization(ctx: Optional[RastContext] = None):
     from .transforms import perspective_from_fov, view_look_at
 
     if ctx is None:
-        ctx = RastContext()
+        ctx = RastContext.get_default_context()
         
     vertices, faces = create_cube_mesh(tri=True)
     attributes = np.random.rand(len(vertices), 3).astype(np.float32)

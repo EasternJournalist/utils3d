@@ -135,9 +135,7 @@ __all__ = ["sliding_window",
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
 "bounding_rect_from_mask", 
-"texture_composite", 
-"warp_image_by_depth", 
-"warp_image_by_forward_flow"]
+"texture_composite"]
 
 def _contains_tensor(obj):
     if isinstance(obj, (list, tuple)):
@@ -954,16 +952,4 @@ def texture_composite(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.texture_composite
     return _call_based_on_args('texture_composite', args, kwargs)
-
-@suppress_traceback
-def warp_image_by_depth(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.warp_image_by_depth
-    return _call_based_on_args('warp_image_by_depth', args, kwargs)
-
-@suppress_traceback
-def warp_image_by_forward_flow(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.warp_image_by_forward_flow
-    return _call_based_on_args('warp_image_by_forward_flow', args, kwargs)
 

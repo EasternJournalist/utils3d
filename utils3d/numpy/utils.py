@@ -284,7 +284,7 @@ def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndar
     ## Parameters
     - `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
     - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
-    - `taking`: (ndarray) shape `(K,)` the indices of segments to take
+    - `taking`: (ndarray) the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
 
     ## Returns
     - `new_data`: (ndarray) shape `(N_new, *data_dims)`

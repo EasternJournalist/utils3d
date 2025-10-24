@@ -139,9 +139,7 @@ __all__ = ["sliding_window",
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
 "bounding_rect_from_mask", 
-"texture_composite", 
-"warp_image_by_depth", 
-"warp_image_by_forward_flow"]
+"texture_composite"]
 
 @overload
 def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
@@ -258,7 +256,7 @@ def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.n
 ## Parameters
 - `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
 - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
-- `taking`: (ndarray) shape `(K,)` the indices of segments to take
+- `taking`: (ndarray) the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
 
 ## Returns
 - `new_data`: (ndarray) shape `(N_new, *data_dims)`
@@ -1582,69 +1580,72 @@ def RastContext(*args, **kwargs):
     utils3d.numpy.rasterization.RastContext
 
 @overload
-def rasterize_triangles(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_triangles(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize triangles.
 
-## Parameters
-- `ctx` (RastContext): rasterization context. Created by `RastContext()`
+Parameters
+----
 - `size` (Tuple[int, int]): (height, width) of the output image
-- `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
-- `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-- `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+- `vertices` (ndarray): (N, 3) or (T, 3, 3)
+- `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+- `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-- `view` (np.ndarray): (4, 4) View matrix (world to camera).
-- `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+- `view` (ndarray): (4, 4) View matrix (world to camera).
+- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
 - `cull_backface` (bool): whether to cull backface
-- `background_image` (np.ndarray): (H, W, C) background image
-- `background_depth` (np.ndarray): (H, W) background depth
-- `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
-- `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `background_image` (ndarray): (H, W, C) background image
+- `background_depth` (ndarray): (H, W) background depth
+- `background_interpolation_id` (ndarray): (H, W) background triangle ID map
+- `background_interpolation_uv` (ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `ctx` (RastContext): rasterization context. Created by `RastContext()`. Default to the thread-local default context.
 
-## Returns
+Returns
+----
 A dictionary containing
 
 if attributes is not None
-- `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+- `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
 if return_depth is True
-- `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+- `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
 
 if return_interpolation is True
-- `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-- `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
+- `interpolation_id` (ndarray): (H, W) int32 triangle ID map
+- `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
     utils3d.numpy.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
+def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
     """Rasterize triangles with depth peeling.
 
-## Parameters
-
-- `ctx` (RastContext): rasterization context
+Parameters
+----
 - `size` (Tuple[int, int]): (height, width) of the output image
-- `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
-- `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-- `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+- `vertices` (ndarray): (N, 3) or (T, 3, 3)
+- `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+- `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-- `view` (np.ndarray): (4, 4) View matrix (world to camera).
-- `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+- `view` (ndarray): (4, 4) View matrix (world to camera).
+- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
 - `cull_backface` (bool): whether to cull backface
+- `ctx` (RastContext): rasterization context. Created by `RastContext()`. Default to the thread-local default context.
 
-## Returns
-
+Returns
+----
 A context manager of generator of dictionary containing
 
 if attributes is not None
-- `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+- `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
 if return_depth is True
-- `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+- `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
 
 if return_interpolation is True
-- `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-- `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
+- `interpolation_id` (ndarray): (H, W) int32 triangle ID map
+- `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
 
-## Example
+Example
+----
 ```
 with rasterize_triangles_peeling(
     ctx, 
@@ -1663,77 +1664,78 @@ with rasterize_triangles_peeling(
     utils3d.numpy.rasterization.rasterize_triangles_peeling
 
 @overload
-def rasterize_lines(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, ...]:
+def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Tuple[numpy_.ndarray, ...]:
     """Rasterize lines.
 
-## Parameters
-- `ctx` (RastContext): rasterization context
+Parameters
+----
 - `size` (Tuple[int, int]): (height, width) of the output image
-- `vertices` (np.ndarray): (N, 3) or (T, 3, 3)
-- `faces` (Optional[np.ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
-- `attributes` (np.ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
+- `vertices` (ndarray): (N, 3) or (T, 3, 3)
+- `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+- `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-- `view` (np.ndarray): (4, 4) View matrix (world to camera).
-- `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+- `view` (ndarray): (4, 4) View matrix (world to camera).
+- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
 - `cull_backface` (bool): whether to cull backface
-- `background_image` (np.ndarray): (H, W, C) background image
-- `background_depth` (np.ndarray): (H, W) background depth
-- `background_interpolation_id` (np.ndarray): (H, W) background triangle ID map
-- `background_interpolation_uv` (np.ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `background_image` (ndarray): (H, W, C) background image
+- `background_depth` (ndarray): (H, W) background depth
+- `background_interpolation_id` (ndarray): (H, W) background triangle ID map
+- `background_interpolation_uv` (ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `ctx` (RastContext): rasterization context. Created by `RastContext()`. Defaults to the current default context.
 
-## Returns
-
+Returns
+----
 A dictionary containing
 
 if attributes is not None
-- `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+- `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
 if return_depth is True
-- `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+- `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
 
 if return_interpolation is True
-- `interpolation_id` (np.ndarray): (H, W) int32 triangle ID map
-- `interpolation_uv` (np.ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
+- `interpolation_id` (ndarray): (H, W) int32 triangle ID map
+- `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)"""
     utils3d.numpy.rasterization.rasterize_lines
 
 @overload
-def rasterize_point_cloud(ctx: utils3d.numpy.rasterization.RastContext, size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_point_cloud(size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize point cloud.
 
-## Parameters
-
-- `ctx` (RastContext): rasterization context
+Parameters
+----
 - `size` (Tuple[int, int]): (height, width) of the output image
-- `points` (np.ndarray): (N, 3)
-- `point_sizes` (np.ndarray): (N,) or float
+- `points` (ndarray): (N, 3)
+- `point_sizes` (ndarray): (N,) or float
 - `point_size_in`: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
 - `point_shape`: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
-- `attributes` (np.ndarray): (N, C)
-- `view` (np.ndarray): (4, 4) View matrix (world to camera).
-- `projection` (np.ndarray): (4, 4) Projection matrix (camera to clip space).
+- `attributes` (ndarray): (N, C)
+- `view` (ndarray): (4, 4) View matrix (world to camera).
+- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
 - `cull_backface` (bool): whether to cull backface,
 - `return_depth` (bool): whether to return depth map
 - `return_point_id` (bool): whether to return point ID map
-- `background_image` (np.ndarray): (H, W, C) background image
-- `background_depth` (np.ndarray): (H, W) background depth
-- `background_point_id` (np.ndarray): (H, W) background point ID map
+- `background_image` (ndarray): (H, W, C) background image
+- `background_depth` (ndarray): (H, W) background depth
+- `background_point_id` (ndarray): (H, W) background point ID map
+- `ctx` (RastContext): rasterization context. Created by `RastContext()`. Defaults to the current default context.
 
-## Returns
-
+Returns
+----
 A dictionary containing
 
 if attributes is not None
-- `image` (np.ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
+- `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
 if return_depth is True
-- `depth` (np.ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+- `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
 
 if return_point_id is True
-- `point_id` (np.ndarray): (H, W) int32 point ID map"""
+- `point_id` (ndarray): (H, W) int32 point ID map"""
     utils3d.numpy.rasterization.rasterize_point_cloud
 
 @overload
-def sample_texture(ctx: utils3d.numpy.rasterization.RastContext, uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: Union[int, Tuple[int, int]] = 0, repeat: Union[bool, Tuple[bool, bool]] = False, anisotropic: float = 1.0) -> numpy_.ndarray:
+def sample_texture(uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: Union[int, Tuple[int, int]] = 0, repeat: Union[bool, Tuple[bool, bool]] = False, anisotropic: float = 1.0, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> numpy_.ndarray:
     """Sample from a texture map with a UV map."""
     utils3d.numpy.rasterization.sample_texture
 
@@ -2971,17 +2973,16 @@ def laplacian_hc_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, time
 
 @overload
 def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
-    """Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
-This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
+    """Get image UV coordinate map. By default, (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
 
 ## Parameters
 - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
-- `top`: `float`, optional top boundary in uv space. Defaults to 0.
-- `left`: `float`, optional left boundary in uv space. Defaults to 0.
-- `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
-- `right`: `float`, optional right boundary in uv space. Defaults to 1.
-- `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to torch.float32.
-- `device`: `torch.device`, optional device of the output uv map. Defaults to None.
+- `top`: `float` defaults to 0.
+- `left`: `float` defaults to 0.
+- `bottom`: `float` defaults to 1.
+- `right`: `float` defaults to 1.
+- `dtype`: `np.dtype` data type of the output uv map. Defaults to torch.float32.
+- `device`: `torch.device`, device of the output uv map. Defaults to None.
 
 ## Returns
 - `uv (Tensor)`: shape `(height, width, 2)`
@@ -3190,74 +3191,70 @@ def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[i
     utils3d.torch.maps.masked_area_resize
 
 @overload
-def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiffrast.torch.ops.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'gl', device: Union[str, torch_.device] = None):
+def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiffrast.torch.ops.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'cuda', device: Union[str, torch_.device] = None):
     """Create a rasterization context. Nothing but a wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext."""
     utils3d.torch.rasterization.RastContext
 
 @overload
-def rasterize_triangles(ctx: utils3d.torch.rasterization.RastContext, width: int, height: int, *, vertices: torch_.Tensor, faces: torch_.Tensor, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
-    """Rasterize a mesh with vertex attributes.
+def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: Optional[torch_.Tensor] = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+    """Rasterize triangles.
 
-## Parameters
-    ctx (GLContext): rasterizer context
+Parameters
+----
+    size (Tuple[int, int]): (height, width) of the output image
     vertices (np.ndarray): (B, N, 2 or 3 or 4)
-    faces (torch.Tensor): (T, 3)
-    width (int): width of the output image
-    height (int): height of the output image
-    attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
-    uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
-    texture (torch.Tensor, optional): (B, C, H, W) texture. Defaults to None.
-    model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
-    view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
-    projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
+    faces (Tensor): (T, 3)
+    attributes (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
+    texture (Tensor, optional): (B, C, H, W) texture. Defaults to None.
+    model (Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
+    view (Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
+    projection (Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
     antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
     diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
 
-## Returns
-    Dictionary containing:
-      - image: (torch.Tensor): (B, C, H, W)
-      - depth: (torch.Tensor): (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
-               NOTE: Empty pixels will have depth 1., i.e. far plane.
-      - mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
-      - image_dr: (torch.Tensor): (B, *, H, W) screen space derivatives of the attributes
-      - face_id: (torch.Tensor): (B, H, W) face ids
-      - uv: (torch.Tensor): (B, H, W, 2) uv coordinates (if uv is not None)
-      - uv_dr: (torch.Tensor): (B, H, W, 4) uv derivatives (if uv is not None)
-      - texture: (torch.Tensor): (B, C, H, W) texture (if uv and texture are not None)"""
+Returns
+----
+A dictionary containing:
+    - image: (Tensor): (B, H, W, C)
+    - image_dr: (Tensor): (B, H, W, C * 2) screen space derivatives of the attributes
+    - depth: (Tensor): (B, H, W) Linear depth. Empty pixels have depth inf.
+    - mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
+    - interpolation_id: (Tensor): (B, H, W) triangle ID map. For empty pixels, the value is -1.
+    - interpolation_uv: (Tensor): (B, H, W, 2) triangle UV (first two channels of barycentric coordinates)"""
     utils3d.torch.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(ctx: utils3d.torch.rasterization.RastContext, vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+def rasterize_triangles_peeling(vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
     """Rasterize a mesh with vertex attributes using depth peeling.
 
 ## Parameters
-    ctx (GLContext): rasterizer context
     vertices (np.ndarray): (B, N, 2 or 3 or 4)
-    faces (torch.Tensor): (T, 3)
+    faces (Tensor): (T, 3)
     width (int): width of the output image
     height (int): height of the output image
     max_layers (int): maximum number of layers
         NOTE: if the number of layers is less than max_layers, the output will contain less than max_layers images.
-    attr (torch.Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
-    uv (torch.Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
-    texture (torch.Tensor, optional): (B, C, H, W) texture. Defaults to None.
-    model (torch.Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
-    view (torch.Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
-    projection (torch.Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
+    attr (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
+    uv (Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
+    texture (Tensor, optional): (B, C, H, W) texture. Defaults to None.
+    model (Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
+    view (Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
+    projection (Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
     antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
     diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
+    ctx (RastContext): rasterizer context
 
 ## Returns
     Dictionary containing:
-      - image: (List[torch.Tensor]): list of (B, C, H, W) rendered images
-      - depth: (List[torch.Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
+      - image: (List[Tensor]): list of (B, C, H, W) rendered images
+      - depth: (List[Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
                  NOTE: Empty pixels will have depth 1., i.e. far plane.
       - mask: (List[torch.BoolTensor]): list of (B, H, W) mask of valid pixels
-      - image_dr: (List[torch.Tensor]): list of (B, *, H, W) screen space derivatives of the attributes
-      - face_id: (List[torch.Tensor]): list of (B, H, W) face ids
-      - uv: (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates (if uv is not None)
-      - uv_dr: (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives (if uv is not None)
-      - texture: (List[torch.Tensor]): list of (B, C, H, W) texture (if uv and texture are not None)"""
+      - image_dr: (List[Tensor]): list of (B, *, H, W) screen space derivatives of the attributes
+      - face_id: (List[Tensor]): list of (B, H, W) face ids
+      - uv: (List[Tensor]): list of (B, H, W, 2) uv coordinates (if uv is not None)
+      - uv_dr: (List[Tensor]): list of (B, H, W, 4) uv derivatives (if uv is not None)
+      - texture: (List[Tensor]): list of (B, C, H, W) texture (if uv and texture are not None)"""
     utils3d.torch.rasterization.rasterize_triangles_peeling
 
 @overload
@@ -3265,12 +3262,12 @@ def sample_texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tens
     """Interpolate texture using uv coordinates.
 
 ## Parameters
-    texture (torch.Tensor): (B, C, H, W) texture
-    uv (torch.Tensor): (B, H, W, 2) uv coordinates
-    uv_da (torch.Tensor): (B, H, W, 4) uv derivatives
+    texture (Tensor): (B, C, H, W) texture
+    uv (Tensor): (B, H, W, 2) uv coordinates
+    uv_da (Tensor): (B, H, W, 4) uv derivatives
     
 ## Returns
-    torch.Tensor: (B, C, H, W) interpolated texture"""
+    Tensor: (B, C, H, W) interpolated texture"""
     utils3d.torch.rasterization.sample_texture
 
 @overload
@@ -3278,65 +3275,14 @@ def texture_composite(texture: torch_.Tensor, uv: List[torch_.Tensor], uv_da: Li
     """Composite textures with depth peeling output.
 
 ## Parameters
-    texture (torch.Tensor): (B, C+1, H, W) texture
+    texture (Tensor): (B, C+1, H, W) texture
         NOTE: the last channel is alpha channel
-    uv (List[torch.Tensor]): list of (B, H, W, 2) uv coordinates
-    uv_da (List[torch.Tensor]): list of (B, H, W, 4) uv derivatives
-    background (Optional[torch.Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
+    uv (List[Tensor]): list of (B, H, W, 2) uv coordinates
+    uv_da (List[Tensor]): list of (B, H, W, 4) uv derivatives
+    background (Optional[Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
     
 ## Returns
-    image: (torch.Tensor): (B, C, H, W) rendered image
-    alpha: (torch.Tensor): (B, H, W) alpha channel"""
+    image: (Tensor): (B, C, H, W) rendered image
+    alpha: (Tensor): (B, H, W) alpha channel"""
     utils3d.torch.rasterization.texture_composite
-
-@overload
-def warp_image_by_depth(ctx: utils3d.torch.rasterization.RastContext, depth: torch_.FloatTensor, image: torch_.FloatTensor = None, mask: torch_.BoolTensor = None, width: int = None, height: int = None, *, extrinsics_src: torch_.FloatTensor = None, extrinsics_tgt: torch_.FloatTensor = None, intrinsics_src: torch_.FloatTensor = None, intrinsics_tgt: torch_.FloatTensor = None, near: float = 0.1, far: float = 100.0, antialiasing: bool = True, backslash: bool = False, padding: int = 0, return_uv: bool = False, return_dr: bool = False) -> Tuple[torch_.FloatTensor, torch_.FloatTensor, torch_.BoolTensor, Optional[torch_.FloatTensor], Optional[torch_.FloatTensor]]:
-    """Warp image by depth. 
-NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
-Otherwise, image mesh will be triangulated simply for batch rendering.
-
-## Parameters
-    ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
-    depth (torch.Tensor): (B, H, W) linear depth
-    image (torch.Tensor): (B, C, H, W). None to use image space uv. Defaults to None.
-    width (int, optional): width of the output image. None to use the same as depth. Defaults to None.
-    height (int, optional): height of the output image. Defaults the same as depth..
-    extrinsics_src (torch.Tensor, optional): (B, 4, 4) extrinsics matrix for source. None to use identity. Defaults to None.
-    extrinsics_tgt (torch.Tensor, optional): (B, 4, 4) extrinsics matrix for target. None to use identity. Defaults to None.
-    intrinsics_src (torch.Tensor, optional): (B, 3, 3) intrinsics matrix for source. None to use the same as target. Defaults to None.
-    intrinsics_tgt (torch.Tensor, optional): (B, 3, 3) intrinsics matrix for target. None to use the same as source. Defaults to None.
-    near (float, optional): near plane. Defaults to 0.1. 
-    far (float, optional): far plane. Defaults to 100.0.
-    antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
-    backslash (bool, optional): whether to use backslash triangulation. Defaults to False.
-    padding (int, optional): padding of the image. Defaults to 0.
-    return_uv (bool, optional): whether to return the uv. Defaults to False.
-    return_dr (bool, optional): whether to return the image-space derivatives of uv. Defaults to False.
-
-## Returns
-    image: (torch.FloatTensor): (B, C, H, W) rendered image
-    depth: (torch.FloatTensor): (B, H, W) linear depth, ranging from 0 to inf
-    mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
-    uv: (torch.FloatTensor): (B, 2, H, W) image-space uv
-    dr: (torch.FloatTensor): (B, 4, H, W) image-space derivatives of uv"""
-    utils3d.torch.rasterization.warp_image_by_depth
-
-@overload
-def warp_image_by_forward_flow(ctx: utils3d.torch.rasterization.RastContext, image: torch_.FloatTensor, flow: torch_.FloatTensor, depth: torch_.FloatTensor = None, *, antialiasing: bool = True, backslash: bool = False) -> Tuple[torch_.FloatTensor, torch_.BoolTensor]:
-    """Warp image by forward flow.
-NOTE: if batch size is 1, image mesh will be triangulated aware of the depth, yielding less distorted results.
-Otherwise, image mesh will be triangulated simply for batch rendering.
-
-## Parameters
-    ctx (Union[dr.RasterizeCudaContext, dr.RasterizeGLContext]): rasterization context
-    image (torch.Tensor): (B, C, H, W) image
-    flow (torch.Tensor): (B, 2, H, W) forward flow
-    depth (torch.Tensor, optional): (B, H, W) linear depth. If None, will use the same for all pixels. Defaults to None.
-    antialiasing (bool, optional): whether to perform antialiasing. Defaults to True.
-    backslash (bool, optional): whether to use backslash triangulation. Defaults to False.
-
-## Returns
-    image: (torch.FloatTensor): (B, C, H, W) rendered image
-    mask: (torch.BoolTensor): (B, H, W) mask of valid pixels"""
-    utils3d.torch.rasterization.warp_image_by_forward_flow
 

@@ -40,17 +40,16 @@ def uv_map(
     device: torch.device = None
 ) -> Tensor:
     """
-    Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
-    This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
+    Get image UV coordinate map. By default, (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
 
     ## Parameters
     - `*size`: `Tuple[int, int]` or two integers of map size `(height, width)`
-    - `top`: `float`, optional top boundary in uv space. Defaults to 0.
-    - `left`: `float`, optional left boundary in uv space. Defaults to 0.
-    - `bottom`: `float`, optional bottom boundary in uv space. Defaults to 1.
-    - `right`: `float`, optional right boundary in uv space. Defaults to 1.
-    - `dtype`: `np.dtype`, optional data type of the output uv map. Defaults to torch.float32.
-    - `device`: `torch.device`, optional device of the output uv map. Defaults to None.
+    - `top`: `float` defaults to 0.
+    - `left`: `float` defaults to 0.
+    - `bottom`: `float` defaults to 1.
+    - `right`: `float` defaults to 1.
+    - `dtype`: `np.dtype` data type of the output uv map. Defaults to torch.float32.
+    - `device`: `torch.device`, device of the output uv map. Defaults to None.
 
     ## Returns
     - `uv (Tensor)`: shape `(height, width, 2)`
@@ -67,10 +66,10 @@ def uv_map(
         height, width = size[0]
     else:
         height, width = size
-    u = torch.linspace(left + 0.5 / width, right - 0.5 / width, width, dtype=dtype, device=device)
-    v = torch.linspace(top + 0.5 / height, bottom - 0.5 / height, height, dtype=dtype, device=device)
-    u, v = torch.meshgrid(u, v, indexing='xy')
-    return torch.stack([u, v], dim=2)
+    u = torch.linspace(left + 0.5 / width * (right - left), right - 0.5 / width * (right - left), width, dtype=dtype, device=device)
+    v = torch.linspace(top + 0.5 / height * (bottom - top), bottom - 0.5 / height * (bottom - top), height, dtype=dtype, device=device)
+    uv = torch.stack(torch.meshgrid(u, v, indexing='xy'), dim=-1)
+    return uv
 
 
 def pixel_coord_map(

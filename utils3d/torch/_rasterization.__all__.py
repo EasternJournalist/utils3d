@@ -5,6 +5,4 @@ __all__ = [
     'rasterize_triangles_peeling',
     'sample_texture',
     'texture_composite',
-    'warp_image_by_depth',
-    'warp_image_by_forward_flow',
 ]
