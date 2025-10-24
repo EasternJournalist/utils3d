@@ -313,7 +313,6 @@ def intrinsics_to_perspective(
 ) -> ndarray:
     """
     OpenCV intrinsics to OpenGL perspective matrix
-    NOTE: not work for tile-shifting intrinsics currently
 
     ## Parameters
         intrinsics (ndarray): [..., 3, 3] OpenCV intrinsics matrix

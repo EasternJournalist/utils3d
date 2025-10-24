@@ -424,7 +424,6 @@ def perspective_to_near_far(perspective: numpy_.ndarray) -> Tuple[numpy_.ndarray
 @overload
 def intrinsics_to_perspective(intrinsics: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
     """OpenCV intrinsics to OpenGL perspective matrix
-NOTE: not work for tile-shifting intrinsics currently
 
 ## Parameters
     intrinsics (ndarray): [..., 3, 3] OpenCV intrinsics matrix
@@ -1580,7 +1579,7 @@ def RastContext(*args, **kwargs):
     utils3d.numpy.rasterization.RastContext
 
 @overload
-def rasterize_triangles(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_triangles(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize triangles.
 
 Parameters
@@ -1590,24 +1589,23 @@ Parameters
 - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
 - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-- `view` (ndarray): (4, 4) View matrix (world to camera).
-- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
+- `view` | `extrinsics` (ndarray): (4, 4) View matrix or extrinsics matrix. Provide either one of them.
+- `projection` | `intrinsics` (ndarray): (4, 4) Projection matrix or (3, 3) Intrinsics matrix. Provide either one of them.
 - `cull_backface` (bool): whether to cull backface
-- `background_image` (ndarray): (H, W, C) background image
-- `background_depth` (ndarray): (H, W) background depth
-- `background_interpolation_id` (ndarray): (H, W) background triangle ID map
-- `background_interpolation_uv` (ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `background` (Optional[Dict[str, ndarray]]): background to composite with. Contains the same keys as the return dictionary, each with shape matching the output.
 - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Default to the thread-local default context.
 
 Returns
 ----
 A dictionary containing
 
+- `mask` (ndarray): (H, W) bool mask of valid pixels
+
 if attributes is not None
 - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
 if return_depth is True
-- `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+- `depth` (ndarray): (H, W) float32 camera space linear depth. Empty pixels are filled with inf.
 
 if return_interpolation is True
 - `interpolation_id` (ndarray): (H, W) int32 triangle ID map
@@ -1615,7 +1613,7 @@ if return_interpolation is True
     utils3d.numpy.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
+def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
     """Rasterize triangles with depth peeling.
 
 Parameters
@@ -1625,46 +1623,52 @@ Parameters
 - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
 - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-- `view` (ndarray): (4, 4) View matrix (world to camera).
-- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
-- `cull_backface` (bool): whether to cull backface
+- `view` | `extrinsics` (ndarray): (4, 4) View matrix or extrinsics matrix. Provide either one of them.
+- `projection` | `intrinsics` (ndarray): (4, 4) Projection matrix or (3, 3) Intrinsics matrix. Provide either one of them.
+- `near` (float): near clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
+- `far` (float): far clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
+- `cull_backface` (bool): whether to cull backfaces
 - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Default to the thread-local default context.
 
 Returns
 ----
-A context manager of generator of dictionary containing
+A generator that yields dictionaries for each peeling layer containing:
+
+- `mask` (ndarray): (H, W) bool mask of valid pixels in this layer
 
 if attributes is not None
 - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
 
 if return_depth is True
-- `depth` (ndarray): (H, W) float32 camera space linear depth, ranging from 0 to 1.
+- `depth` (ndarray): (H, W) float32 camera space linear depth. Empty pixels are filled with inf.
 
 if return_interpolation is True
 - `interpolation_id` (ndarray): (H, W) int32 triangle ID map
 - `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
 
+The last layer yielded will be empty (no pixels covered), then the generator stops.
+
 Example
 ----
 ```
-with rasterize_triangles_peeling(
-    ctx, 
-    512, 512, 
+for i, layer_output in enumerate(rasterize_triangles_peeling(
+    (512, 512), 
     vertices=vertices, 
     faces=faces, 
     attributes=attributes,
     view=view,
     projection=projection
-) as peeler:
-    for i, layer_output in zip(range(3, peeler)):
-        print(f"Layer {i}:")
-        for key, value in layer_output.items():
-            print(f"  {key}: {value.shape}")
+)):
+    print(f"Layer {i}:")
+    for key, value in layer_output.items():
+        print(f"  {key}: {value.shape}")
+    if i >= 4:  # Stop after 5 layers at most
+        break
 ```"""
     utils3d.numpy.rasterization.rasterize_triangles_peeling
 
 @overload
-def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_interpolation_id: Optional[numpy_.ndarray] = None, background_interpolation_uv: Optional[numpy_.ndarray] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Tuple[numpy_.ndarray, ...]:
+def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, intrinsics: Optional[numpy_.ndarray] = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Tuple[numpy_.ndarray, ...]:
     """Rasterize lines.
 
 Parameters
@@ -1674,18 +1678,18 @@ Parameters
 - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
 - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
-- `view` (ndarray): (4, 4) View matrix (world to camera).
-- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
-- `cull_backface` (bool): whether to cull backface
-- `background_image` (ndarray): (H, W, C) background image
-- `background_depth` (ndarray): (H, W) background depth
-- `background_interpolation_id` (ndarray): (H, W) background triangle ID map
-- `background_interpolation_uv` (ndarray): (H, W, 2) background triangle UV (first two channels of barycentric coordinates)
+- `view` | `extrinsics` (ndarray): (4, 4) View matrix or extrinsics matrix. Provide either one of them.
+- `projection` | `intrinsics` (ndarray): (4, 4) Projection matrix or (3, 3) Intrinsics matrix. Provide either one of them.
+- `near` (float): near clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
+- `far` (float): far clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
+- `background` (Optional[Dict[str, ndarray]]): background to composite with. Contains the same keys as the return dictionary, each with shape matching the output.
 - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Defaults to the current default context.
 
 Returns
 ----
 A dictionary containing
+
+- `mask` (ndarray): (H, W) bool mask of valid pixels
 
 if attributes is not None
 - `image` (ndarray): (H, W, C) float32 rendered image corresponding to the input attributes
@@ -1699,7 +1703,7 @@ if return_interpolation is True
     utils3d.numpy.rasterization.rasterize_lines
 
 @overload
-def rasterize_point_cloud(size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, return_depth: bool = False, return_point_id: bool = False, background_image: Optional[numpy_.ndarray] = None, background_depth: Optional[numpy_.ndarray] = None, background_point_id: Optional[numpy_.ndarray] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_point_cloud(size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, return_depth: bool = False, return_point_id: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize point cloud.
 
 Parameters
@@ -1707,17 +1711,16 @@ Parameters
 - `size` (Tuple[int, int]): (height, width) of the output image
 - `points` (ndarray): (N, 3)
 - `point_sizes` (ndarray): (N,) or float
-- `point_size_in`: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (screen space measured in pixels) or 3D (world space measured in scene units).
+- `point_size_in`: Literal['2d', '3d'] = '2d'. Whether the point sizes are in 2D (size in pixels) or 3D (size in world units).
 - `point_shape`: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square'. The visual shape of the points.
 - `attributes` (ndarray): (N, C)
-- `view` (ndarray): (4, 4) View matrix (world to camera).
-- `projection` (ndarray): (4, 4) Projection matrix (camera to clip space).
-- `cull_backface` (bool): whether to cull backface,
+- `view` | `extrinsics` (ndarray): (4, 4) View matrix or extrinsics matrix. Provide either one of them.
+- `projection` | `intrinsics` (ndarray): (4, 4) Projection matrix or (3, 3) Intrinsics matrix. Provide either one of them.
+- `near` (float): near clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
+- `far` (float): far clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
 - `return_depth` (bool): whether to return depth map
 - `return_point_id` (bool): whether to return point ID map
-- `background_image` (ndarray): (H, W, C) background image
-- `background_depth` (ndarray): (H, W) background depth
-- `background_point_id` (ndarray): (H, W) background point ID map
+- `background` (Optional[Dict[str, ndarray]]): background to composite with. Contains the same keys as the return dictionary, each with shape matching the output.
 - `ctx` (RastContext): rasterization context. Created by `RastContext()`. Defaults to the current default context.
 
 Returns
@@ -3196,7 +3199,7 @@ def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiff
     utils3d.torch.rasterization.RastContext
 
 @overload
-def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: Optional[torch_.Tensor] = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: Optional[torch_.Tensor] = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
     """Rasterize triangles.
 
 Parameters
@@ -3206,11 +3209,15 @@ Parameters
     faces (Tensor): (T, 3)
     attributes (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
     texture (Tensor, optional): (B, C, H, W) texture. Defaults to None.
-    model (Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
-    view (Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
-    projection (Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
+    view | extrinsics (Tensor, optional): ([B,] 4, 4) view matrix or extrinsics matrix. Provide either one of them. Defaults to identity.
+    projection | intrinsics (Tensor, optional): ([B,] 4, 4) projection matrix or ([B,] 3, 3) intrinsics matrix. Provide either one of them. Defaults to identity.
+    near (float, optional): near plane. Defaults to 0.01. Only used for intrinsics. Ignored if projection matrix is provided.
+    far (float, optional): far plane. Defaults to inf. Only used for intrinsics. Ignored if projection matrix is provided.
+    return_image_derivatives (bool, optional): whether to return screen space derivatives of the attributes. Defaults to False.
+    return_depth (bool, optional): whether to return depth map. Defaults to False.
+    return_interpolation (bool, optional): whether to return triangle interpolation maps. Defaults to False.
     antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
-    diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
+    ctx (RastContext): rasterization context. Defaults to the thread-local default context. If custom context is needed, provide one with utils3d.pt.RastContext().
 
 Returns
 ----
@@ -3224,50 +3231,68 @@ A dictionary containing:
     utils3d.torch.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(vertices: torch_.Tensor, faces: torch_.Tensor, width: int, height: int, max_layers: int, attr: torch_.Tensor = None, uv: torch_.Tensor = None, texture: torch_.Tensor = None, model: torch_.Tensor = None, view: torch_.Tensor = None, projection: torch_.Tensor = None, antialiasing: Union[bool, List[int]] = True, diff_attrs: Optional[List[int]] = None, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: Optional[torch_.Tensor] = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Iterator[Iterator[Dict[str, torch_.Tensor]]]:
     """Rasterize a mesh with vertex attributes using depth peeling.
 
-## Parameters
+Parameters
+----
+    size (Tuple[int, int]): (height, width) of the output image
     vertices (np.ndarray): (B, N, 2 or 3 or 4)
     faces (Tensor): (T, 3)
-    width (int): width of the output image
-    height (int): height of the output image
-    max_layers (int): maximum number of layers
-        NOTE: if the number of layers is less than max_layers, the output will contain less than max_layers images.
-    attr (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
-    uv (Tensor, optional): (B, N, 2) uv coordinates. Defaults to None.
+    attributes (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
     texture (Tensor, optional): (B, C, H, W) texture. Defaults to None.
-    model (Tensor, optional): ([B,] 4, 4) model matrix. Defaults to None (identity).
-    view (Tensor, optional): ([B,] 4, 4) view matrix. Defaults to None (identity).
-    projection (Tensor, optional): ([B,] 4, 4) projection matrix. Defaults to None (identity).
+    view | extrinsics (Tensor, optional): ([B,] 4, 4) view matrix or extrinsics matrix. Provide either one of them. Defaults to identity.
+    projection | intrinsics (Tensor, optional): ([B,] 4, 4) projection matrix or ([B,] 3, 3) intrinsics matrix. Provide either one of them. Defaults to identity.
+    near (float, optional): near plane. Defaults to 0.01. Only used for intrinsics. Ignored if projection matrix is provided.
+    far (float, optional): far plane. Defaults to inf. Only used for intrinsics. Ignored if projection matrix is provided.
+    return_image_derivatives (bool, optional): whether to return screen space derivatives of the attributes. Defaults to False.
+    return_depth (bool, optional): whether to return depth map. Defaults to False.
+    return_interpolation (bool, optional): whether to return triangle interpolation maps. Defaults to False.
     antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
-    diff_attrs (Union[None, List[int]], optional): indices of attributes to compute screen-space derivatives. Defaults to None.
-    ctx (RastContext): rasterizer context
+    ctx (RastContext): rasterization context. Defaults to the thread-local default context. If custom context is needed, provide one with utils3d.pt.RastContext().
 
-## Returns
-    Dictionary containing:
-      - image: (List[Tensor]): list of (B, C, H, W) rendered images
-      - depth: (List[Tensor]): list of (B, H, W) screen space depth, ranging from 0 (near) to 1. (far)
-                 NOTE: Empty pixels will have depth 1., i.e. far plane.
-      - mask: (List[torch.BoolTensor]): list of (B, H, W) mask of valid pixels
-      - image_dr: (List[Tensor]): list of (B, *, H, W) screen space derivatives of the attributes
-      - face_id: (List[Tensor]): list of (B, H, W) face ids
-      - uv: (List[Tensor]): list of (B, H, W, 2) uv coordinates (if uv is not None)
-      - uv_dr: (List[Tensor]): list of (B, H, W, 4) uv derivatives (if uv is not None)
-      - texture: (List[Tensor]): list of (B, C, H, W) texture (if uv and texture are not None)"""
+Returns
+----
+A generator of dictionaries for each layer containing:
+    - mask: (List[torch.BoolTensor]): (B, H, W) mask of valid pixels in this layer
+    - image: (List[Tensor]): (B, C, H, W) rendered images
+    - image_dr: (List[Tensor]): (B, *, H, W) screen space derivatives of the attributes
+    - depth: (List[Tensor]): (B, H, W) linear depth. Empty pixels have depth inf.
+    - interpolation_id: (List[Tensor]): (B, H, W) triangle ID map. For empty pixels, the value is -1.
+    - interpolation_uv: (List[Tensor]): (B, H, W, 2) triangle UV (first two channels of barycentric coordinates)
+
+The last layer yielded will be empty, then the generator will stop.
+
+Example
+----
+```
+for i, layer_output in enumerate(rasterize_triangles_peeling(
+    (512, 512), 
+    vertices=vertices, 
+    faces=faces, 
+    attributes=attributes,
+    view=view,
+    projection=projection
+)):
+    print(f"Layer {i}:")
+    for key, value in layer_output.items():
+        print(f"  {key}: {value.shape}")
+    if i >= 4:  # Stop after 5 layers at most
+        break
+```"""
     utils3d.torch.rasterization.rasterize_triangles_peeling
 
 @overload
-def sample_texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_da: torch_.Tensor) -> torch_.Tensor:
+def sample_texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_dr: torch_.Tensor) -> torch_.Tensor:
     """Interpolate texture using uv coordinates.
 
 ## Parameters
-    texture (Tensor): (B, C, H, W) texture
+    texture (Tensor): (B, H, W, C) texture
     uv (Tensor): (B, H, W, 2) uv coordinates
-    uv_da (Tensor): (B, H, W, 4) uv derivatives
+    uv_dr (Tensor): (B, H, W, 4) uv derivatives
     
 ## Returns
-    Tensor: (B, C, H, W) interpolated texture"""
+    Tensor: (B, H, W, C) interpolated texture"""
     utils3d.torch.rasterization.sample_texture
 
 @overload
