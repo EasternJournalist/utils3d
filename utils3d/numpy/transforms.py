@@ -1672,6 +1672,7 @@ def solve_poses_sequential(
         - `cov`: (..., 3, 3) weighted covariance of points
         - `tot_w`: (...,) total weight of points
         - `nnz`: (...,) number of non-zero weight points
+    - `canonical_points`: (..., N, 3) canonical points.
     - `err`: (..., N,) per-point RMS error over all time := sqrt(sum_over_time(per_point_weights * per_point_squared_error) / per_point_nnz)
         Use this to filter outliers as needed.
     - `accum`: per point accumulated statistics. Just pass it to the next call for incremental solving.
@@ -1781,4 +1782,4 @@ def solve_poses_sequential(
 
     err = np.sqrt(np.trace(accum_wxx, axis1=-2, axis2=-1) / np.maximum(accum_nnz, np.finfo(dtype).tiny))
 
-    return poses, valid, (mu, sigma, tot_w, nnz), err, (accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz)
+    return poses, valid, (mu, sigma, tot_w, nnz), mean_wx, err, (accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz)
