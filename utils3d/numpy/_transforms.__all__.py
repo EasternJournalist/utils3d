@@ -52,4 +52,7 @@ __all__ = [
     'piecewise_interpolate_se3_matrix',
     'transform_points',
     'angle_between',
+    'procrustes',
+    'solve_pose',
+    'solve_poses_sequential',
 ]

@@ -68,6 +68,9 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
+"procrustes", 
+"solve_pose", 
+"solve_poses_sequential", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -544,6 +547,24 @@ def angle_between(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.angle_between, utils3d.torch.angle_between
     return _call_based_on_args('angle_between', args, kwargs)
+
+@suppress_traceback
+def procrustes(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.procrustes, None
+    return _call_based_on_args('procrustes', args, kwargs)
+
+@suppress_traceback
+def solve_pose(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.solve_pose, None
+    return _call_based_on_args('solve_pose', args, kwargs)
+
+@suppress_traceback
+def solve_poses_sequential(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.solve_poses_sequential, None
+    return _call_based_on_args('solve_poses_sequential', args, kwargs)
 
 @suppress_traceback
 def triangulate_mesh(*args, **kwargs):

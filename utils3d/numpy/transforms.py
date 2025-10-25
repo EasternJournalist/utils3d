@@ -59,7 +59,10 @@ __all__ = [
     'piecewise_lerp',
     'piecewise_interpolate_se3_matrix',
     'transform_points',
-    'angle_between'
+    'angle_between',
+    'procrustes',
+    'solve_pose',
+    'solve_poses_sequential',
 ]
 
 
@@ -1442,3 +1445,340 @@ def angle_between(v1: ndarray, v2: ndarray):
     sin = np.minimum(np.linalg.norm(v2 - v1 * cos[..., None], axis=-1), np.linalg.norm(v1 - v2 * cos[..., None], axis=-1))
     return np.atan2(sin, cos)
 
+
+def vector_outer(x: ndarray, y: Optional[ndarray] = None) -> ndarray:
+    if y is None:
+        return x[..., :, None] * x[..., None, :]
+    return x[..., :, None] * y[..., None, :]
+
+
+def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[ndarray] = None, mean_x: Optional[ndarray] = None, mean_y: Optional[ndarray] = None, niter: int = 8) -> Tuple[ndarray, ndarray]:
+    """
+    Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
+    
+    Specifically, based on provided inputs:
+    
+    - To solve the rotation `R`, `cov_yx` must be given.
+    - To solve the scale `s`, at least one of `cov_xx` and `cov_yy` must be given.
+        - (Recommended) If both `cov_xx` and `cov_yy` are given, the scale will be solved by minimizing a symmetric cost:
+            `||s R X + t - Y||_F^2 / ||Y||_F^2 + ||s R^T (Y - t)  - X||_F^2 / ||X||_F^2`
+        - If only `cov_xx` is given, the scale will be solved by minimizing forward cost
+            `||s R X  + t - Y||_F^2`
+        - If only `cov_yy` is given, the scale will be solved by minimizing inverse cost 
+            `||s R^T (Y - t)  - X||_F^2`
+    - To solve the translation `t`, provide `mean_x` and `mean_y`.
+
+    Parameters
+    ----
+    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
+    - `cov_xx`: (..., 3, 3) covariance matrix of x points. If None, no scaling is solved.
+    - `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
+    - `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
+    - `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
+    - `niter`: int, number of Newton iterations for scale solving when both cov_xx and cov_yy are given.
+
+    Returns
+    ----
+    - `s`: (...) scale factor. None if both cov_xx and cov_yy are None. 
+    - `R`: (..., 3, 3) rotation matrix.
+    - `t`: (..., 3) translation vector. None if mean_x or mean_y is None.
+    """
+    dtype = mean_x.dtype
+    U, _, Vh = np.linalg.svd(cov_yx)
+    R = U @ Vh
+    Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
+    R = U @ Vh
+    if cov_xx is not None and cov_yy is None:
+        s = np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1) / np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+    if cov_xx is None and cov_yy is not None:
+        s = np.trace(cov_yy, axis1=-2, axis2=-1) / np.maximum(np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+    elif cov_xx is not None and cov_yy is not None:
+        a = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        b = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        c = np.maximum(np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        u = (b / a) ** 0.5
+        for _ in range(niter):
+            s = np.exp(u)
+            du = -(2 * (s ** 2 - 1 / s ** 2) - 2 * c * (s / b - 1 / s / a)) / (4 * (s ** 2 + 1 / (s ** 2)) - 2 * c * (s / b + 1 / s / a))
+            u = u + du
+        s = np.exp(u)
+    else:
+        s = None
+    if mean_x is not None and mean_y is not None:
+        if s is not None:
+            t = mean_y - transform_points(mean_x, s * R)
+        else:
+            t = mean_y - transform_points(mean_x, R)
+    else:
+        t = None
+    return s, R, t
+
+
+def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2, niter: int = 8) -> Tuple[ndarray, ndarray]:
+    """
+    Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
+
+    Parameters
+    ----
+    - `cov_yx`: (..., 3, 3) covariance matrix between y
+    - `cov_xx`: (..., 3, 3) covariance matrix of x points.
+    - `cov_yy`: (..., 3, 3) covariance matrix of y
+    - `mean_x`: (..., 3) mean of x points.
+    - `mean_y`: (..., 3) mean of y points.
+    - `lam`: rigidity regularization weight.
+    - `gamma`: symmetricity regularization annealing factor.
+    - `niter`: number of iterations for solving.
+
+    Returns
+    ----
+    - `A`: (..., 3, 3) affine transformation matrix.
+    - `t`: (..., 3) translation vector.
+    """
+    dtype = mean_x.dtype
+    U, _, Vh = np.linalg.svd(cov_yx)
+    R = U @ Vh
+    Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
+    R = U @ Vh
+    tr_xx = np.trace(cov_xx, axis1=-2, axis2=-1) + np.finfo(dtype).eps
+    tr_yy = np.trace(cov_yy, axis1=-2, axis2=-1) + np.finfo(dtype).eps
+    A, B = R, R.mT
+    for i in range(niter):
+        gamma_i = 1.2 ** i - 1
+        A = (cov_yx + (lam * tr_xx)[..., None, None] * R + (gamma_i * tr_xx)[..., None, None] * B.mT) @ np.linalg.inv(cov_xx + (lam * tr_xx)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_xx)[..., None, None] * (B @ B.mT))
+        B = (cov_yx.mT + (lam * tr_yy)[..., None, None] * R.mT + (gamma_i * tr_yy)[..., None, None] * A.mT) @ np.linalg.inv(cov_yy + (lam * tr_yy)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_yy)[..., None, None] * (A @ A.mT))
+    t = mean_y - transform_points(mean_x, A)
+    return A, t
+
+
+def solve_pose(
+    p: np.ndarray, 
+    q: np.ndarray, 
+    w: np.ndarray, 
+    offsets: Optional[np.ndarray] = None, 
+    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    lam: float = 1e-2, 
+    niter: int = 5
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Solve for the pose (transformation from p to q) given weighted point correspondences.
+    
+    Parameters
+    ----
+    For batch input
+    - `p`: (..., N, 3) source points
+    - `q`: (..., N, 3) target points
+    - `w`: (..., N) weights for each point correspondence
+
+    For segment input
+    - `p`: (N, 3) source points
+    - `q`: (N, 3) target points
+    - `w`: (N,) weights for each point correspondence
+    - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+    
+    Optional parameters
+    ----
+    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+        - For 'rigid', only rotation and translation are allowed.
+        - For 'similar', uniform scaling, rotation and translation are allowed.
+        - For 'affine', full affine transformation is allowed. Using least squares.
+    - `lam`: regularization weight for affine solving.
+    - `niter`: number of iterations for affine solving.
+    
+    Returns
+    ----
+    - `T`: (S, 4, 4) transformations from p to q
+    - `R`: (S, 3, 3) rotation matrices from p to
+    """
+    if offsets is None:
+        w_sum = np.maximum(np.sum(w, axis=-2), np.finfo(p.dtype).tiny)
+        p_mean = np.sum(w[..., None] * p, axis=-2) / w_sum[..., None]
+        q_mean = np.sum(w[..., None] * q, axis=-2) / w_sum[..., None]
+        p = p - p_mean[..., None, :]
+        q = q - q_mean[..., None, :]
+        pw = p * w[..., None]
+        qw = q * w[..., None]
+        cov_pp = np.sum(vector_outer(pw, p), axis=-3) / w_sum[..., None, None]
+        if mode == 'similar' or mode == 'affine':
+            cov_qp = np.sum(vector_outer(qw, p), axis=-3) / w_sum[..., None, None]
+            cov_qq = np.sum(vector_outer(qw, q), axis=-3) / w_sum[..., None, None]
+    else:
+        lengths = np.diff(offsets)
+        w_sum = np.maximum(np.add.reduceat(w, offsets[:-1], axis=0), np.finfo(p.dtype).tiny)
+        p_mean = np.add.reduceat(w[..., None] * p, offsets[:-1], axis=0) / w_sum[:, None]
+        q_mean = np.add.reduceat(w[..., None] * q, offsets[:-1], axis=0) / w_sum[:, None]
+        p = p - np.repeat(p_mean, lengths, axis=0)
+        q = q - np.repeat(q_mean, lengths, axis=0)
+        pw = p * w[..., None]
+        qw = q * w[..., None]
+        cov_pp = np.add.reduceat(vector_outer(p, pw), offsets[:-1], axis=0) / w_sum[:, None, None]
+        if mode == 'similar' or mode == 'affine':
+            cov_qp = np.add.reduceat(vector_outer(q, pw), offsets[:-1], axis=0) / w_sum[:, None, None]
+            cov_qq = np.add.reduceat(vector_outer(q, qw), offsets[:-1], axis=0) / w_sum[:, None, None]
+    
+    if mode == 'rigid':
+        _, R, t = procrustes(cov_qp, mean_x=p_mean, mean_y=q_mean)
+        pose = make_affine_matrix(R, t)
+    elif mode == 'similar':
+        s, R, t = procrustes(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
+        pose = make_affine_matrix(s * R, t)
+    elif mode == 'affine':
+        A, t = affine_procrustes(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
+        pose = make_affine_matrix(A, t)
+    
+    return pose
+
+
+def solve_poses_sequential(
+    trajectories: ndarray,
+    weights: ndarray,
+    offsets: Optional[ndarray] = None,
+    accum: Optional[Tuple[ndarray, ...]] = None,
+    min_valid_size: int = 0,
+    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    lam: float = 1e-2,
+    niter: int = 8
+) -> Tuple[ndarray, Tuple[ndarray, ...], Tuple[ndarray, ndarray, ndarray, ndarray]]:
+    """
+    Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
+
+    Parameters
+    ----
+    For single or batch input
+    - `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
+    - `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+
+    For segment input
+    - `trajectories`: (T, N, 3) posed points.
+    - `weights`: (T, N) quardratic error term weights for each point at each frame
+    - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+
+    Optional parameters
+    ----
+    - `accum`: accumulated statistics from previous calls. If None, start fresh.
+    - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
+    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+        - For 'rigid', only rotation and translation are allowed.
+        - For 'similar', uniform scaling, rotation and translation are allowed. 
+        - For 'affine', full affine transformation is allowed. Using least squares.
+    - `lam`: rigidity regularization weight for affine solving.
+    - `niter`: number of iterations for affine solving.
+
+    Returns
+    ----
+    - `poses`: (T, ..., 4, 4) transformations from canonical to each frame
+    - `valid`: (T, ...) boolean mask indicating valid segments
+    - `stats`: canonical statistics of each group,
+        It is a tuple of:
+        - `mu`: (..., 3) weighted mean of points
+        - `cov`: (..., 3, 3) weighted covariance of points
+        - `tot_w`: (...,) total weight of points
+        - `nnz`: (...,) number of non-zero weight points
+    - `err`: (..., N,) per-point RMS error over all time := sqrt(sum_over_time(per_point_weights * per_point_squared_error) / per_point_nnz)
+        Use this to filter outliers as needed.
+    - `accum`: per point accumulated statistics. Just pass it to the next call for incremental solving.
+        It is a tuple of:
+        - `accum_sqrtw`: (..., N,) sum of sqrt(weights)
+        - `accum_sqrtwx`: (..., N, 3) sum of sqrt(weights) * x
+        - `accum_sqrtwxx`: (...N, 3, 3) sum of sqrt(weights) * outer(x - mean_sqrtwx, x - mean_sqrtwx)
+        - `accum_w`: (..., N,) sum of weights
+        - `accum_wx`: (..., N, 3) sum of weights * x
+        - `accum_wxx`: (..., N, 3, 3) sum of weights * outer(x - mean_wx, x - mean_wx)
+        - `accum_nnz`: (..., N,) number of non-zero weight accumulations
+    """
+    dtype = trajectories.dtype
+    num_frames = trajectories.shape[0]
+    num_points = trajectories.shape[-2]
+    batch_shape = trajectories.shape[1:-2]
+
+    if offsets is None:
+        poses = np.zeros((*batch_shape, 4, 4), dtype=dtype)
+    else:
+        num_segments = len(offsets) - 1
+        lengths = np.diff(offsets)
+        poses = np.zeros((num_frames, num_segments, 4, 4), dtype=dtype)
+        
+    if accum is not None:
+        accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz = [a.copy() for a in accum]
+    else:
+        accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz = \
+            np.zeros((*batch_shape, num_points,), dtype=dtype), \
+            np.zeros((*batch_shape, num_points, 3), dtype=dtype), \
+            np.zeros((*batch_shape, num_points, 3, 3), dtype=dtype), \
+            np.zeros((*batch_shape, num_points,), dtype=dtype), \
+            np.zeros((*batch_shape, num_points, 3), dtype=dtype), \
+            np.zeros((*batch_shape, num_points, 3, 3), dtype=dtype), \
+            np.zeros((*batch_shape, num_points,), dtype=dtype)
+
+    for i in range(num_frames):
+        # Compute weighted statistics
+        mean_sqrtwx = accum_sqrtwx / np.maximum(accum_sqrtw, np.finfo(trajectories.dtype).tiny)[..., None]
+        wi, yi = weights[i], trajectories[i]
+        sqrtwi = np.sqrt(wi)
+        if offsets is None:
+            sum_w = np.sum(sqrtwi * accum_sqrtw, axis=-1) + np.finfo(dtype).tiny
+            center_x = np.sum(sqrtwi[..., None] * accum_sqrtwx, axis=-2) / sum_w[..., None]
+            center_y = np.sum(sqrtwi[..., None] * accum_sqrtw[..., None] * yi, axis=-2) / sum_w[..., None]
+            cov_yx = np.sum(sqrtwi[..., None, None] * vector_outer(yi - center_y, accum_sqrtwx - accum_sqrtw[..., None] * center_x), axis=-3) / sum_w[..., None, None]
+            if mode == 'affine' or mode == 'similar':
+                cov_xx = np.sum(sqrtwi[..., None, None] * (accum_sqrtwxx + accum_sqrtw[..., None, None] * vector_outer(mean_sqrtwx - center_x)), axis=-3) / sum_w[..., None, None]
+                cov_yy = np.sum(sqrtwi[..., None, None] * accum_sqrtw[..., None, None] * vector_outer(yi - center_y), axis=-3) / sum_w[..., None, None]
+        else:
+            sum_w = np.add.reduceat(sqrtwi * accum_sqrtw, offsets[:-1], axis=0) + np.finfo(dtype).tiny
+            center_x = np.add.reduceat(sqrtwi[:, None] * accum_sqrtwx, offsets[:-1], axis=0) / sum_w[:, None]
+            center_y = np.add.reduceat(sqrtwi[:, None] * accum_sqrtw[:, None] * yi, offsets[:-1], axis=0) / sum_w[:, None]
+            center_x_broadcast = np.repeat(center_x, lengths, axis=0)
+            center_y_broadcast = np.repeat(center_y, lengths, axis=0)
+            cov_yx = np.add.reduceat(sqrtwi[:, None, None] * vector_outer(yi - center_y_broadcast, accum_sqrtwx - accum_sqrtw[:, None] * center_x_broadcast), offsets[:-1], axis=0) / sum_w[:, None, None]
+            if mode == 'affine' or mode == 'similar':
+                cov_xx = np.add.reduceat(sqrtwi[:, None, None] * (accum_sqrtwxx + accum_sqrtw[:, None, None] * vector_outer(mean_sqrtwx - center_x_broadcast)), offsets[:-1], axis=0) / sum_w[:, None, None]
+                cov_yy = np.add.reduceat(sqrtwi[:, None, None] * accum_sqrtw[:, None, None] * vector_outer(yi - center_y_broadcast), offsets[:-1], axis=0) / sum_w[:, None, None]
+        
+        # Solve for pose
+        if mode == 'rigid':
+            _, R, t = procrustes(cov_yx, mean_x=center_x, mean_y=center_y)
+            poses[i] = make_affine_matrix(R, t)
+        elif mode == 'similar':
+            s, R, t = procrustes(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
+            poses[i] = make_affine_matrix(s * R, t)
+        elif mode == 'affine':
+            A, t = affine_procrustes(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
+            poses[i] = make_affine_matrix(A, t)
+
+        if offsets is None:
+            xi = transform_points(yi, np.linalg.inv(poses[i])[..., None, :, :])
+        else:
+            xi = transform_points(yi, np.repeat(np.linalg.inv(poses[i]), lengths, axis=0))
+
+        # Update accum
+        old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.copy(), accum_sqrtw.copy()
+        accum_sqrtw += sqrtwi
+        accum_sqrtwx += sqrtwi[:, None] * xi
+        mean_sqrtwx = accum_sqrtwx / np.maximum(accum_sqrtw, np.finfo(dtype).tiny)[:, None]
+        accum_sqrtwxx += old_accum_sqrtw[:, None, None] * vector_outer(mean_sqrtwx - old_mean_sqrtwx) + sqrtwi[:, None, None] * vector_outer(xi - mean_sqrtwx)
+
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
+        old_mean_wx, old_accum_w = mean_wx.copy(), accum_w.copy()
+        accum_w += wi
+        accum_wx += wi[:, None] * xi
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
+        accum_wxx += old_accum_w[:, None, None] * vector_outer(mean_wx - old_mean_wx) + wi[:, None, None] * vector_outer(xi - mean_wx)
+        accum_nnz += wi > 0
+
+    if offsets is None:
+        tot_w = np.sum(accum_w, axis=-1)
+        mu = np.sum(accum_wx, axis=-2) / np.maximum(tot_w, np.finfo(dtype).tiny)[:, None]
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
+        sigma = np.sum(accum_wxx + accum_w[:, None, None] * vector_outer(mu[..., None, :] - mean_wx), axis=-3) / np.maximum(tot_w, np.finfo(dtype).tiny)[:, None, None]
+        nnz = np.sum(accum_nnz, axis=-1)
+        valid = np.sum(weights > 0, axis=-1) >= min_valid_size
+    else:
+        tot_w = np.add.reduceat(accum_w, offsets[:-1], axis=0)
+        mu = np.add.reduceat(accum_wx, offsets[:-1], axis=0) / np.maximum(tot_w, np.finfo(dtype).tiny)[:, None]
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
+        mu_broadcast = np.repeat(mu, lengths, axis=0)
+        sigma = np.add.reduceat(accum_wxx + accum_w[:, None, None] * vector_outer(mu_broadcast - mean_wx), offsets[:-1], axis=0) / np.maximum(tot_w, np.finfo(dtype).tiny)[:, None, None]
+        nnz = np.add.reduceat(accum_nnz, offsets[:-1], axis=0)
+        valid = np.add.reduceat(weights > 0, offsets[:-1], axis=1) >= min_valid_size
+
+    err = np.sqrt(np.trace(accum_wxx, axis1=-2, axis2=-1) / np.maximum(accum_nnz, np.finfo(dtype).tiny))
+
+    return poses, valid, (mu, sigma, tot_w, nnz), err, (accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz)

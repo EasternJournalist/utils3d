@@ -72,6 +72,9 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
+"procrustes", 
+"solve_pose", 
+"solve_poses_sequential", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -987,6 +990,119 @@ Better precision than using the arccos dot product directly.
 ## Returns
 `angle`: ndarray, shape (...): the angle between the two vectors."""
     utils3d.numpy.transforms.angle_between
+
+@overload
+def procrustes(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
+
+Specifically, based on provided inputs:
+
+- To solve the rotation `R`, `cov_yx` must be given.
+- To solve the scale `s`, at least one of `cov_xx` and `cov_yy` must be given.
+    - (Recommended) If both `cov_xx` and `cov_yy` are given, the scale will be solved by minimizing a symmetric cost:
+        `||s R X + t - Y||_F^2 / ||Y||_F^2 + ||s R^T (Y - t)  - X||_F^2 / ||X||_F^2`
+    - If only `cov_xx` is given, the scale will be solved by minimizing forward cost
+        `||s R X  + t - Y||_F^2`
+    - If only `cov_yy` is given, the scale will be solved by minimizing inverse cost 
+        `||s R^T (Y - t)  - X||_F^2`
+- To solve the translation `t`, provide `mean_x` and `mean_y`.
+
+Parameters
+----
+- `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
+- `cov_xx`: (..., 3, 3) covariance matrix of x points. If None, no scaling is solved.
+- `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
+- `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
+- `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
+- `niter`: int, number of Newton iterations for scale solving when both cov_xx and cov_yy are given.
+
+Returns
+----
+- `s`: (...) scale factor. None if both cov_xx and cov_yy are None. 
+- `R`: (..., 3, 3) rotation matrix.
+- `t`: (..., 3) translation vector. None if mean_x or mean_y is None."""
+    utils3d.numpy.transforms.procrustes
+
+@overload
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: numpy_.ndarray, offsets: Optional[numpy_.ndarray] = None, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+Parameters
+----
+For batch input
+- `p`: (..., N, 3) source points
+- `q`: (..., N, 3) target points
+- `w`: (..., N) weights for each point correspondence
+
+For segment input
+- `p`: (N, 3) source points
+- `q`: (N, 3) target points
+- `w`: (N,) weights for each point correspondence
+- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+
+Optional parameters
+----
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: regularization weight for affine solving.
+- `niter`: number of iterations for affine solving.
+
+Returns
+----
+- `T`: (S, 4, 4) transformations from p to q
+- `R`: (S, 3, 3) rotation matrices from p to"""
+    utils3d.numpy.transforms.solve_pose
+
+@overload
+def solve_poses_sequential(trajectories: numpy_.ndarray, weights: numpy_.ndarray, offsets: Optional[numpy_.ndarray] = None, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 0, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+    """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
+
+Parameters
+----
+For single or batch input
+- `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
+- `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+
+For segment input
+- `trajectories`: (T, N, 3) posed points.
+- `weights`: (T, N) quardratic error term weights for each point at each frame
+- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+
+Optional parameters
+----
+- `accum`: accumulated statistics from previous calls. If None, start fresh.
+- `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed. 
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: rigidity regularization weight for affine solving.
+- `niter`: number of iterations for affine solving.
+
+Returns
+----
+- `poses`: (T, ..., 4, 4) transformations from canonical to each frame
+- `valid`: (T, ...) boolean mask indicating valid segments
+- `stats`: canonical statistics of each group,
+    It is a tuple of:
+    - `mu`: (..., 3) weighted mean of points
+    - `cov`: (..., 3, 3) weighted covariance of points
+    - `tot_w`: (...,) total weight of points
+    - `nnz`: (...,) number of non-zero weight points
+- `err`: (..., N,) per-point RMS error over all time := sqrt(sum_over_time(per_point_weights * per_point_squared_error) / per_point_nnz)
+    Use this to filter outliers as needed.
+- `accum`: per point accumulated statistics. Just pass it to the next call for incremental solving.
+    It is a tuple of:
+    - `accum_sqrtw`: (..., N,) sum of sqrt(weights)
+    - `accum_sqrtwx`: (..., N, 3) sum of sqrt(weights) * x
+    - `accum_sqrtwxx`: (...N, 3, 3) sum of sqrt(weights) * outer(x - mean_sqrtwx, x - mean_sqrtwx)
+    - `accum_w`: (..., N,) sum of weights
+    - `accum_wx`: (..., N, 3) sum of weights * x
+    - `accum_wxx`: (..., N, 3, 3) sum of weights * outer(x - mean_wx, x - mean_wx)
+    - `accum_nnz`: (..., N,) number of non-zero weight accumulations"""
+    utils3d.numpy.transforms.solve_poses_sequential
 
 @overload
 def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> numpy_.ndarray:
