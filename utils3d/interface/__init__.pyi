@@ -1024,7 +1024,7 @@ Returns
     utils3d.numpy.transforms.procrustes
 
 @overload
-def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: numpy_.ndarray, offsets: Optional[numpy_.ndarray] = None, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, offsets: Optional[numpy_.ndarray] = None, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Parameters
@@ -1032,7 +1032,7 @@ Parameters
 For batch input
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: (..., N) weights for each point correspondence
+- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
 
 For segment input
 - `p`: (N, 3) source points
@@ -1046,8 +1046,8 @@ Optional parameters
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: regularization weight for affine solving.
-- `niter`: number of iterations for affine solving.
+- `lam`: regularization weight for 'affine' mode.
+- `niter`: number of iterations for 'affine' mode.
 
 Returns
 ----
@@ -1056,7 +1056,7 @@ Returns
     utils3d.numpy.transforms.solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: numpy_.ndarray, weights: numpy_.ndarray, offsets: Optional[numpy_.ndarray] = None, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 0, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: Optional[numpy_.ndarray] = None, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 0, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
@@ -1078,8 +1078,8 @@ Optional parameters
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed. 
     - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: rigidity regularization weight for affine solving.
-- `niter`: number of iterations for affine solving.
+- `lam`: rigidity regularization weight for 'affine' mode.
+- `niter`: number of iterations for 'affine' mode.
 
 Returns
 ----
@@ -1091,6 +1091,7 @@ Returns
     - `cov`: (..., 3, 3) weighted covariance of points
     - `tot_w`: (...,) total weight of points
     - `nnz`: (...,) number of non-zero weight points
+- `canonical_points`: (..., N, 3) canonical points.
 - `err`: (..., N,) per-point RMS error over all time := sqrt(sum_over_time(per_point_weights * per_point_squared_error) / per_point_nnz)
     Use this to filter outliers as needed.
 - `accum`: per point accumulated statistics. Just pass it to the next call for incremental solving.

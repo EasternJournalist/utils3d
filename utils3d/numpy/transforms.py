@@ -1553,7 +1553,7 @@ def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x:
 def solve_pose(
     p: np.ndarray, 
     q: np.ndarray, 
-    w: np.ndarray, 
+    w: Optional[np.ndarray] = None, 
     offsets: Optional[np.ndarray] = None, 
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2, 
@@ -1566,7 +1566,7 @@ def solve_pose(
     For batch input
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: (..., N) weights for each point correspondence
+    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
 
     For segment input
     - `p`: (N, 3) source points
@@ -1580,14 +1580,16 @@ def solve_pose(
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: regularization weight for affine solving.
-    - `niter`: number of iterations for affine solving.
+    - `lam`: regularization weight for 'affine' mode.
+    - `niter`: number of iterations for 'affine' mode.
     
     Returns
     ----
     - `T`: (S, 4, 4) transformations from p to q
     - `R`: (S, 3, 3) rotation matrices from p to
     """
+    if w is None:
+        w = np.ones(p.shape[:-1], dtype=p.dtype)
     if offsets is None:
         w_sum = np.maximum(np.sum(w, axis=-2), np.finfo(p.dtype).tiny)
         p_mean = np.sum(w[..., None] * p, axis=-2) / w_sum[..., None]
@@ -1629,7 +1631,7 @@ def solve_pose(
 
 def solve_poses_sequential(
     trajectories: ndarray,
-    weights: ndarray,
+    weights: Optional[ndarray] = None,
     offsets: Optional[ndarray] = None,
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 0,
@@ -1659,8 +1661,8 @@ def solve_poses_sequential(
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed. 
         - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: rigidity regularization weight for affine solving.
-    - `niter`: number of iterations for affine solving.
+    - `lam`: rigidity regularization weight for 'affine' mode.
+    - `niter`: number of iterations for 'affine' mode.
 
     Returns
     ----
@@ -1689,6 +1691,9 @@ def solve_poses_sequential(
     num_frames = trajectories.shape[0]
     num_points = trajectories.shape[-2]
     batch_shape = trajectories.shape[1:-2]
+
+    if weights is None:
+        weights = np.ones((num_frames, *batch_shape, num_points), dtype=dtype)
 
     if offsets is None:
         poses = np.zeros((*batch_shape, 4, 4), dtype=dtype)
