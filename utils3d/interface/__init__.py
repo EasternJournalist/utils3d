@@ -68,6 +68,7 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
+"vector_outer", 
 "procrustes", 
 "solve_pose", 
 "solve_poses_sequential", 
@@ -547,6 +548,12 @@ def angle_between(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.angle_between, utils3d.torch.angle_between
     return _call_based_on_args('angle_between', args, kwargs)
+
+@suppress_traceback
+def vector_outer(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.vector_outer, None
+    return _call_based_on_args('vector_outer', args, kwargs)
 
 @suppress_traceback
 def procrustes(*args, **kwargs):

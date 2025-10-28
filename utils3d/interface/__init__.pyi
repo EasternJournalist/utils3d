@@ -72,6 +72,7 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
+"vector_outer", 
 "procrustes", 
 "solve_pose", 
 "solve_poses_sequential", 
@@ -990,6 +991,10 @@ Better precision than using the arccos dot product directly.
 ## Returns
 `angle`: ndarray, shape (...): the angle between the two vectors."""
     utils3d.numpy.transforms.angle_between
+
+@overload
+def vector_outer(x: numpy_.ndarray, y: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+    utils3d.numpy.transforms.vector_outer
 
 @overload
 def procrustes(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:

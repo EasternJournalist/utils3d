@@ -408,12 +408,9 @@ def depth_map_to_normal_map(depth: ndarray, intrinsics: ndarray, mask: ndarray =
     ## Returns
         normal (ndarray): shape (height, width, 3), normal map. 
     """
-    height, width = depth.shape[-2:]
-
-    uv = uv_map(height, width, dtype=np.float32)
-    pts = unproject_cv(uv, depth, intrinsics=intrinsics, extrinsics=None)
-    
-    return point_map_to_normal_map(pts, mask, edge_threshold)
+    points = depth_map_to_point_map(depth, intrinsics)
+    normals = point_map_to_normal_map(points, mask, edge_threshold)
+    return normals
 
 
 def depth_map_to_point_map(
@@ -432,7 +429,7 @@ def depth_map_to_point_map(
         points (ndarray): [..., N, 3] 3d points
     """
     assert intrinsics is not None, "intrinsics matrix is required"
-    uv = uv_map(depth.shape, dtype=depth.dtype)
+    uv = uv_map(depth.shape[-2:], dtype=depth.dtype)
     points = unproject_cv(
         uv, 
         depth, 
