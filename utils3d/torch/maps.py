@@ -27,6 +27,7 @@ __all__ = [
     'bounding_rect_from_mask',
     'masked_nearest_resize',
     'masked_area_resize', 
+    'flood_fill'
 ]
 
 
@@ -547,37 +548,54 @@ def masked_area_resize(
 
 def flood_fill(*image: Tensor, mask: Tensor, return_index: bool = False) -> Tensor:
     """
-    Jump flooding fill the invalid regions in the map(s) according to the binary mask.
+    Flooding fill the holes in the image(s) according to the mask. ![img](doc/flood_fill.png)
 
-    ## Parameters
-        map (Tensor): shape (..., height, width, [C]), input map
-        mask (Tensor): shape (..., height, width), binary mask indicating valid regions
+    Parameters
+    ----
+    - `*image` (Tensor): shape (..., height, width, [C]), input image(s)
+    - `mask` (Tensor): shape (..., height, width), binary mask indicating valid regions
 
-    ## Returns
-        filled_map (Tensor): shape (..., height, width, [C]), flood filled map
+    Returns
+    ----
+    - `*filled_image` (Tensor): shape (..., height, width, [C]), flood filled map
+    - `filled_indices` (Tuple[Tensor, ...], optional): tuple of shape (..., height, width). The nearest neighbor indices of each pixel in the original map.
+        It satisfies `filled_image = image[filled_indices]`
     """
     device = mask.device
-    shape = mask.shape
-    map = mask.reshape(-1, *shape[-3:])
-    mask = mask.reshape(-1, *shape[-2:])
+    *batch_shape, height, width = mask.shape
 
-    batch_size, height, width = mask.shape
-
-    nearest_i, nearest_j = torch.meshgrid(
-        torch.arange(height, device=device),
-        torch.arange(width, device=device),
+    self_i, self_j = torch.meshgrid(
+        torch.arange(height, device=device, dtype=torch.float32),
+        torch.arange(width, device=device, dtype=torch.float32),
         indexing='ij'
     )
-    stride = (max(height, width) + 1) // 2
-    while True:
-        sliding_window_i = sliding_window(nearest_i, window_size=3, dilation=stride, pad_size=stride, dim=(-2, -1))
-        sliding_window_j = sliding_window(nearest_j, window_size=3, dilation=stride, pad_size=stride, dim=(-2, -1))
+    nearest_i, nearest_j = self_i.expand_as(mask), self_j.expand_as(mask)
 
-        ...
-        
-        if stride == 1:
-            break
-        stride = (stride + 1) // 2
+    filled_mask = mask.clone()
 
-    filled_map = filled_map.reshape(*shape)
-    return filled_map
+    step = (max(height, width) + 1) // 2
+    steps = []
+    while step > 1:
+        steps.append(step)
+        step = (step + 1) // 2
+    steps += [1, 1]
+    for step in steps:
+        sliding_window_i = sliding_window(nearest_i, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        sliding_window_j = sliding_window(nearest_j, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        sliding_window_mask = sliding_window(filled_mask, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        filled_mask |= sliding_window_mask.any(dim=-1)
+        dist = torch.where(sliding_window_mask, torch.square(sliding_window_i - self_i[..., None]) + torch.square(sliding_window_j - self_j[..., None]), torch.inf)
+        nearest_in_window = torch.argmin(dist, dim=-1)
+        nearest_i = torch.gather(sliding_window_i, index=nearest_in_window[..., None], dim=-1)[..., 0]
+        nearest_j = torch.gather(sliding_window_j, index=nearest_in_window[..., None], dim=-1)[..., 0]
+
+    batch_indices = [torch.arange(n, device=device).reshape([1] * i + [n] + [1] * (mask.ndim - i - 1)) for i, n in enumerate(mask.shape[:-2])]
+    nearest_i, nearest_j = nearest_i.round().to(torch.long), nearest_j.round().to(torch.long)
+    nearest_indices = (*batch_indices, nearest_i, nearest_j)
+
+    outputs = tuple(x[nearest_indices] for x in image)
+
+    if return_index:
+        return *outputs, nearest_indices
+    else:
+        return outputs

@@ -110,6 +110,7 @@ __all__ = ["sliding_window",
 "masked_area_resize", 
 "colorize_depth_map", 
 "colorize_normal_map", 
+"flood_fill", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -799,6 +800,12 @@ def colorize_normal_map(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.colorize_normal_map, None
     return _call_based_on_args('colorize_normal_map', args, kwargs)
+
+@suppress_traceback
+def flood_fill(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.flood_fill, utils3d.torch.flood_fill
+    return _call_based_on_args('flood_fill', args, kwargs)
 
 @suppress_traceback
 def RastContext(*args, **kwargs):

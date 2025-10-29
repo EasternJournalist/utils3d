@@ -14,4 +14,5 @@ __all__ = [
     'bounding_rect_from_mask',
     'masked_nearest_resize',
     'masked_area_resize',
+    'flood_fill',
 ]

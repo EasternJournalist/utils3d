@@ -16,4 +16,5 @@ __all__ = [
     'masked_area_resize',
     'colorize_depth_map',
     'colorize_normal_map',
+    'flood_fill',
 ]

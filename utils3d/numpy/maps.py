@@ -26,7 +26,8 @@ __all__ = [
     'masked_nearest_resize',
     'masked_area_resize',
     'colorize_depth_map',
-    'colorize_normal_map'
+    'colorize_normal_map',
+    'flood_fill'
 ]
 
 
@@ -650,3 +651,57 @@ def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = F
         normal = normal * 0.5 + 0.5
     normal = (normal.clip(0, 1) * 255).astype(np.uint8)
     return normal
+
+
+def flood_fill(*image: ndarray, mask: ndarray, return_index: bool = False) -> ndarray:
+    """
+    Flooding fill the holes in the image(s) according to the mask. ![doc/flood_fill.png](doc/flood_fill.png)
+    
+    Parameters
+    ----
+    - `*image` (ndarray): shape (..., height, width, [C]), input image(s)
+    - `mask` (ndarray): shape (..., height, width), binary mask indicating valid regions
+
+    Returns
+    ----
+    - `*filled_image` (ndarray): shape (..., height, width, [C]), flood filled map
+    - `filled_indices` (Tuple[ndarray, ...], optional): tuple of shape (..., height, width). The nearest neighbor indices of each pixel in the original map.
+        It satisfies `filled_image = image[filled_indices]`
+    """
+    *batch_shape, height, width = mask.shape
+
+    self_i, self_j = np.meshgrid(
+        np.arange(height, dtype=np.float32),
+        np.arange(width, dtype=np.float32),
+        indexing='ij'
+    )
+    nearest_i, nearest_j = np.broadcast_to(self_i, mask.shape), np.broadcast_to(self_j, mask.shape)
+
+    filled_mask = mask.copy()
+
+    step = (max(height, width) + 1) // 2
+    steps = []
+    while step > 1:
+        steps.append(step)
+        step = step // 2
+    steps += [1, 1]
+    for step in steps:
+        sliding_window_i = sliding_window(nearest_i, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        sliding_window_j = sliding_window(nearest_j, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        sliding_window_mask = sliding_window(filled_mask, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        filled_mask |= sliding_window_mask.any(dim=-1)
+        dist = np.where(sliding_window_mask, np.square(sliding_window_i - self_i[..., None]) + np.square(sliding_window_j - self_j[..., None]), np.inf)
+        nearest_in_window = np.argmin(dist, axis=-1)
+        nearest_i = np.take_along_axis(sliding_window_i, nearest_in_window[..., None], axis=-1)[..., 0]
+        nearest_j = np.take_along_axis(sliding_window_j, nearest_in_window[..., None], axis=-1)[..., 0]
+
+    batch_indices = [np.arange(n).reshape([1] * i + [n] + [1] * (mask.ndim - i - 1)) for i, n in enumerate(mask.shape[:-2])]
+    nearest_i, nearest_j = nearest_i.round().astype(int), nearest_j.round().astype(int)
+    nearest_indices = (*batch_indices, nearest_i, nearest_j)
+
+    outputs = tuple(x[nearest_indices] for x in image)
+
+    if return_index:
+        return *outputs, nearest_indices
+    else:
+        return outputs

@@ -114,6 +114,7 @@ __all__ = ["sliding_window",
 "masked_area_resize", 
 "colorize_depth_map", 
 "colorize_normal_map", 
+"flood_fill", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -1694,6 +1695,22 @@ def colorize_normal_map(normal: numpy_.ndarray, mask: numpy_.ndarray = None, fli
 ## Returns
     - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB in [0, 255]"""
     utils3d.numpy.maps.colorize_normal_map
+
+@overload
+def flood_fill(*image: numpy_.ndarray, mask: numpy_.ndarray, return_index: bool = False) -> numpy_.ndarray:
+    """Flooding fill the holes in the image(s) according to the mask. ![doc/flood_fill.png](doc/flood_fill.png)
+
+Parameters
+----
+- `*image` (ndarray): shape (..., height, width, [C]), input image(s)
+- `mask` (ndarray): shape (..., height, width), binary mask indicating valid regions
+
+Returns
+----
+- `*filled_image` (ndarray): shape (..., height, width, [C]), flood filled map
+- `filled_indices` (Tuple[ndarray, ...], optional): tuple of shape (..., height, width). The nearest neighbor indices of each pixel in the original map.
+    It satisfies `filled_image = image[filled_indices]`"""
+    utils3d.numpy.maps.flood_fill
 
 @overload
 def RastContext(*args, **kwargs):
@@ -3350,6 +3367,22 @@ def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[i
 - `*resized_image`: resized image(s) of shape `(..., H', W', C)`. or `(..., H', W')`
 - `resized_mask`: mask of the resized map of shape `(..., H', W')`"""
     utils3d.torch.maps.masked_area_resize
+
+@overload
+def flood_fill(*image: torch_.Tensor, mask: torch_.Tensor, return_index: bool = False) -> torch_.Tensor:
+    """Flooding fill the holes in the image(s) according to the mask. ![img](doc/flood_fill.png)
+
+Parameters
+----
+- `*image` (Tensor): shape (..., height, width, [C]), input image(s)
+- `mask` (Tensor): shape (..., height, width), binary mask indicating valid regions
+
+Returns
+----
+- `*filled_image` (Tensor): shape (..., height, width, [C]), flood filled map
+- `filled_indices` (Tuple[Tensor, ...], optional): tuple of shape (..., height, width). The nearest neighbor indices of each pixel in the original map.
+    It satisfies `filled_image = image[filled_indices]`"""
+    utils3d.torch.maps.flood_fill
 
 @overload
 def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiffrast.torch.ops.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'cuda', device: Union[str, torch_.device] = None):
