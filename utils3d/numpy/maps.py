@@ -702,6 +702,11 @@ def flood_fill(*image: ndarray, mask: ndarray, return_index: bool = False) -> nd
     outputs = tuple(x[nearest_indices] for x in image)
 
     if return_index:
-        return *outputs, nearest_indices
+        ret = *outputs, nearest_indices
     else:
-        return outputs
+        ret = outputs
+    
+    if len(ret) == 1:
+        return ret[0]
+    else:
+        return ret
