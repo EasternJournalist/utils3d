@@ -513,10 +513,10 @@ def masked_area_resize(
     window_mask = sliding_window(mask, window_size=filter_shape, pad_size=padding_shape, dim=(-2, -1))
 
     # Gather the target pixels's local window
-    target_center = uv_map((target_height, target_width), dtype=torch.float32) * torch.tensor([width, height], dtype=torch.float32)
-    target_lefttop = target_center - torch.tensor((filter_w_f / 2, filter_h_f / 2), dtype=torch.float32)
-    target_bottomright = target_center + torch.tensor((filter_w_f / 2, filter_h_f / 2), dtype=torch.float32)
-    target_window = torch.floor(target_lefttop).astype(torch.long) + torch.tensor((padding_w, padding_h), dtype=torch.long)
+    target_center = uv_map((target_height, target_width), dtype=torch.float32, device=device) * torch.tensor([width, height], dtype=torch.float32, device=device)
+    target_lefttop = target_center - torch.tensor((filter_w_f / 2, filter_h_f / 2), dtype=torch.float32, device=device)
+    target_bottomright = target_center + torch.tensor((filter_w_f / 2, filter_h_f / 2), dtype=torch.float32, device=device)
+    target_window = torch.floor(target_lefttop).to(torch.long) + torch.tensor((padding_w, padding_h), dtype=torch.long, device=device)
 
     target_window_centers = window_pixels[target_window[..., 1], target_window[..., 0], :, :, :].reshape(target_height, target_width, 2, filter_size)                 # (target_height, tgt_width, 2, filter_size)
     target_window_mask = window_mask[..., target_window[..., 1], target_window[..., 0], :, :].reshape(*mask.shape[:-2], target_height, target_width, filter_size)     # (..., target_height, tgt_width, filter_size)
@@ -535,11 +535,49 @@ def masked_area_resize(
     # Weighted sum by area
     outputs = [] 
     for x in image:
-        assert x.shape[:mask.ndim] == mask.shape, "Image and mask should have the same batch shape and spatial shape"
+        assert x.shape[:mask.ndim] == mask.shape, f"Image and mask should have the same batch shape and spatial shape. Got {x.shape[:mask.ndim]} vs {mask.shape}"
         expand_channels = (slice(None),) * (x.ndim - mask.ndim)
         x = torch.where(mask[(..., *expand_channels)], x, 0)
         x = x.reshape(*x.shape[:mask.ndim - 2], height * width, *x.shape[mask.ndim:])[(*((slice(None),) * (mask.ndim - 2)), target_window_indices)]                   # (..., target_height, tgt_width, filter_size, ...)
-        x = (x * target_window_area[(..., *expand_channels)]).sum(dim=mask.ndim) / torch.maximum(target_area[(..., *expand_channels)], torch.finfo(torch.float32).eps)  # (..., target_height, tgt_width, ...)
+        x = (x * target_window_area[(..., *expand_channels)]).sum(dim=mask.ndim) / torch.maximum(target_area[(..., *expand_channels)], torch.tensor(torch.finfo(torch.float32).eps, device=device))  # (..., target_height, tgt_width, ...)
         outputs.append(x)
 
     return *outputs, target_mask
+
+
+def flood_fill(*image: Tensor, mask: Tensor, return_index: bool = False) -> Tensor:
+    """
+    Jump flooding fill the invalid regions in the map(s) according to the binary mask.
+
+    ## Parameters
+        map (Tensor): shape (..., height, width, [C]), input map
+        mask (Tensor): shape (..., height, width), binary mask indicating valid regions
+
+    ## Returns
+        filled_map (Tensor): shape (..., height, width, [C]), flood filled map
+    """
+    device = mask.device
+    shape = mask.shape
+    map = mask.reshape(-1, *shape[-3:])
+    mask = mask.reshape(-1, *shape[-2:])
+
+    batch_size, height, width = mask.shape
+
+    nearest_i, nearest_j = torch.meshgrid(
+        torch.arange(height, device=device),
+        torch.arange(width, device=device),
+        indexing='ij'
+    )
+    stride = (max(height, width) + 1) // 2
+    while True:
+        sliding_window_i = sliding_window(nearest_i, window_size=3, dilation=stride, pad_size=stride, dim=(-2, -1))
+        sliding_window_j = sliding_window(nearest_j, window_size=3, dilation=stride, pad_size=stride, dim=(-2, -1))
+
+        ...
+        
+        if stride == 1:
+            break
+        stride = (stride + 1) // 2
+
+    filled_map = filled_map.reshape(*shape)
+    return filled_map

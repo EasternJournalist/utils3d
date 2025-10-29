@@ -2,5 +2,4 @@
 __all__ = [
     'read_obj',
     'write_obj',
-    'write_simple_obj',
 ]

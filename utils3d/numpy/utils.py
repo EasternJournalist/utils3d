@@ -28,6 +28,7 @@ def sliding_window(
     x: ndarray, 
     window_size: Union[int, Tuple[int, ...]], 
     stride: Optional[Union[int, Tuple[int, ...]]] = None, 
+    dilation: Optional[Union[int, Tuple[int, ...]]] = None,
     pad_size: Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]] = None, 
     pad_mode: str = 'constant',
     pad_value: Number = 0,
@@ -41,8 +42,10 @@ def sliding_window(
     - `x` (ndarray): Input array.
     - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
         is provided, the same size is used for all specified axes.
-    - `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+    - `stride` (Optional[Tuple[int,...]]): Stride between the sliding windows. If None,
         no stride is applied. If int is provided, the same stride is used for all specified axes.
+    - `dilation` (Optional[Tuple[int,...]]): Dilation in each sliding window. If None,
+        no dilation is applied. If int is provided, the same dilation is used for all specified axes.
     - `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
         Corresponding to `axis`.
         - General format is `((before_1, after_1), (before_2, after_2), ...)`.
@@ -68,7 +71,13 @@ def sliding_window(
     axis = [axis[i] % x.ndim for i in range(len(axis))]
     if isinstance(window_size, int):
         window_size = (window_size,) * len(axis)
-    
+    if dilation is not None:
+        if isinstance(dilation, int):
+            dilation = (dilation,) * len(axis)
+    if stride is not None:
+        if isinstance(stride, int):
+            stride = (stride,) * len(axis)
+
     # Pad the input array if needed
     if pad_size is not None:
         if isinstance(pad_size, int):
@@ -89,14 +98,21 @@ def sliding_window(
             x = np.pad(x, full_pad, mode=pad_mode)
     
     # Apply sliding window
-    x = np.lib.stride_tricks.sliding_window_view(x, window_size, axis=axis)
+    if dilation is None:
+        x = np.lib.stride_tricks.sliding_window_view(x, window_size, axis=axis)
+    else:
+        window_size_dilated = tuple((window_size[i] - 1) * dilation[i] + 1 for i in range(len(window_size)))
+        x = np.lib.stride_tricks.sliding_window_view(x, window_size_dilated, axis=axis)
 
     # Apply stride if needed
     if stride is not None:
-        if isinstance(stride, int):
-            stride = (stride,) * len(axis)
-        stride_slice = tuple(slice(None) if i not in axis else slice(None, None, stride[axis.index(i)]) for i in range(x.ndim))
+        stride_slice = tuple(slice(None) if i not in axis else slice(None, None, stride[axis.index(i)]) for i in range(x.ndim - len(axis)))
         x = x[stride_slice]
+    
+    # Apply dilation if needed
+    if dilation is not None:
+        dilation_slice = tuple(slice(None, None, dilation[i]) for i in range(len(axis)))
+        x = x[(..., *dilation_slice)]
 
     return x
 

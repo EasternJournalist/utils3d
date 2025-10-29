@@ -2,7 +2,7 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 from typing import *
-from .transforms import angle_between
+from .transforms import angle_between, unproject_cv
 from .utils import lookup, csr_eliminate_zeros, csr_matrix_from_dense_indices, segment_roll
 
 
@@ -28,6 +28,9 @@ __all__ = [
     'laplacian_smooth_mesh',
     'taubin_smooth_mesh',
     'laplacian_hc_smooth_mesh',
+    "create_cube_mesh",
+    "create_camera_frustum_mesh",
+    "create_icosahedron_mesh",
 ]
 
 
@@ -818,3 +821,79 @@ def laplacian_hc_smooth_mesh(vertices: Tensor, faces: Tensor, times: int = 5, al
         b = p - (alpha * vertices + (1 - alpha) * q)
         p = p - (beta * b + (1 - beta) * laplacian_smooth_mesh(b, faces, weight)) * 0.8
     return p
+
+
+def create_cube_mesh(tri: bool = False, device: Optional[torch.device] = None) -> Tuple[Tensor, Tensor]:
+    """
+    Create a cube mesh of size 1 centered at origin.
+
+    ### Parameters
+        tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
+
+    ### Returns
+        vertices (Tensor): shape (8, 3) float32
+        faces (Tensor): shape (12, 3) int32
+    """
+    vertices = torch.tensor([
+        [0.5, 0.5, 0.5],   [-0.5, 0.5, 0.5],   [-0.5, -0.5, 0.5],   [0.5, -0.5, 0.5], # v0-v1-v2-v3
+        [0.5, 0.5, -0.5],  [-0.5, 0.5, -0.5],  [-0.5, -0.5, -0.5],  [0.5, -0.5, -0.5] # v4-v5-v6-v7
+    ], dtype=torch.float32, device=device).reshape((-1, 3))
+
+    faces = torch.tensor([
+        [0, 1, 2, 3], #  (front)
+        [5, 4, 7, 6], #  (back)
+        [4, 5, 1, 0], #  (top)
+        [2, 6, 7, 3], #  (bottom)
+        [1, 5, 6, 2], #  (left)
+        [4, 0, 3, 7], #  (right)
+    ], dtype=torch.int32, device=device)
+
+    if tri:
+        faces = triangulate_mesh(faces, vertices=vertices)
+
+    return vertices, faces
+
+
+def create_camera_frustum_mesh(extrinsics: Tensor, intrinsics: Tensor, depth: float = 1.0) -> Tuple[Tensor, Tensor, Tensor]:
+    """
+    Create a triangle mesh of camera frustum.
+    """
+    assert extrinsics.shape == (4, 4) and intrinsics.shape == (3, 3)
+    vertices = unproject_cv(
+        torch.tensor([[0, 0], [0, 0], [0, 1], [1, 1], [1, 0]], dtype=extrinsics.dtype, device=extrinsics.device), 
+        torch.tensor([0] + [depth] * 4, dtype=extrinsics.dtype, device=extrinsics.device), 
+        intrinsics,
+        extrinsics
+    )
+    edges = torch.tensor([
+        [0, 1], [0, 2], [0, 3], [0, 4], 
+        [1, 2], [2, 3], [3, 4], [4, 1]
+    ], dtype=torch.int32, device=extrinsics.device)
+    faces = torch.tensor([
+        [0, 1, 2],
+        [0, 2, 3],
+        [0, 3, 4],
+        [0, 4, 1],
+        [1, 2, 3],
+        [1, 3, 4]
+    ], dtype=torch.int32, device=extrinsics.device)
+    return vertices, edges, faces
+
+
+def create_icosahedron_mesh(device: Optional[torch.device] = None) -> Tuple[Tensor, Tensor]:
+    """
+    Create an icosahedron mesh of centered at origin.
+    """
+    A = (1 + 5 ** 0.5) / 2
+    vertices = torch.tensor([
+        [0, 1, A], [0, -1, A], [0, 1, -A], [0, -1, -A],
+        [1, A, 0], [-1, A, 0], [1, -A, 0], [-1, -A, 0],
+        [A, 0, 1], [A, 0, -1], [-A, 0, 1], [-A, 0, -1]
+    ], dtype=torch.float32, device=device)
+    faces = torch.tensor([
+        [0, 1, 8], [0, 8, 4], [0, 4, 5], [0, 5, 10], [0, 10, 1],
+        [3, 2, 9], [3, 9, 6], [3, 6, 7], [3, 7, 11], [3, 11, 2],
+        [1, 6, 8], [8, 9, 4], [4, 2, 5], [5, 11, 10], [10, 7, 1],
+        [2, 4, 9], [9, 8, 6], [6, 1, 7], [7, 10, 11], [11, 5, 2]
+    ], dtype=torch.int32, device=device)
+    return vertices, faces

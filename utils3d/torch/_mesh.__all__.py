@@ -21,4 +21,7 @@ __all__ = [
     'laplacian_smooth_mesh',
     'taubin_smooth_mesh',
     'laplacian_hc_smooth_mesh',
+    'create_cube_mesh',
+    'create_camera_frustum_mesh',
+    'create_icosahedron_mesh',
 ]

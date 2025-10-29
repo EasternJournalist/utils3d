@@ -127,7 +127,6 @@ __all__ = ["sliding_window",
 "write_intrinsics_as_colmap", 
 "read_obj", 
 "write_obj", 
-"write_simple_obj", 
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
@@ -146,7 +145,7 @@ __all__ = ["sliding_window",
 "texture_composite"]
 
 @overload
-def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
+def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, dilation: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
     """Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s).
 This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
 
@@ -154,8 +153,10 @@ This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with
 - `x` (ndarray): Input array.
 - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
     is provided, the same size is used for all specified axes.
-- `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+- `stride` (Optional[Tuple[int,...]]): Stride between the sliding windows. If None,
     no stride is applied. If int is provided, the same stride is used for all specified axes.
+- `dilation` (Optional[Tuple[int,...]]): Dilation in each sliding window. If None,
+    no dilation is applied. If int is provided, the same dilation is used for all specified axes.
 - `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
     Corresponding to `axis`.
     - General format is `((before_1, after_1), (before_2, after_2), ...)`.
@@ -1916,48 +1917,59 @@ def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics
     utils3d.numpy.io.colmap.write_intrinsics_as_colmap
 
 @overload
-def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False):
-    """Read wavefront .obj file, without preprocessing.
+def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
+    """Read wavefront .obj file.
 
-Why bothering having this read_obj() while we already have other libraries like `trimesh`? 
-This function read the raw format from .obj file and keeps the order of vertices and faces, 
-while trimesh which involves modification like merge/split vertices, which could break the orders of vertices and faces,
-Those libraries are commonly aiming at geometry processing and rendering supporting various formats.
-If you want mesh geometry processing, you may turn to `trimesh` for more features.
+Parameters
+----
+- `file` (str, Path, TextIOWrapper): filepath or file object
+- `encoding` (str, optional): file encoding
+- `ignore_unknown` (bool): whether to ignore unknown keywords in .obj file. Default to False.
 
-### Parameters
-    `file` (str, Path, TextIOWrapper): filepath or file object
-    encoding (str, optional): 
+Returns
+----
+A dictionary maybe containing the following fields. Note that some fields may be absent if not present in the .obj file:
 
-### Returns
-    obj (dict): A dict containing .obj components
-    {   
-        'mtllib': [],
-        'v': [[0,1, 0.2, 1.0], [1.2, 0.0, 0.0], ...],
-        'vt': [[0.5, 0.5], ...],
-        'vn': [[0., 0.7, 0.7], [0., -0.7, 0.7], ...],
-        'f': [[0, 1, 2], [2, 3, 4],...],
-        'usemtl': [{'name': 'mtl1', 'f': 7}]
-    }"""
+Vertices and attributes data:
+- `v` (ndarray): (N_v, 3 or 4) vertex coordinates.
+- `vt` (ndarray): (N_vt, 2 or 3). vertex texture coordinates.
+- `vn` (ndarray): (N_vn, 3). vertex normals.
+
+Primitive definitions (face/line). NOTE: all indices are 0-based, unlike the 1-based indexing in .obj file.
+- `f` (ndarray): Vertex indices in each face.
+    - If all faces have the same number of vertices: (M, K)
+    - If faces have different numbers of vertices: a tuple of segmented array:
+        - `data` (ndarray): flattened array of shape (sum(K_i),)
+        - `offsets` (ndarray): shape (M + 1,), offsets of each face in the flattened array
+- `ft` (ndarray): Vertex texture coordinate indices of each face. The same format as `f`.
+- `fn` (ndarray): Vertex normal indices of each face. The same format as `f`.
+- `l` (ndarray): Vertex indices of each line segment.
+    - If all lines have the same number of vertices: (L, K_line)
+    - If lines have different numbers of vertices: a tuple of segmented array:
+        - `data` (ndarray): flattened array of shape (sum(K_line_i),)
+        - `offsets` (ndarray): shape (L + 1,), offsets of each line in the flattened array
+- `lt` (ndarray): Vertex texture coordinate indices of each line. The same format as `l`.
+- `p` (ndarray): Vertex indices of each point. 1D array of shape (N_p,)
+- `pt` (ndarray): Vertex texture coordinate indices of each point. The same format as `p`.
+
+Object/Group/Material info:
+- `o` (Dict[str, Dict[Literal['f', 'l', 'p'], slice]]). The objects and their corresponding faces/lines/points. E.g. `o['object_A']['f']` gives the slice of faces belonging to object_A.
+- `g` (Dict[str, Dict[Literal['f', 'l', 'p'], slice]]). The groups and their corresponding faces/lines/points. E.g. `g['group_A']['f']` gives the slice of faces belonging to group_A.
+- `usemtl` (Dict[str, Dict[Literal['f', 'l', 'p'], slice]]). The materials and their corresponding faces/lines/points. E.g. `usemtl['material_A']['f']` gives the slice of faces using material_A.
+
+Here, `names` is a list of names, and `offsets` is an array of shape (num_entities + 1,) indicating the start and end indices of faces belonging to each object/group/material.
+For example, the second material has name `material_names[1]`, and its faces are `f[material_offsets[1]:material_offsets[2]]`.
+
+Material library:
+- `mtllib` (List[str]): list of material library filenames - `mtllib` lines in .obj file."""
     utils3d.numpy.io.obj.read_obj
 
 @overload
-def write_obj(file: Union[str, pathlib._local.Path], obj: Dict[str, Any], encoding: Optional[str] = None):
+def write_obj(file: Union[str, pathlib._local.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
     utils3d.numpy.io.obj.write_obj
 
 @overload
-def write_simple_obj(file: Union[str, pathlib._local.Path], vertices: numpy_.ndarray, faces: numpy_.ndarray, encoding: Optional[str] = None):
-    """Write wavefront .obj file, without preprocessing.
-
-## Parameters
-    vertices (np.ndarray): [N, 3]
-    faces (np.ndarray): [T, 3]
-    file (Any): filepath
-    encoding (str, optional): """
-    utils3d.numpy.io.obj.write_simple_obj
-
-@overload
-def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
+def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, dilation: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
     """Get a sliding window of the input array.
 This function is a wrapper of `torch.nn.functional.unfold` with additional support for padding and stride.
 
@@ -1965,8 +1977,10 @@ This function is a wrapper of `torch.nn.functional.unfold` with additional suppo
 - `x` (Tensor): Input tensor.
 - `window_size` (int or Tuple[int,...]): Size of the sliding window. If int
     is provided, the same size is used for all specified axes.
-- `stride` (Optional[Tuple[int,...]]): Stride of the sliding window. If None,
+- `stride` (Optional[Tuple[int,...]]): Stride between the sliding windows. If None,
     no stride is applied. If int is provided, the same stride is used for all specified axes.
+- `dilation` (Optional[Tuple[int,...]]): Dilation in each sliding window. If None,
+    no dilation is applied. If int is provided, the same dilation is used for all specified axes.
 - `pad_size` (Optional[Union[int, Tuple[int, int], Tuple[Tuple[int, int]]]]): Size of padding to apply before sliding window.
     Corresponding to `axis`.
     - General format is `((before_1, after_1), (before_2, after_2), ...)`.
@@ -3095,6 +3109,28 @@ def laplacian_hc_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, time
     """HC algorithm from Improved Laplacian Smoothing of Noisy Surface Meshes by J.Vollmer et al.
     """
     utils3d.torch.mesh.laplacian_hc_smooth_mesh
+
+@overload
+def create_cube_mesh(tri: bool = False, device: Optional[torch_.device] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Create a cube mesh of size 1 centered at origin.
+
+### Parameters
+    tri (bool, optional): return triangulated mesh. Defaults to False, which returns quad mesh.
+
+### Returns
+    vertices (Tensor): shape (8, 3) float32
+    faces (Tensor): shape (12, 3) int32"""
+    utils3d.torch.mesh.create_cube_mesh
+
+@overload
+def create_camera_frustum_mesh(extrinsics: torch_.Tensor, intrinsics: torch_.Tensor, depth: float = 1.0) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Create a triangle mesh of camera frustum."""
+    utils3d.torch.mesh.create_camera_frustum_mesh
+
+@overload
+def create_icosahedron_mesh(device: Optional[torch_.device] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Create an icosahedron mesh of centered at origin."""
+    utils3d.torch.mesh.create_icosahedron_mesh
 
 @overload
 def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:

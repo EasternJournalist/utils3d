@@ -123,7 +123,6 @@ __all__ = ["sliding_window",
 "write_intrinsics_as_colmap", 
 "read_obj", 
 "write_obj", 
-"write_simple_obj", 
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
@@ -678,13 +677,13 @@ def flatten_mesh_indices(*args, **kwargs):
 @suppress_traceback
 def create_cube_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.create_cube_mesh, None
+        utils3d.numpy.create_cube_mesh, utils3d.torch.create_cube_mesh
     return _call_based_on_args('create_cube_mesh', args, kwargs)
 
 @suppress_traceback
 def create_icosahedron_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.create_icosahedron_mesh, None
+        utils3d.numpy.create_icosahedron_mesh, utils3d.torch.create_icosahedron_mesh
     return _call_based_on_args('create_icosahedron_mesh', args, kwargs)
 
 @suppress_traceback
@@ -696,7 +695,7 @@ def create_square_mesh(*args, **kwargs):
 @suppress_traceback
 def create_camera_frustum_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.create_camera_frustum_mesh, None
+        utils3d.numpy.create_camera_frustum_mesh, utils3d.torch.create_camera_frustum_mesh
     return _call_based_on_args('create_camera_frustum_mesh', args, kwargs)
 
 @suppress_traceback
@@ -878,12 +877,6 @@ def write_obj(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.write_obj, None
     return _call_based_on_args('write_obj', args, kwargs)
-
-@suppress_traceback
-def write_simple_obj(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.write_simple_obj, None
-    return _call_based_on_args('write_simple_obj', args, kwargs)
 
 @suppress_traceback
 def masked_min(*args, **kwargs):
