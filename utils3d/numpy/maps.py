@@ -699,16 +699,16 @@ def flood_fill(*image: ndarray, mask: ndarray, return_index: bool = False) -> nd
         step = step // 2
     steps += [1, 1]
     for step in steps:
-        sliding_window_i = sliding_window(nearest_i, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
-        sliding_window_j = sliding_window(nearest_j, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
-        sliding_window_mask = sliding_window(filled_mask, window_size=3, dilation=step, pad_size=step, dim=(-2, -1)).reshape(*batch_shape, height, width, 9)
-        filled_mask |= sliding_window_mask.any(dim=-1)
+        sliding_window_i = sliding_window(nearest_i, window_size=3, dilation=step, pad_size=step, axis=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        sliding_window_j = sliding_window(nearest_j, window_size=3, dilation=step, pad_size=step, axis=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        sliding_window_mask = sliding_window(filled_mask, window_size=3, dilation=step, pad_size=step, axis=(-2, -1)).reshape(*batch_shape, height, width, 9)
+        filled_mask |= sliding_window_mask.any(axis=-1)
         dist = np.where(sliding_window_mask, np.square(sliding_window_i - self_i[..., None]) + np.square(sliding_window_j - self_j[..., None]), np.inf)
         nearest_in_window = np.argmin(dist, axis=-1)
         nearest_i = np.take_along_axis(sliding_window_i, nearest_in_window[..., None], axis=-1)[..., 0]
         nearest_j = np.take_along_axis(sliding_window_j, nearest_in_window[..., None], axis=-1)[..., 0]
 
-    batch_indices = [np.arange(n).reshape([1] * i + [n] + [1] * (mask.ndim - i - 1)) for i, n in enumerate(mask.shape[:-2])]
+    batch_indices = [np.arange(n).reshape([1] * i + [n] + [1] * (mask.ndim - i - 1)) for i, n in enumerate(batch_shape)]
     nearest_i, nearest_j = nearest_i.round().astype(int), nearest_j.round().astype(int)
     nearest_indices = (*batch_indices, nearest_i, nearest_j)
 

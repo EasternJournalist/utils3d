@@ -603,7 +603,7 @@ def flood_fill(*image: Tensor, mask: Tensor, return_index: bool = False) -> Tens
         nearest_i = torch.gather(sliding_window_i, index=nearest_in_window[..., None], dim=-1)[..., 0]
         nearest_j = torch.gather(sliding_window_j, index=nearest_in_window[..., None], dim=-1)[..., 0]
 
-    batch_indices = [torch.arange(n, device=device).reshape([1] * i + [n] + [1] * (mask.ndim - i - 1)) for i, n in enumerate(mask.shape[:-2])]
+    batch_indices = [torch.arange(n, device=device).reshape([1] * i + [n] + [1] * (mask.ndim - i - 1)) for i, n in enumerate(batch_shape)]
     nearest_i, nearest_j = nearest_i.round().to(torch.long), nearest_j.round().to(torch.long)
     nearest_indices = (*batch_indices, nearest_i, nearest_j)
 
