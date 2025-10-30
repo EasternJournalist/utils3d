@@ -413,7 +413,10 @@ def masked_nearest_resize(
     return_index: bool = False
 ) -> Tuple[Unpack[Tuple[Tensor, ...]], Tensor, Tuple[Tensor, ...]]:
     """
-    Resize image(s) by nearest sampling with mask awareness. 
+    Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
+    - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
+    - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
+
 
     ### Parameters
     - `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
@@ -431,7 +434,7 @@ def masked_nearest_resize(
     device = mask.device
     height, width = mask.shape[-2:]
     target_height, target_width = size
-    filter_h_f, filter_w_f = max(1, height / target_height), max(1, width / target_width)
+    filter_h_f, filter_w_f = height / target_height, width / target_width
     filter_h_i, filter_w_i = math.ceil(filter_h_f), math.ceil(filter_w_f)
     filter_size = filter_h_i * filter_w_i
     filter_shape = (filter_h_i, filter_w_i)
@@ -455,10 +458,11 @@ def masked_nearest_resize(
     target_window_indices = window_indices[target_window[..., 1], target_window[..., 0], :, :].reshape(target_height, target_width, filter_size)                      # (target_height, tgt_width, filter_size)
 
     # Compute nearest neighbor in the local window for each pixel 
-    dist = torch.square(target_window_pixels - target_centers[..., None])
-    dist = dist[..., 0, :] + dist[..., 1, :]
-    dist = torch.where(target_window_mask, dist, torch.inf)                                                   # (..., target_height, tgt_width, filter_size)
-    nearest_in_window = torch.argmin(dist, dim=-1, keepdims=True)                                         # (..., target_height, tgt_width, 1)
+    delta = target_window_pixels - target_centers[..., None]
+    eps = torch.finfo(torch.float32).eps * max(height, width) # Shift a small epsilon to avoid numerical issues when the pixel is exactly on the border
+    target_window_mask &= (-filter_w_f / 2 + eps < delta[..., 0, :]) & (delta[..., 0, :] <= filter_w_f / 2 + eps) & (-filter_h_f / 2 + eps < delta[..., 1, :]) & (delta[..., 1, :] <= filter_h_f / 2 + eps)
+    dist = torch.where(target_window_mask, torch.square(delta[..., 0, :]) + torch.square(delta[..., 1, :]), torch.inf)      # (..., target_height, tgt_width, filter_size)
+    nearest_in_window = torch.argmin(dist, dim=-1, keepdim=True)                                                 # (..., target_height, tgt_width, 1)
     nearest_idx = torch.gather(
         target_window_indices.expand(dist.shape),
         dim=-1,
@@ -472,9 +476,14 @@ def masked_nearest_resize(
     outputs = tuple(x[nearest_indices] for x in image)
 
     if return_index:
-        return *outputs, target_mask, nearest_indices
+        ret = (*outputs, target_mask, nearest_indices)
     else:
-        return *outputs, target_mask
+        ret = (*outputs, target_mask)
+
+    if len(ret) == 1:
+        return ret[0]
+    else:
+        return ret
 
 
 def masked_area_resize(
@@ -543,7 +552,12 @@ def masked_area_resize(
         x = (x * target_window_area[(..., *expand_channels)]).sum(dim=mask.ndim) / torch.maximum(target_area[(..., *expand_channels)], torch.tensor(torch.finfo(torch.float32).eps, device=device))  # (..., target_height, tgt_width, ...)
         outputs.append(x)
 
-    return *outputs, target_mask
+    ret = *outputs, target_mask
+
+    if len(ret) == 1:
+        return ret[0]
+    else:
+        return ret
 
 
 def flood_fill(*image: Tensor, mask: Tensor, return_index: bool = False) -> Tensor:

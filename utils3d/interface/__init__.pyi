@@ -1636,7 +1636,9 @@ def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: nump
 
 @overload
 def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
-    """Resize image(s) by nearest sampling with mask awareness. 
+    """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
+- Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
+- Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
 
 ### Parameters
 - `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
@@ -3337,7 +3339,10 @@ def bounding_rect_from_mask(mask: torch_.BoolTensor):
 
 @overload
 def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
-    """Resize image(s) by nearest sampling with mask awareness. 
+    """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
+- Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
+- Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
+
 
 ### Parameters
 - `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
