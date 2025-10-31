@@ -1592,14 +1592,14 @@ def solve_pose(
     if w is None:
         w = np.ones(p.shape[:-1], dtype=p.dtype)
     if offsets is None:
-        w_sum = np.maximum(np.sum(w, axis=-2), np.finfo(p.dtype).tiny)
+        w_sum = np.maximum(np.sum(w, axis=-1), np.finfo(p.dtype).tiny)
         p_mean = np.sum(w[..., None] * p, axis=-2) / w_sum[..., None]
         q_mean = np.sum(w[..., None] * q, axis=-2) / w_sum[..., None]
         p = p - p_mean[..., None, :]
         q = q - q_mean[..., None, :]
         pw = p * w[..., None]
         qw = q * w[..., None]
-        cov_pp = np.sum(vector_outer(pw, p), axis=-3) / w_sum[..., None, None]
+        cov_qp = np.sum(vector_outer(qw, p), axis=-3) / w_sum[..., None, None]
         if mode == 'similar' or mode == 'affine':
             cov_qp = np.sum(vector_outer(qw, p), axis=-3) / w_sum[..., None, None]
             cov_qq = np.sum(vector_outer(qw, q), axis=-3) / w_sum[..., None, None]
@@ -1612,9 +1612,9 @@ def solve_pose(
         q = q - np.repeat(q_mean, lengths, axis=0)
         pw = p * w[..., None]
         qw = q * w[..., None]
-        cov_pp = np.add.reduceat(vector_outer(p, pw), offsets[:-1], axis=0) / w_sum[:, None, None]
+        cov_qp = np.add.reduceat(vector_outer(q, pw), offsets[:-1], axis=0) / w_sum[:, None, None]
         if mode == 'similar' or mode == 'affine':
-            cov_qp = np.add.reduceat(vector_outer(q, pw), offsets[:-1], axis=0) / w_sum[:, None, None]
+            cov_pp = np.add.reduceat(vector_outer(p, pw), offsets[:-1], axis=0) / w_sum[:, None, None]    
             cov_qq = np.add.reduceat(vector_outer(q, qw), offsets[:-1], axis=0) / w_sum[:, None, None]
     
     if mode == 'rigid':
