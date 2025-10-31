@@ -1456,7 +1456,16 @@ def vector_outer(x: ndarray, y: Optional[ndarray] = None) -> ndarray:
 def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[ndarray] = None, mean_x: Optional[ndarray] = None, mean_y: Optional[ndarray] = None, niter: int = 8) -> Tuple[ndarray, ndarray]:
     """
     Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
-    
+
+    Parameters
+    ----
+    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
+    - `cov_xx`: (..., 3, 3) covariance matrix of x points. If None, no scaling is solved.
+    - `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
+    - `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
+    - `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
+    - `niter`: int, number of Newton iterations for scale solving when both cov_xx and cov_yy are given.
+
     Specifically, based on provided inputs:
     
     - To solve the rotation `R`, `cov_yx` must be given.
@@ -1468,15 +1477,6 @@ def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Option
         - If only `cov_yy` is given, the scale will be solved by minimizing inverse cost 
             `||s R^T (Y - t)  - X||_F^2`
     - To solve the translation `t`, provide `mean_x` and `mean_y`.
-
-    Parameters
-    ----
-    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
-    - `cov_xx`: (..., 3, 3) covariance matrix of x points. If None, no scaling is solved.
-    - `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
-    - `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
-    - `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
-    - `niter`: int, number of Newton iterations for scale solving when both cov_xx and cov_yy are given.
 
     Returns
     ----
@@ -1586,8 +1586,7 @@ def solve_pose(
     
     Returns
     ----
-    - `T`: (S, 4, 4) transformations from p to q
-    - `R`: (S, 3, 3) rotation matrices from p to
+    - `pose`: (..., 4, 4) transformations matrix from p to q.
     """
     if w is None:
         w = np.ones(p.shape[:-1], dtype=p.dtype)
@@ -1667,7 +1666,7 @@ def solve_poses_sequential(
 
     Returns
     ----
-    - `poses`: (T, ..., 4, 4) transformations from canonical to each frame
+    - `poses`: (T, ..., 4, 4) transformations from canonical to each frame.
     - `valid`: (T, ...) boolean mask indicating valid segments
     - `stats`: canonical statistics of each group,
         It is a tuple of:
@@ -1687,6 +1686,23 @@ def solve_poses_sequential(
         - `accum_wx`: (..., N, 3) sum of weights * x
         - `accum_wxx`: (..., N, 3, 3) sum of weights * outer(x - mean_wx, x - mean_wx)
         - `accum_nnz`: (..., N,) number of non-zero weight accumulations
+
+    Example
+    ----
+    ```
+    accum = None
+    poses, valid = [], []
+    for new_trajectories_chunk in data_stream:
+        # new_trajectories_chunk: (T_chunk, N, 3)
+        poses_chunk, valid_chunk, stats, canonical_points, err, accum = solve_poses(
+            new_trajectories_chunk,
+            accum=accum,
+        )
+        poses.append(poses_chunk)
+        valid.append(valid_chunk)
+        # `stats`, `canonical_points` and `err` are returned and updated every chunk.
+    poses = np.concatenate(poses, axis=0)   # (T_all, 4, 4), poses over all frames
+    valid = np.concatenate(valid, axis=0)   # (T_all,), poses' validity over all frames
     """
     dtype = trajectories.dtype
     num_frames = trajectories.shape[0]
