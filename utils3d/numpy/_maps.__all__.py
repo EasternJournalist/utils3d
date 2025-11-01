@@ -17,4 +17,7 @@ __all__ = [
     'colorize_depth_map',
     'colorize_normal_map',
     'flood_fill',
+    'perlin_noise',
+    'perlin_noise_map',
+    'fractal_perlin_noise_map',
 ]

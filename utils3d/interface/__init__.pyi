@@ -115,6 +115,9 @@ __all__ = ["sliding_window",
 "colorize_depth_map", 
 "colorize_normal_map", 
 "flood_fill", 
+"perlin_noise", 
+"perlin_noise_map", 
+"fractal_perlin_noise_map", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -1731,6 +1734,56 @@ Returns
     utils3d.numpy.maps.flood_fill
 
 @overload
+def perlin_noise(x: numpy_.ndarray, seed: Optional[int] = None) -> numpy_.ndarray:
+    """Generate Perlin noise for the given coordinates.
+
+Parameters
+----
+- `x` (ndarray): shape (*batch_shape, N_1, ..., N_D, D), coordinates to sample Perlin.
+    If input ndim is more than D + 1, the leading dimensions are treated as batch dimensions. Instances in the batch have different noise patterns.
+- `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+Returns
+----
+- `y` (ndarray): shape (*batch_shape, N_1, ..., N_D), Perlin noise value at the given coordinates and seed. Value range is approximately [-1, 1]"""
+    utils3d.numpy.maps.perlin_noise
+
+@overload
+def perlin_noise_map(size: Tuple[int, ...], frequency: Union[float, numpy_.ndarray], seed: Optional[int] = None, dtype: Optional[numpy_.dtype] = numpy_.float32) -> numpy_.ndarray:
+    """Generate Perlin noise map.
+
+Parameters
+----
+- `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+- `frequency` (float | ndarray): frequency relative to map's larger dimension max(H, W) of the Perlin noise. 
+    Represents how many periods of noise fit in the larger dimension of the map.
+- `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+Returns
+----
+- `noise_map` (ndarray): shape (..., H, W), Perlin noise map. Value range is approximately [-1, 1]"""
+    utils3d.numpy.maps.perlin_noise_map
+
+@overload
+def fractal_perlin_noise_map(size: Tuple[int, ...], base_frequency: Union[float, numpy_.ndarray], octaves: int = 4, lacunarity: float = 2.0, gain: float = 0.5, seed: Optional[int] = None, dtype: Optional[numpy_.dtype] = numpy_.float32) -> numpy_.ndarray:
+    """Generate fractal Perlin noise map. ![fractal_perlin_base_frequeny2_octaves7_gain0.7.png](doc/fractal_perlin_base_frequeny2_octaves7_gain0.7.png)
+
+Parameters
+----
+- `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+- `base_frequency` (float | ndarray): base frequency (relative to map's larger dimension max(H, W)) of the Perlin noise.
+    Represents how many periods of noise fit in the larger dimension of the map.
+- `octaves` (int, optional): number of octaves. Defaults to 4.
+- `lacunarity` (float, optional): frequency multiplier between octaves. Defaults to 2.0.
+- `gain` (float, optional): amplitude multiplier between octaves. Defaults to 0.5.
+- `seed` (int, optional): random seed. The same seed will generate the same noise pattern. Defaults to None.
+
+Returns
+----
+- `noise_map` (ndarray): shape (..., H, W), fractal Perlin noise map. Value range is approximately [-1, 1]"""
+    utils3d.numpy.maps.fractal_perlin_noise_map
+
+@overload
 def RastContext(*args, **kwargs):
     """Context for numpy-side rasterization. Based on moderngl.
     """
@@ -3177,7 +3230,7 @@ def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0
 - `left`: `float` defaults to 0.
 - `bottom`: `float` defaults to 1.
 - `right`: `float` defaults to 1.
-- `dtype`: `np.dtype` data type of the output uv map. Defaults to torch.float32.
+- `dtype`: `torch.dtype` data type of the output uv map. Defaults to torch.float32.
 - `device`: `torch.device`, device of the output uv map. Defaults to None.
 
 ## Returns
@@ -3234,7 +3287,7 @@ This is commonly used in graphics APIs like OpenGL.
 - `left`: `float`, optional left boundary in the screen space. Defaults to 0.
 - `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
 - `right`: `float`, optional right boundary in the screen space. Defaults to 1.
-- `dtype`: `np.dtype`, optional data type of the output map. Defaults to torch.float32.
+- `dtype`: `torch.dtype`, optional data type of the output map. Defaults to torch.float32.
 
 ## Returns
     (Tensor): shape (height, width, 2)"""
@@ -3250,7 +3303,7 @@ def build_mesh_from_map(*maps: torch_.Tensor, mask: Optional[torch_.Tensor] = No
 
 ## Returns
     faces (Tensor): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-    *attributes (Tensor): vertex attributes in corresponding order with input maps
+    *attributes (Tensor): vertex attributes in corresponding order with itorchut maps
     indices (Tensor, optional): indices of vertices in the original mesh"""
     utils3d.torch.maps.build_mesh_from_map
 
@@ -3361,9 +3414,9 @@ def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tupl
 
 
 ### Parameters
-- `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
+- `*image`: Itorchut image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
     - You can pass multiple images to be resized at the same time for efficiency.
-- `mask`: input mask of shape `(..., H, W)`, dtype=bool
+- `mask`: itorchut mask of shape `(..., H, W)`, dtype=bool
 - `size`: target size `(H', W')`
 - `return_index`: whether to return the nearest neighbor indices in the original map for each pixel in the resized map.
     Defaults to False.
@@ -3379,9 +3432,9 @@ def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[i
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters
-- `*image`: Input image(s) of shape `(..., H, W, C)` or `(..., H, W)`
+- `*image`: Itorchut image(s) of shape `(..., H, W, C)` or `(..., H, W)`
     - You can pass multiple images to be resized at the same time for efficiency.
-- `mask`: Input mask of shape `(..., H, W)`
+- `mask`: Itorchut mask of shape `(..., H, W)`
 - `size`: target image size `(H', W')`
 
 ### Returns
@@ -3395,7 +3448,7 @@ def flood_fill(*image: torch_.Tensor, mask: torch_.Tensor, return_index: bool = 
 
 Parameters
 ----
-- `*image` (Tensor): shape (..., height, width, [C]), input image(s)
+- `*image` (Tensor): shape (..., height, width, [C]), itorchut image(s)
 - `mask` (Tensor): shape (..., height, width), binary mask indicating valid regions
 
 Returns
@@ -3404,6 +3457,56 @@ Returns
 - `filled_indices` (Tuple[Tensor, ...], optional): tuple of shape (..., height, width). The nearest neighbor indices of each pixel in the original map.
     It satisfies `filled_image = image[filled_indices]`"""
     utils3d.torch.maps.flood_fill
+
+@overload
+def perlin_noise(x: torch_.Tensor, seed: Optional[int] = None) -> torch_.Tensor:
+    """Generate Perlin noise for the given coordinates.
+
+Parameters
+----
+- `x` (Tensor): shape (*batch_shape, N_1, ..., N_D, D), coordinates to sample Perlin.
+    If itorchut ndim is more than D + 1, the leading dimensions are treated as batch dimensions. Instances in the batch have different noise patterns.
+- `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+Returns
+----
+- `y` (Tensor): shape (*batch_shape, N_1, ..., N_D), Perlin noise value at the given coordinates and seed. Value range is approximately [-1, 1]"""
+    utils3d.torch.maps.perlin_noise
+
+@overload
+def perlin_noise_map(size: Tuple[int, ...], frequency: Union[float, torch_.Tensor], seed: Optional[int] = None, dtype: Optional[torch_.dtype] = None, device: Optional[torch_.device] = None) -> torch_.Tensor:
+    """Generate Perlin noise map.
+
+Parameters
+----
+- `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+- `frequency` (float | Tensor): frequency relative to map's larger dimension max(H, W) of the Perlin noise. 
+    Represents how many periods of noise fit in the larger dimension of the map.
+- `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+Returns
+----
+- `noise_map` (Tensor): shape (..., H, W), Perlin noise map. Value range is approximately [-1, 1]"""
+    utils3d.torch.maps.perlin_noise_map
+
+@overload
+def fractal_perlin_noise_map(size: Tuple[int, ...], base_frequency: Union[float, torch_.Tensor], octaves: int = 4, lacunarity: float = 2.0, gain: float = 0.5, seed: Optional[int] = None, dtype: Optional[torch_.dtype] = None, device: Optional[torch_.device] = None) -> torch_.Tensor:
+    """Generate fractal Perlin noise map. ![fractal_perlin_base_frequeny2_octaves7_gain0.7.png](doc/fractal_perlin_base_frequeny2_octaves7_gain0.7.png)
+
+Parameters
+----
+- `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+- `base_frequency` (float | Tensor): base frequency (relative to map's larger dimension max(H, W)) of the Perlin noise.
+    Represents how many periods of noise fit in the larger dimension of the map.
+- `octaves` (int, optional): number of octaves. Defaults to 4.
+- `lacunarity` (float, optional): frequency multiplier between octaves. Defaults to 2.0.
+- `gain` (float, optional): amplitude multiplier between octaves. Defaults to 0.5.
+- `seed` (int, optional): random seed. The same seed will generate the same noise pattern. Defaults to None.
+
+Returns
+----
+- `noise_map` (Tensor): shape (..., H, W), fractal Perlin noise map. Value range is approximately [-1, 1]"""
+    utils3d.torch.maps.fractal_perlin_noise_map
 
 @overload
 def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiffrast.torch.ops.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'cuda', device: Union[str, torch_.device] = None):

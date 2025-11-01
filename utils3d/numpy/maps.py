@@ -27,7 +27,10 @@ __all__ = [
     'masked_area_resize',
     'colorize_depth_map',
     'colorize_normal_map',
-    'flood_fill'
+    'flood_fill',
+    'perlin_noise',
+    'perlin_noise_map',
+    'fractal_perlin_noise_map'
 ]
 
 
@@ -723,3 +726,119 @@ def flood_fill(*image: ndarray, mask: ndarray, return_index: bool = False) -> nd
         return ret[0]
     else:
         return ret
+
+
+def perlin_noise(x: ndarray, seed: Optional[int] = None) -> ndarray:
+    """Generate Perlin noise for the given coordinates.
+    
+    Parameters
+    ----
+    - `x` (ndarray): shape (*batch_shape, N_1, ..., N_D, D), coordinates to sample Perlin.
+        If input ndim is more than D + 1, the leading dimensions are treated as batch dimensions. Instances in the batch have different noise patterns.
+    - `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+    Returns
+    ----
+    - `y` (ndarray): shape (*batch_shape, N_1, ..., N_D), Perlin noise value at the given coordinates and seed. Value range is approximately [-1, 1]
+    """
+    D = x.shape[-1]
+    xi = x.astype(int)
+    xf = x - xi
+
+    # Prepare gradient set and hash permutation
+    rng = np.random.default_rng(seed)
+    hash_set_size = min(16 ** D, x.size // D)
+    perm = rng.permutation(hash_set_size)
+    gradient_set = rng.standard_normal((hash_set_size, D)).astype(x.dtype)
+    gradient_set = gradient_set / (np.linalg.norm(gradient_set, axis=-1, keepdims=True) + np.finfo(x.dtype).tiny)
+    
+    # Get corner coordinates
+    unit_grid = np.stack(
+        np.meshgrid(*([[0, 1]] * D), indexing='ij'), 
+        axis=-1
+    ).reshape(-1,D)
+    x_corners = xi[..., None, :] + unit_grid
+
+    # Hash index initialization. 
+    if x.ndim > D + 1:
+        # If batch dimensions exist, instances have different noise patterns
+        hash_idx = np.arange(math.prod(x.shape[:-1 - D])).reshape(*x.shape[:-1 - D], *([1] * (D + 1)))
+        hash_idx = perm[hash_idx % hash_set_size]
+    else:
+        # No batch dimensions, start from 0
+        hash_idx = 0
+    
+    # Hash corner coordinates
+    for i in range(x.shape[-1]):
+        hash_idx = perm[(hash_idx + x_corners[..., i]) % hash_set_size]
+
+    # Compute dot products of each corner's gradient and the direction to the point
+    gradients = gradient_set[hash_idx]
+    direction = xf[..., None, :] - unit_grid.astype(x.dtype)
+    dot = np.einsum('...i,...i->...', gradients, direction)
+
+    # Smooth interpolation
+    u = np.polyval([6, -15, 10, 0, 0, 0], xf)
+    w = (1 - np.abs(u[..., None, :] - unit_grid.astype(x.dtype))).prod(axis=-1)
+    y = np.einsum('...i,...i->...', dot, w)
+
+    return y
+
+
+def perlin_noise_map(size: Tuple[int, ...], frequency: Union[float, ndarray], seed: Optional[int] = None, dtype: Optional[np.dtype] = np.float32) -> ndarray:
+    """Generate Perlin noise map.
+
+    Parameters
+    ----
+    - `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+    - `frequency` (float | ndarray): frequency relative to map's larger dimension max(H, W) of the Perlin noise. 
+        Represents how many periods of noise fit in the larger dimension of the map.
+    - `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+    Returns
+    ----
+    - `noise_map` (ndarray): shape (..., H, W), Perlin noise map. Value range is approximately [-1, 1]
+    """
+    height, width = size[-2:]
+    uv = uv_map(size[-2:], dtype=dtype) 
+    frequency_uv = np.asarray(frequency, dtype=dtype)[..., None] * (np.array([width, height], dtype=dtype) / max(size[-2:]))
+    x = np.broadcast_to(uv * frequency_uv[..., None, None, :], (*size, 2)) 
+    noise_map = perlin_noise(x, seed=seed)
+    return noise_map
+
+
+def fractal_perlin_noise_map(
+    size: Tuple[int, ...], 
+    base_frequency: Union[float, ndarray], 
+    octaves: int = 4, 
+    lacunarity: float = 2.0, 
+    gain: float = 0.5, 
+    seed: Optional[int] = None, 
+    dtype: Optional[np.dtype] = np.float32
+) -> ndarray:
+    """Generate fractal Perlin noise map. ![fractal_perlin_base_frequeny2_octaves7_gain0.7.png](doc/fractal_perlin_base_frequeny2_octaves7_gain0.7.png)
+
+    Parameters
+    ----
+    - `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+    - `base_frequency` (float | ndarray): base frequency (relative to map's larger dimension max(H, W)) of the Perlin noise.
+        Represents how many periods of noise fit in the larger dimension of the map.
+    - `octaves` (int, optional): number of octaves. Defaults to 4.
+    - `lacunarity` (float, optional): frequency multiplier between octaves. Defaults to 2.0.
+    - `gain` (float, optional): amplitude multiplier between octaves. Defaults to 0.5.
+    - `seed` (int, optional): random seed. The same seed will generate the same noise pattern. Defaults to None.
+
+    Returns
+    ----
+    - `noise_map` (ndarray): shape (..., H, W), fractal Perlin noise map. Value range is approximately [-1, 1]
+    """
+    noise_map = np.zeros(size, dtype=dtype)
+    amplitude = 1.0
+    frequency_uv = np.asarray(base_frequency, dtype=dtype).copy()[..., None] * (np.array([size[-1], size[-2]], dtype=dtype) / max(size[-2:]))
+    uv = uv_map(size[-2:], dtype=dtype) 
+    for octave in range(octaves):
+        x = np.broadcast_to(uv * frequency_uv[..., None, None, :], (*size, 2)) 
+        noise_map += amplitude * perlin_noise(x, seed=seed + octave if seed is not None else None)
+        amplitude *= gain
+        frequency_uv *= lacunarity
+    return noise_map

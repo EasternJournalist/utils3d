@@ -15,4 +15,7 @@ __all__ = [
     'masked_nearest_resize',
     'masked_area_resize',
     'flood_fill',
+    'perlin_noise',
+    'perlin_noise_map',
+    'fractal_perlin_noise_map',
 ]

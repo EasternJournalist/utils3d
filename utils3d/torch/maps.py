@@ -27,7 +27,10 @@ __all__ = [
     'bounding_rect_from_mask',
     'masked_nearest_resize',
     'masked_area_resize', 
-    'flood_fill'
+    'flood_fill',
+    'perlin_noise',
+    'perlin_noise_map',
+    'fractal_perlin_noise_map'
 ]
 
 
@@ -49,7 +52,7 @@ def uv_map(
     - `left`: `float` defaults to 0.
     - `bottom`: `float` defaults to 1.
     - `right`: `float` defaults to 1.
-    - `dtype`: `np.dtype` data type of the output uv map. Defaults to torch.float32.
+    - `dtype`: `torch.dtype` data type of the output uv map. Defaults to torch.float32.
     - `device`: `torch.device`, device of the output uv map. Defaults to None.
 
     ## Returns
@@ -143,7 +146,7 @@ def screen_coord_map(
     - `left`: `float`, optional left boundary in the screen space. Defaults to 0.
     - `bottom`: `float`, optional bottom boundary in the screen space. Defaults to 0.
     - `right`: `float`, optional right boundary in the screen space. Defaults to 1.
-    - `dtype`: `np.dtype`, optional data type of the output map. Defaults to torch.float32.
+    - `dtype`: `torch.dtype`, optional data type of the output map. Defaults to torch.float32.
 
     ## Returns
         (Tensor): shape (height, width, 2)
@@ -172,7 +175,7 @@ def build_mesh_from_map(
 
     ## Returns
         faces (Tensor): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-        *attributes (Tensor): vertex attributes in corresponding order with input maps
+        *attributes (Tensor): vertex attributes in corresponding order with itorchut maps
         indices (Tensor, optional): indices of vertices in the original mesh
     """
     assert (len(maps) > 0) or (mask is not None), "At least one of maps or mask should be provided"
@@ -419,9 +422,9 @@ def masked_nearest_resize(
 
 
     ### Parameters
-    - `*image`: Input image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
+    - `*image`: Itorchut image(s) of shape `(..., H, W, C)` or `(... , H, W)` 
         - You can pass multiple images to be resized at the same time for efficiency.
-    - `mask`: input mask of shape `(..., H, W)`, dtype=bool
+    - `mask`: itorchut mask of shape `(..., H, W)`, dtype=bool
     - `size`: target size `(H', W')`
     - `return_index`: whether to return the nearest neighbor indices in the original map for each pixel in the resized map.
         Defaults to False.
@@ -495,9 +498,9 @@ def masked_area_resize(
     Resize 2D map by area sampling with mask awareness.
 
     ### Parameters
-    - `*image`: Input image(s) of shape `(..., H, W, C)` or `(..., H, W)`
+    - `*image`: Itorchut image(s) of shape `(..., H, W, C)` or `(..., H, W)`
         - You can pass multiple images to be resized at the same time for efficiency.
-    - `mask`: Input mask of shape `(..., H, W)`
+    - `mask`: Itorchut mask of shape `(..., H, W)`
     - `size`: target image size `(H', W')`
 
     ### Returns
@@ -566,7 +569,7 @@ def flood_fill(*image: Tensor, mask: Tensor, return_index: bool = False) -> Tens
 
     Parameters
     ----
-    - `*image` (Tensor): shape (..., height, width, [C]), input image(s)
+    - `*image` (Tensor): shape (..., height, width, [C]), itorchut image(s)
     - `mask` (Tensor): shape (..., height, width), binary mask indicating valid regions
 
     Returns
@@ -618,3 +621,136 @@ def flood_fill(*image: Tensor, mask: Tensor, return_index: bool = False) -> Tens
         return ret[0]
     else:
         return ret
+
+
+def perlin_noise(x: Tensor, seed: Optional[int] = None) -> Tensor:
+    """Generate Perlin noise for the given coordinates.
+    
+    Parameters
+    ----
+    - `x` (Tensor): shape (*batch_shape, N_1, ..., N_D, D), coordinates to sample Perlin.
+        If itorchut ndim is more than D + 1, the leading dimensions are treated as batch dimensions. Instances in the batch have different noise patterns.
+    - `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+    Returns
+    ----
+    - `y` (Tensor): shape (*batch_shape, N_1, ..., N_D), Perlin noise value at the given coordinates and seed. Value range is approximately [-1, 1]
+    """
+    D = x.shape[-1]
+    xi = x.astype(int)
+    xf = x - xi
+    dtype, device = x.dtype, x.device
+
+    # Prepare gradient set and hash permutation
+    rng = torch.Generator(device=x.device).manual_seed(seed)
+    hash_set_size = min(16 ** D, x.size // D)
+    perm = torch.randperm(hash_set_size, generator=rng, device=device, dtype=torch.long)
+    gradient_set = torch.randn((hash_set_size, D), generator=rng, device=device, dtype=dtype)
+    gradient_set = gradient_set / (torch.linalg.norm(gradient_set, dim=-1, keepdim=True) + torch.finfo(dtype).tiny)
+
+    # Get corner coordinates
+    unit_grid = torch.stack(
+        torch.meshgrid(*([torch.tensor([0, 1])] * D), indexing='ij'),
+        dim=-1
+    ).reshape(-1,D).to(device=device)
+    x_corners = xi[..., None, :] + unit_grid
+
+    # Hash index initialization. 
+    if x.ndim > D + 1:
+        # If batch dimensions exist, instances have different noise patterns
+        hash_idx = torch.arange(math.prod(x.shape[:-1 - D]), device=device).reshape(*x.shape[:-1 - D], *([1] * (D + 1)))
+        hash_idx = perm[hash_idx % hash_set_size]
+    else:
+        # No batch dimensions, start from 0
+        hash_idx = 0
+    
+    # Hash corner coordinates
+    for i in range(x.shape[-1]):
+        hash_idx = perm[(hash_idx + x_corners[..., i]) % hash_set_size]
+
+    # Compute dot products of each corner's gradient and the direction to the point
+    gradients = gradient_set[hash_idx]
+    direction = xf[..., None, :] - unit_grid.to(dtype)
+    dot = torch.einsum('...i,...i->...', gradients, direction)
+
+    # Smooth interpolation
+    u = xf * xf * xf * (xf * (xf * 6 - 15) + 10)
+    w = torch.prod(1 - torch.abs(u[..., None, :] - unit_grid.to(dtype)), dim=-1)
+    y = torch.einsum('...i,...i->...', dot, w)
+
+    return y
+
+
+def perlin_noise_map(size: Tuple[int, ...], frequency: Union[float, Tensor], seed: Optional[int] = None, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None) -> Tensor:
+    """Generate Perlin noise map.
+
+    Parameters
+    ----
+    - `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+    - `frequency` (float | Tensor): frequency relative to map's larger dimension max(H, W) of the Perlin noise. 
+        Represents how many periods of noise fit in the larger dimension of the map.
+    - `seed` (int, optional): random seed. The same seed will generate the same noise pattern(s). Defaults to None.
+
+    Returns
+    ----
+    - `noise_map` (Tensor): shape (..., H, W), Perlin noise map. Value range is approximately [-1, 1]
+    """
+    height, width = size[-2:]
+    if isinstance(frequency, torch.Tensor):
+        dtype = frequency.dtype
+        device = frequency.device
+    else:
+        if dtype is None:
+            dtype = torch.float32    
+        frequency = torch.tensor(frequency, dtype=dtype, device=device)
+    uv = uv_map(size[-2:], dtype=dtype, device=device)
+    frequency_uv = frequency[..., None] * (torch.tensor([width, height], dtype=dtype, device=device) / max(size[-2:]))
+    x = torch.broadcast_to(uv * frequency_uv[..., None, None, :], (*size, 2))
+    noise_map = perlin_noise(x, seed=seed)
+    return noise_map
+
+
+def fractal_perlin_noise_map(
+    size: Tuple[int, ...], 
+    base_frequency: Union[float, Tensor], 
+    octaves: int = 4, 
+    lacunarity: float = 2.0, 
+    gain: float = 0.5, 
+    seed: Optional[int] = None, 
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[torch.device] = None,
+) -> Tensor:
+    """Generate fractal Perlin noise map. ![fractal_perlin_base_frequeny2_octaves7_gain0.7.png](doc/fractal_perlin_base_frequeny2_octaves7_gain0.7.png)
+
+    Parameters
+    ----
+    - `size` (Tuple[int, ...]): size of the noise map (..., H, W)
+    - `base_frequency` (float | Tensor): base frequency (relative to map's larger dimension max(H, W)) of the Perlin noise.
+        Represents how many periods of noise fit in the larger dimension of the map.
+    - `octaves` (int, optional): number of octaves. Defaults to 4.
+    - `lacunarity` (float, optional): frequency multiplier between octaves. Defaults to 2.0.
+    - `gain` (float, optional): amplitude multiplier between octaves. Defaults to 0.5.
+    - `seed` (int, optional): random seed. The same seed will generate the same noise pattern. Defaults to None.
+
+    Returns
+    ----
+    - `noise_map` (Tensor): shape (..., H, W), fractal Perlin noise map. Value range is approximately [-1, 1]
+    """
+    if isinstance(base_frequency, torch.Tensor):
+        dtype = base_frequency.dtype
+        device = base_frequency.device
+    else:
+        if dtype is None:
+            dtype = torch.float32    
+        base_frequency = torch.tensor(base_frequency, dtype=dtype, device=device)
+    
+    noise_map = torch.zeros(size, dtype=dtype, device=device)
+    amplitude = 1.0
+    frequency_uv = base_frequency.clone()[..., None] * (torch.tensor([size[-1], size[-2]], dtype=dtype, device=device) / max(size[-2:]))
+    uv = uv_map(size[-2:], dtype=dtype, device=device)
+    for octave in range(octaves):
+        x = torch.broadcast_to(uv * frequency_uv[..., None, None, :], (*size, 2)) 
+        noise_map += amplitude * perlin_noise(x, seed=seed + octave if seed is not None else None)
+        amplitude *= gain
+        frequency_uv *= lacunarity
+    return noise_map

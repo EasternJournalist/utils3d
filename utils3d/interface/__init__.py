@@ -111,6 +111,9 @@ __all__ = ["sliding_window",
 "colorize_depth_map", 
 "colorize_normal_map", 
 "flood_fill", 
+"perlin_noise", 
+"perlin_noise_map", 
+"fractal_perlin_noise_map", 
 "RastContext", 
 "rasterize_triangles", 
 "rasterize_triangles_peeling", 
@@ -806,6 +809,24 @@ def flood_fill(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.flood_fill, utils3d.torch.flood_fill
     return _call_based_on_args('flood_fill', args, kwargs)
+
+@suppress_traceback
+def perlin_noise(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.perlin_noise, utils3d.torch.perlin_noise
+    return _call_based_on_args('perlin_noise', args, kwargs)
+
+@suppress_traceback
+def perlin_noise_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.perlin_noise_map, utils3d.torch.perlin_noise_map
+    return _call_based_on_args('perlin_noise_map', args, kwargs)
+
+@suppress_traceback
+def fractal_perlin_noise_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.fractal_perlin_noise_map, utils3d.torch.fractal_perlin_noise_map
+    return _call_based_on_args('fractal_perlin_noise_map', args, kwargs)
 
 @suppress_traceback
 def RastContext(*args, **kwargs):
