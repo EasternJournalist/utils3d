@@ -637,13 +637,15 @@ def perlin_noise(x: Tensor, seed: Optional[int] = None) -> Tensor:
     - `y` (Tensor): shape (*batch_shape, N_1, ..., N_D), Perlin noise value at the given coordinates and seed. Value range is approximately [-1, 1]
     """
     D = x.shape[-1]
-    xi = x.astype(int)
+    xi = x.to(int)
     xf = x - xi
     dtype, device = x.dtype, x.device
 
     # Prepare gradient set and hash permutation
-    rng = torch.Generator(device=x.device).manual_seed(seed)
-    hash_set_size = min(16 ** D, x.size // D)
+    rng = torch.Generator(device=x.device)
+    if seed is not None:
+        rng.manual_seed(seed)
+    hash_set_size = min(16 ** D, x.numel() // D)
     perm = torch.randperm(hash_set_size, generator=rng, device=device, dtype=torch.long)
     gradient_set = torch.randn((hash_set_size, D), generator=rng, device=device, dtype=dtype)
     gradient_set = gradient_set / (torch.linalg.norm(gradient_set, dim=-1, keepdim=True) + torch.finfo(dtype).tiny)
@@ -652,7 +654,7 @@ def perlin_noise(x: Tensor, seed: Optional[int] = None) -> Tensor:
     unit_grid = torch.stack(
         torch.meshgrid(*([torch.tensor([0, 1])] * D), indexing='ij'),
         dim=-1
-    ).reshape(-1,D).to(device=device)
+    ).reshape(-1, D).to(device=device)
     x_corners = xi[..., None, :] + unit_grid
 
     # Hash index initialization. 

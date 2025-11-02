@@ -5,8 +5,8 @@ import math
 import numpy as np
 from numpy import ndarray
 
-from ..helpers import no_warnings
-from .utils import max_pool_2d, sliding_window, pooling
+from ..helpers import no_warnings, timeit
+from .utils import max_pool_2d, sliding_window, pooling, lite_sum, lite_prod, lite_dot, lite_norm
 from .transforms import angle_between, unproject_cv
 from .mesh import triangulate_mesh, remove_unused_vertices
 
@@ -750,37 +750,45 @@ def perlin_noise(x: ndarray, seed: Optional[int] = None) -> ndarray:
     hash_set_size = min(16 ** D, x.size // D)
     perm = rng.permutation(hash_set_size)
     gradient_set = rng.standard_normal((hash_set_size, D)).astype(x.dtype)
-    gradient_set = gradient_set / (np.linalg.norm(gradient_set, axis=-1, keepdims=True) + np.finfo(x.dtype).tiny)
+    gradient_set = gradient_set / (lite_norm(gradient_set, axis=-1)[..., None] + np.finfo(x.dtype).tiny)
     
     # Get corner coordinates
     unit_grid = np.stack(
         np.meshgrid(*([[0, 1]] * D), indexing='ij'), 
         axis=-1
-    ).reshape(-1,D)
-    x_corners = xi[..., None, :] + unit_grid
-
-    # Hash index initialization. 
-    if x.ndim > D + 1:
-        # If batch dimensions exist, instances have different noise patterns
-        hash_idx = np.arange(math.prod(x.shape[:-1 - D])).reshape(*x.shape[:-1 - D], *([1] * (D + 1)))
-        hash_idx = perm[hash_idx % hash_set_size]
-    else:
-        # No batch dimensions, start from 0
-        hash_idx = 0
+    ).reshape(-1, D)  # (2 ** D, D)
+    x_corners = xi[..., None, :].repeat(unit_grid.shape[0], axis=-2)
+    x_corners += unit_grid
     
     # Hash corner coordinates
-    for i in range(x.shape[-1]):
-        hash_idx = perm[(hash_idx + x_corners[..., i]) % hash_set_size]
+    hash_idx = perm[x_corners[..., 0] % hash_set_size]
+    for i in range(1, x.shape[-1]):
+        hash_idx += x_corners[..., i]
+        hash_idx %= hash_set_size
+        hash_idx = perm[hash_idx]
+
+    # Batch hashing
+    if x.ndim > D + 1:
+        # If batch dimensions exist, instances have different noise patterns
+        batch_idx = np.arange(math.prod(x.shape[:x.ndim - D - 1]))
+        batch_idx = batch_idx.reshape(*x.shape[:x.ndim - D - 1], *([1] * (D + 1)))
+        hash_idx = perm[(hash_idx + batch_idx) % hash_set_size]
 
     # Compute dot products of each corner's gradient and the direction to the point
-    gradients = gradient_set[hash_idx]
-    direction = xf[..., None, :] - unit_grid.astype(x.dtype)
-    dot = np.einsum('...i,...i->...', gradients, direction)
+    gradients = gradient_set.view(f'<S{gradient_set.itemsize * D}').ravel()[hash_idx].view(x.dtype).reshape(*hash_idx.shape, D) # NOTE: equivalent to `gradients = gradient_set[hash_idx]`, but 6x faster. Flattened fancy indexing is faster.
+    direction = xf[..., None, :].repeat(unit_grid.shape[0], axis=-2)
+    direction -= unit_grid.astype(x.dtype)      # NOTE: equivalent to `direction = xf[..., None, :] - unit_grid.astype(x.dtype)`, but 3x faster. Repeating is faster than broadcasting here.
+    dot = lite_dot(gradients, direction, axis=-1)
 
     # Smooth interpolation
     u = np.polyval([6, -15, 10, 0, 0, 0], xf)
-    w = (1 - np.abs(u[..., None, :] - unit_grid.astype(x.dtype))).prod(axis=-1)
-    y = np.einsum('...i,...i->...', dot, w)
+    w = u[..., None, :].repeat(unit_grid.shape[0], axis=-2)
+    w -= unit_grid.astype(x.dtype)
+    np.abs(w, out=w)
+    w *= -1
+    w += 1          # NOTE: equivalent to `w = 1 - np.abs(u[..., None, :] - unit_grid.astype(x.dtype))`, but 3x faster
+    w = lite_prod(w, axis=-1)
+    y = lite_dot(dot, w, axis=-1)
 
     return y
 

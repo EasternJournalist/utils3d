@@ -403,3 +403,62 @@ def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tup
     else:
         data = data[np.argsort(inv)]
     return group_labels, data, offsets
+
+
+def take_view(a: ndarray, i: Union[int, slice], axis: int = 0) -> ndarray:
+    """Take a view of the input array at the specified index along the given axis."""
+    return a[(slice(None),) * (axis % a.ndim) + (i,)]
+
+
+def lite_sum(a: ndarray, axis: int = -1) -> ndarray:
+    """Compute the sum of the input array along the specified small axis.
+    """
+    result_dtype = np.result_type(a.dtype, 0)
+    if a.shape[axis] == 0:
+        return np.zeros(a.shape[:axis] + a.shape[axis + 1:], dtype=result_dtype)
+    elif a.shape[axis] <= 4:    # Sweet point for python loop vs einsum
+        s = take_view(a, 0, axis=axis).astype(result_dtype, copy=True)
+        for i in range(1, a.shape[axis]):
+            s += take_view(a, i, axis=axis)
+        return s
+    else:   # Einsum is faster than np.sum in most cases
+        return np.einsum('...i->...', np.moveaxis(a, axis, -1))
+
+
+def lite_prod(a: ndarray, axis: int = -1) -> ndarray:
+    """Compute the product of the input array along the specified small axis.
+    """
+    result_dtype = np.result_type(a.dtype, 1)
+    if a.shape[axis] == 0:
+        return np.ones(a.shape[:axis] + a.shape[axis + 1:], dtype=result_dtype)
+    elif a.shape[axis] <= 8:
+        p = take_view(a, 0, axis=axis).astype(result_dtype, copy=True)
+        for i in range(1, a.shape[axis]):
+            p *= take_view(a, i, axis=axis)
+        return p
+    else:
+        return np.prod(a, axis=axis)
+
+
+def lite_dot(a: ndarray, b: ndarray, axis: int = -1) -> ndarray:
+    """Compute the dot product of two input arrays along the specified small axis.
+    """
+    if a.shape[axis] == 0:
+        return np.zeros(a.shape[:axis] + a.shape[axis + 1:], dtype=np.result_type(a.dtype, b.dtype))
+    elif a.shape[axis] <= 3:
+        return lite_sum(a * b, axis=axis)
+    else:
+        return np.einsum('...i,...i->...', np.moveaxis(a, axis, -1), np.moveaxis(b, axis, -1))
+
+
+def lite_norm(a: ndarray, ord: int = 2, axis: int = -1) -> ndarray:
+    """Compute the norm of the input array along the specified small axis.
+    """
+    if ord == 1:
+        return lite_sum(np.abs(a), axis=axis)
+    elif ord == 2:
+        return np.sqrt(lite_sum(a * a, axis=axis))
+    elif ord == np.inf:
+        return np.max(np.abs(a), axis=axis)
+    else:
+        raise ValueError(f"Unsupported norm order {ord}. Supported orders are 1, 2, and inf.")
