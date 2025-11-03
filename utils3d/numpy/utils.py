@@ -3,7 +3,7 @@ from numpy import ndarray
 import scipy.sparse as sp
 from scipy.sparse import csr_array
 from typing import *
-from numbers import Number
+from numbers import Number, Integral
 import warnings
 import functools
 
@@ -66,23 +66,23 @@ def sliding_window(
     # Process axis
     if axis is None:
         axis = tuple(range(x.ndim))
-    if isinstance(axis, int):
+    if isinstance(axis, Integral):
         axis = (axis,)
     axis = [axis[i] % x.ndim for i in range(len(axis))]
-    if isinstance(window_size, int):
+    if isinstance(window_size, Integral):
         window_size = (window_size,) * len(axis)
     if dilation is not None:
-        if isinstance(dilation, int):
+        if isinstance(dilation, Integral):
             dilation = (dilation,) * len(axis)
     if stride is not None:
-        if isinstance(stride, int):
+        if isinstance(stride, Integral):
             stride = (stride,) * len(axis)
 
     # Pad the input array if needed
     if pad_size is not None:
-        if isinstance(pad_size, int):
+        if isinstance(pad_size, Integral):
             pad_size = ((pad_size, pad_size),) * len(axis)
-        elif isinstance(pad_size, tuple) and len(pad_size) == 2 and all(isinstance(p, int) for p in pad_size):
+        elif isinstance(pad_size, tuple) and len(pad_size) == 2 and all(isinstance(p, Integral) for p in pad_size):
             pad_size = (pad_size,) * len(axis)
         elif isinstance(pad_size, tuple) and all(isinstance(p, tuple) and 1 <= len(p) <= 2 for p in pad_size):
             if len(pad_size) == 1:
@@ -148,17 +148,17 @@ def pooling(
     """
     if axis is None:
         axis = tuple(range(x.ndim))
-    if isinstance(axis, int):
+    if isinstance(axis, Integral):
         axis = (axis,)
     axis = [axis[i] % x.ndim for i in range(len(axis))]
-    if isinstance(kernel_size, int):
+    if isinstance(kernel_size, Integral):
         kernel_size = (kernel_size,) * len(axis)
     if not isinstance(stride, tuple):
         stride = (stride,) * len(axis)
     if padding is not None:
-        if isinstance(padding, int):
+        if isinstance(padding, Integral):
             padding = ((padding, padding),) * len(axis)
-        elif isinstance(padding, tuple) and len(padding) == 2 and all(isinstance(p, int) for p in padding):
+        elif isinstance(padding, tuple) and len(padding) == 2 and all(isinstance(p, Integral) for p in padding):
             padding = (padding,) * len(axis)
         elif isinstance(padding, tuple) and all(isinstance(p, tuple) and 1 <= len(p) <= 2 for p in padding):
             if len(padding) == 1:

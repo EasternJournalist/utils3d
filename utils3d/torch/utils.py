@@ -1,6 +1,7 @@
 from typing import *
 from numbers import Number
 from itertools import chain
+from numbers import Integral
 
 import torch
 from torch import Tensor
@@ -67,26 +68,26 @@ def sliding_window(
     """
     if dim is None:
         dim = tuple(range(x.ndim))
-    if isinstance(dim, int):
+    if isinstance(dim, Integral):
         dim = (dim,)
     dim = [dim[i] % x.ndim for i in range(len(dim))]
-    if isinstance(window_size, int):
+    if isinstance(window_size, Integral):
         window_size = (window_size,) * len(dim)
     if stride is None:
         stride = (1,) * len(dim)
-    elif isinstance(stride, int):
+    elif isinstance(stride, Integral):
         stride = (stride,) * len(dim)
     if dilation is None:
         dilation = (1,) * len(dim)
-    elif isinstance(dilation, int):
+    elif isinstance(dilation, Integral):
         dilation = (dilation,) * len(dim)
     assert len(window_size) == len(stride) == len(dim)
 
     # Pad the input array if needed
     if pad_size is not None:
-        if isinstance(pad_size, int):
+        if isinstance(pad_size, Integral):
             pad_size = ((pad_size, pad_size),) * len(dim)
-        elif isinstance(pad_size, tuple) and len(pad_size) == 2 and all(isinstance(p, int) for p in pad_size):
+        elif isinstance(pad_size, tuple) and len(pad_size) == 2 and all(isinstance(p, Integral) for p in pad_size):
             pad_size = (pad_size,) * len(dim)
         elif isinstance(pad_size, tuple) and all(isinstance(p, tuple) and 1 <= len(p) <= 2 for p in pad_size):
             if len(pad_size) == 1:
