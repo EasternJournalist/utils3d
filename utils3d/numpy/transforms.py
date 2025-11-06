@@ -1494,20 +1494,14 @@ def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Option
     if cov_xx is None and cov_yy is not None:
         s = np.trace(cov_yy, axis1=-2, axis2=-1) / np.maximum(np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     elif cov_xx is not None and cov_yy is not None:
-        a = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
-        b = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
-        c = np.maximum(np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
-        u = (b / a) ** 0.5
-        for _ in range(niter):
-            s = np.exp(u)
-            du = -(2 * (s ** 2 - 1 / s ** 2) - 2 * c * (s / b - 1 / s / a)) / (4 * (s ** 2 + 1 / (s ** 2)) - 2 * c * (s / b + 1 / s / a))
-            u = u + du
-        s = np.exp(u)
+        x_fnorm = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        y_fnorm = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        s = np.sqrt(y_fnorm / x_fnorm)
     else:
         s = None
     if mean_x is not None and mean_y is not None:
         if s is not None:
-            t = mean_y - transform_points(mean_x, s * R)
+            t = mean_y - transform_points(mean_x, s[..., None, None] * R)
         else:
             t = mean_y - transform_points(mean_x, R)
     else:
@@ -1540,9 +1534,10 @@ def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x:
     R = U @ Vh
     Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
     R = U @ Vh
-    tr_xx = np.trace(cov_xx, axis1=-2, axis2=-1) + np.finfo(dtype).eps
-    tr_yy = np.trace(cov_yy, axis1=-2, axis2=-1) + np.finfo(dtype).eps
-    A, B = R, R.mT
+    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+    s = np.sqrt(tr_yy / tr_xx)
+    A, B = s[..., None, None] * R, R.mT / s[..., None, None]
     for i in range(niter):
         gamma_i = 1.2 ** i - 1
         A = (cov_yx + (lam * tr_xx)[..., None, None] * R + (gamma_i * tr_xx)[..., None, None] * B.mT) @ np.linalg.inv(cov_xx + (lam * tr_xx)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_xx)[..., None, None] * (B @ B.mT))
@@ -1559,7 +1554,7 @@ def solve_pose(
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2, 
     niter: int = 5
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
     
     Parameters
@@ -1600,7 +1595,7 @@ def solve_pose(
         qw = q * w[..., None]
         cov_qp = np.sum(vector_outer(qw, p), axis=-3) / w_sum[..., None, None]
         if mode == 'similar' or mode == 'affine':
-            cov_qp = np.sum(vector_outer(qw, p), axis=-3) / w_sum[..., None, None]
+            cov_pp = np.sum(vector_outer(pw, p), axis=-3) / w_sum[..., None, None]
             cov_qq = np.sum(vector_outer(qw, q), axis=-3) / w_sum[..., None, None]
     else:
         lengths = np.diff(offsets)
@@ -1611,10 +1606,10 @@ def solve_pose(
         q = q - np.repeat(q_mean, lengths, axis=0)
         pw = p * w[..., None]
         qw = q * w[..., None]
-        cov_qp = np.add.reduceat(vector_outer(q, pw), offsets[:-1], axis=0) / w_sum[:, None, None]
+        cov_qp = np.add.reduceat(vector_outer(qw, p), offsets[:-1], axis=0) / w_sum[:, None, None]
         if mode == 'similar' or mode == 'affine':
-            cov_pp = np.add.reduceat(vector_outer(p, pw), offsets[:-1], axis=0) / w_sum[:, None, None]    
-            cov_qq = np.add.reduceat(vector_outer(q, qw), offsets[:-1], axis=0) / w_sum[:, None, None]
+            cov_pp = np.add.reduceat(vector_outer(pw, p), offsets[:-1], axis=0) / w_sum[:, None, None]    
+            cov_qq = np.add.reduceat(vector_outer(qw, q), offsets[:-1], axis=0) / w_sum[:, None, None]
     
     if mode == 'rigid':
         _, R, t = procrustes(cov_qp, mean_x=p_mean, mean_y=q_mean)

@@ -37,17 +37,21 @@ def totensor(
                 **{argnames[i]: x for i, x in enumerate(args)},
                 **kwargs
             }
+            if len(input_devices := tuple(x.device for x in inputs.values() if isinstance(x, Tensor))) > 0:
+                device = input_devices[0]
+            else:
+                device = None
             args = tuple(
-                torch.tensor(x).to(inputs[dtype_device] if isinstance(dtype_device, str) else dtype_device)
+                torch.tensor(x).to(device, inputs[dtype] if isinstance(dtype, str) else dtype)
                 if isinstance(x, (Number, list, tuple)) \
-                    and (dtype_device := dtypes_dict.get(argnames[i], _others)) is not None \
+                    and (dtype := dtypes_dict.get(argnames[i], _others)) is not None \
                 else x
                 for i, x in enumerate(args)
             )
             kwargs = {
-                k: torch.tensor(x).to(inputs[dtype_device] if isinstance(dtype_device, str) else dtype_device)
+                k: torch.tensor(x).to(device, inputs[dtype] if isinstance(dtype, str) else dtype)
                 if isinstance(x, (Number, list, tuple)) \
-                    and (dtype_device := dtypes_dict.get(k, _others)) is not None \
+                    and (dtype := dtypes_dict.get(k, _others)) is not None \
                 else x
                 for k, x in kwargs.items()
             }

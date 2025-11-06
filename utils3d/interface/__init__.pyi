@@ -1034,7 +1034,7 @@ Returns
     utils3d.numpy.transforms.procrustes
 
 @overload
-def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, offsets: Optional[numpy_.ndarray] = None, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, offsets: Optional[numpy_.ndarray] = None, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Parameters
