@@ -986,6 +986,9 @@ def rasterize_lines(
     - `interpolation_id` (ndarray): (H, W) int32 triangle ID map
     - `interpolation_uv` (ndarray): (H, W, 2) float32 triangle UV (first two channels of barycentric coordinates)
     """
+    if ctx is None:
+        ctx = RastContext.get_default_context()
+
     height, width = size
     if lines is None:
         assert vertices.ndim == 3 and vertices.shape[1] == 2 and vertices.shape[2] == 3, "If lines is None, vertices must be an array with shape (T, 2, 3)"
@@ -1106,12 +1109,12 @@ def rasterize_lines(
     # Create framebuffer
     if return_interpolation:
         fbo = ctx.mgl_ctx.framebuffer(
-            color_attachments=[image_tex, interpolation_id_tex, interpolation_uv_tex],
+            color_attachments=[image_tex, mask_tex, interpolation_id_tex, interpolation_uv_tex],
             depth_attachment=buffer_depth_tex,
         )
     else:
         fbo = ctx.mgl_ctx.framebuffer(
-            color_attachments=[image_tex],
+            color_attachments=[image_tex, mask_tex],
             depth_attachment=buffer_depth_tex,
         )
     fbo.viewport = (0, 0, width, height)
@@ -1338,12 +1341,12 @@ def rasterize_point_cloud(
     # Create framebuffer
     if return_point_id:
         fbo = ctx.mgl_ctx.framebuffer(
-            color_attachments=[image_tex, point_id_tex],
+            color_attachments=[image_tex, mask_tex, point_id_tex],
             depth_attachment=buffer_depth_tex,
         )
     else:
         fbo = ctx.mgl_ctx.framebuffer(
-            color_attachments=[image_tex],
+            color_attachments=[image_tex, mask_tex],
             depth_attachment=buffer_depth_tex,
         )
     fbo.viewport = (0, 0, width, height)
@@ -1403,6 +1406,7 @@ def rasterize_point_cloud(
     output = {
         "image": image,
         "depth": depth,
+        "mask": mask,
         "point_id": point_id
     }
 
