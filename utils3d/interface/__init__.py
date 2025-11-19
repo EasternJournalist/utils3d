@@ -12,6 +12,8 @@ __all__ = ["sliding_window",
 "lookup_set", 
 "segment_roll", 
 "segment_take", 
+"segment_argmax", 
+"segment_argmin", 
 "segment_concatenate", 
 "csr_matrix_from_dense_indices", 
 "group", 
@@ -215,6 +217,18 @@ def segment_take(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.segment_take, utils3d.torch.segment_take
     return _call_based_on_args('segment_take', args, kwargs)
+
+@suppress_traceback
+def segment_argmax(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_argmax, None
+    return _call_based_on_args('segment_argmax', args, kwargs)
+
+@suppress_traceback
+def segment_argmin(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_argmin, None
+    return _call_based_on_args('segment_argmin', args, kwargs)
 
 @suppress_traceback
 def segment_concatenate(*args, **kwargs):

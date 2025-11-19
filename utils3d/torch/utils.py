@@ -20,6 +20,8 @@ __all__ = [
     'lookup_set',
     'segment_roll',
     'segment_take',
+    'segment_argmax',
+    'segment_argmin',
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
     'group',
@@ -319,3 +321,41 @@ def group_as_segments(labels: Tensor, data: Optional[Tensor] = None) -> Tuple[Te
     offsets = torch.cat([torch.tensor([0], dtype=counts.dtype, device=counts.device), torch.cumsum(counts, dim=0)])
     data = data[torch.argsort(inv)]
     return group_labels, data, offsets
+
+
+def segment_argmax(data: Tensor, offsets: Tensor) -> Tensor:
+    """Compute the argmax of each segment in the segmented data.
+
+    ## Parameters
+    - `data`: (Tensor) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+    - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+    ## Returns
+    - `argmax_indices`: (Tensor) shape `(M, ...)` the argmax indices of each segment along the first dimension.
+    NOTE: If there are multiple maximum values in a segment, the index of the first one is returned.
+    """
+    seg_maxs = torch.segment_reduce(data, 'max', offsets=offsets, axis=0)
+    lengths = torch.diff(offsets)
+    is_max_mask = data == torch.repeat_interleave(seg_maxs, lengths, dim=0)
+    candidate_indices = torch.where(is_max_mask, torch.arange(data.shape[0], device=data.device)[(..., *((None,) * (data.ndim - 1)))], data.shape[0])
+    argmax_indices = torch.segment_reduce(candidate_indices, 'min', offsets=offsets, axis=0)
+    return argmax_indices
+
+
+def segment_argmin(data: Tensor, offsets: Tensor) -> Tensor:
+    """Compute the argmin of each segment in the segmented data.
+
+    ## Parameters
+    - `data`: (Tensor) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+    - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+    ## Returns
+    - `argmin_indices`: (Tensor) shape `(M, ...)` the argmin indices of each segment along the first dimension.
+    NOTE: If there are multiple minimum values in a segment, the index of the first one is returned.
+    """
+    seg_mins = torch.segment_reduce(data, 'min', offsets=offsets, axis=0)
+    lengths = torch.diff(offsets)
+    is_min_mask = data == torch.repeat_interleave(seg_mins, lengths, dim=0)
+    candidate_indices = torch.where(is_min_mask, torch.arange(data.shape[0], device=data.device)[(..., *((None,) * (data.ndim - 1)))], data.shape[0])
+    argmin_indices = torch.segment_reduce(candidate_indices, 'min', offsets=offsets, axis=0)
+    return argmin_indices

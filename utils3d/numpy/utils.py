@@ -17,6 +17,8 @@ __all__ = [
     'lookup_set',
     'segment_roll',
     'segment_take',
+    'segment_argmax',
+    'segment_argmin',
     'segment_concatenate',
     'csr_matrix_from_dense_indices',
     'group',
@@ -287,7 +289,7 @@ def lookup_set(key: ndarray, value: ndarray, set_key: ndarray, set_value: ndarra
 def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:
     """Roll the data within each segment.
     """
-    lengths = offsets[1:] - offsets[:-1]
+    lengths = np.diff(offsets)
     start = np.repeat(offsets[:-1], lengths)
     elem_indices = start + (np.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % np.repeat(lengths, lengths)
     data = data[elem_indices]
@@ -462,3 +464,41 @@ def lite_norm(a: ndarray, ord: int = 2, axis: int = -1) -> ndarray:
         return np.max(np.abs(a), axis=axis)
     else:
         raise ValueError(f"Unsupported norm order {ord}. Supported orders are 1, 2, and inf.")
+    
+
+def segment_argmax(data: ndarray, offsets: ndarray) -> ndarray:
+    """Compute the argmax of each segment in the segmented data.
+
+    ## Parameters
+    - `data`: (ndarray) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+
+    ## Returns
+    - `argmax_indices`: (ndarray) shape `(M, ...)` the argmax indices of each segment along the first dimension.
+    NOTE: If there are multiple maximum values in a segment, the index of the first one is returned.
+    """
+    seg_maxs = np.maximum.reduceat(data, offsets[:-1], axis=0)
+    lengths = np.diff(offsets)
+    is_max_mask = data == np.repeat(seg_maxs, lengths, axis=0)
+    candidate_indices = np.where(is_max_mask, np.arange(data.shape[0])[(..., *((None,) * (data.ndim - 1)))], data.shape[0])
+    argmax_indices = np.minimum.reduceat(candidate_indices, offsets[:-1], axis=0)
+    return argmax_indices
+
+
+def segment_argmin(data: ndarray, offsets: ndarray) -> ndarray:
+    """Compute the argmin of each segment in the segmented data.
+
+    ## Parameters
+    - `data`: (ndarray) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+
+    ## Returns
+    - `argmin_indices`: (ndarray) shape `(M, ...)` the argmin indices of each segment along the first dimension.
+    NOTE: If there are multiple minimum values in a segment, the index of the first one is returned.
+    """
+    seg_mins = np.minimum.reduceat(data, offsets[:-1], axis=0)
+    lengths = np.diff(offsets)
+    is_min_mask = data == np.repeat(seg_mins, lengths, axis=0)
+    candidate_indices = np.where(is_min_mask, np.arange(data.shape[0])[(..., *((None,) * (data.ndim - 1)))], data.shape[0])
+    argmin_indices = np.minimum.reduceat(candidate_indices, offsets[:-1], axis=0)
+    return argmin_indices

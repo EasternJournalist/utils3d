@@ -76,7 +76,8 @@ if __name__ == "__main__":
             """
         ))
         f.write("\n\n")
-        f.write(f"__all__ = [{', \n'.join('\"' + s + '\"' for s in all.keys())}]\n\n")
+        all_ = ', \n'.join('\"' + s + '\"' for s in all.keys())
+        f.write(f"__all__ = [{all_}]\n\n")
 
         for fname, fn in itertools.chain(numpy_funcs.items(), torch_funcs.items()):
             sig, doc = get_signature(fn), inspect.getdoc(fn)
@@ -97,7 +98,8 @@ if __name__ == "__main__":
             """
         ))
         f.write("\n\n")
-        f.write(f"__all__ = [{', \n'.join('\"' + s + '\"' for s in all.keys())}]\n\n")
+        all_ = ', \n'.join('\"' + s + '\"' for s in all.keys())
+        f.write(f"__all__ = [{all_}]\n\n")
         f.write(inspect.getsource(_contains_tensor) + "\n\n")
         f.write(inspect.getsource(_call_based_on_args) + "\n\n")
 
