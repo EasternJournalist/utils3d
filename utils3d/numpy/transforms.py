@@ -620,7 +620,7 @@ def project_gl(
     if points.shape[-1] == 3:
         points = np.concatenate([points, np.ones((*points.shape[:-1], 1), dtype=points.dtype)], axis=-1)
     transform = projection @ view if view is not None else projection
-    clip_coord = points @ transform.mT
+    clip_coord = points @ transform.swapaxes(-2, -1)
     ndc_coord = clip_coord[..., :3] / clip_coord[..., 3:]
     scr_coord = ndc_coord * 0.5 + 0.5
     linear_depth = clip_coord[..., 3]
@@ -653,7 +653,7 @@ def project_cv(
         [np.broadcast_to(np.array([0, 0, 0, 1], dtype=intrinsics.dtype), (*intrinsics.shape[:-2], 1, 4))]
     ])
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
-    points = points @ transform.mT
+    points = points @ transform.swapaxes(-2, -1)
     uv_coord = points[..., :2] / points[..., 2:3]
     linear_depth = points[..., 2]
     return uv_coord, linear_depth
@@ -685,7 +685,7 @@ def unproject_gl(
         @ np.concatenate([view_z[..., None, None], np.ones_like(view_z[..., None, None])], axis=-2))
     points = np.concatenate([clip_xy.squeeze(-1), view_z[..., None], np.ones_like(view_z)[..., None]], axis=-1)
     if view is not None:
-        points = points @ np.linalg.inv(view).mT
+        points = points @ np.linalg.inv(view).swapaxes(-2, -1)
     return points[..., :3]
 
 
@@ -737,7 +737,7 @@ def unproject_cv(
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
     points = np.concatenate([uv, np.ones((*uv.shape[:-1], 1), dtype=uv.dtype)], axis=-1) * depth[..., None]
     points = np.concatenate([points, np.ones((*points.shape[:-1], 1), dtype=uv.dtype)], axis=-1)
-    points = points @ np.linalg.inv(transform).mT
+    points = points @ np.linalg.inv(transform).swapaxes(-2, -1)
     points = points[..., :3]
     return points
 
@@ -1490,9 +1490,9 @@ def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Option
     Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
     R = U @ Vh
     if cov_xx is not None and cov_yy is None:
-        s = np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1) / np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        s = np.trace(cov_yx @ R.swapaxes(-2, -1), axis1=-2, axis2=-1) / np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     if cov_xx is None and cov_yy is not None:
-        s = np.trace(cov_yy, axis1=-2, axis2=-1) / np.maximum(np.trace(cov_yx @ R.mT, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+        s = np.trace(cov_yy, axis1=-2, axis2=-1) / np.maximum(np.trace(cov_yx @ R.swapaxes(-2, -1), axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     elif cov_xx is not None and cov_yy is not None:
         x_fnorm = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
         y_fnorm = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
@@ -1534,14 +1534,14 @@ def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x:
     R = U @ Vh
     Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
     R = U @ Vh
-    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
-    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).eps)
+    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).eps)
     s = np.sqrt(tr_yy / tr_xx)
-    A, B = s[..., None, None] * R, R.mT / s[..., None, None]
+    A, B = s[..., None, None] * R, R.swapaxes(-2, -1) / s[..., None, None]
     for i in range(niter):
         gamma_i = 1.2 ** i - 1
-        A = (cov_yx + (lam * tr_xx)[..., None, None] * R + (gamma_i * tr_xx)[..., None, None] * B.mT) @ np.linalg.inv(cov_xx + (lam * tr_xx)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_xx)[..., None, None] * (B @ B.mT))
-        B = (cov_yx.mT + (lam * tr_yy)[..., None, None] * R.mT + (gamma_i * tr_yy)[..., None, None] * A.mT) @ np.linalg.inv(cov_yy + (lam * tr_yy)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_yy)[..., None, None] * (A @ A.mT))
+        A = (cov_yx + (lam * tr_xx)[..., None, None] * R + (gamma_i * tr_xx)[..., None, None] * B.swapaxes(-2, -1)) @ np.linalg.inv(cov_xx + (lam * tr_xx)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_xx)[..., None, None] * (B @ B.swapaxes(-2, -1)))
+        B = (cov_yx.swapaxes(-2, -1) + (lam * tr_yy)[..., None, None] * R.swapaxes(-2, -1) + (gamma_i * tr_yy)[..., None, None] * A.swapaxes(-2, -1)) @ np.linalg.inv(cov_yy + (lam * tr_yy)[..., None, None] * np.eye(3, dtype=dtype) + (gamma_i * tr_yy)[..., None, None] * (A @ A.swapaxes(-2, -1)))
     t = mean_y - transform_points(mean_x, A)
     return A, t
 
@@ -1708,7 +1708,7 @@ def solve_poses_sequential(
         weights = np.ones((num_frames, *batch_shape, num_points), dtype=dtype)
 
     if offsets is None:
-        poses = np.zeros((*batch_shape, 4, 4), dtype=dtype)
+        poses = np.zeros((num_frames, *batch_shape, 4, 4), dtype=dtype)
     else:
         num_segments = len(offsets) - 1
         lengths = np.diff(offsets)
@@ -1735,10 +1735,10 @@ def solve_poses_sequential(
             sum_w = np.sum(sqrtwi * accum_sqrtw, axis=-1) + np.finfo(dtype).tiny
             center_x = np.sum(sqrtwi[..., None] * accum_sqrtwx, axis=-2) / sum_w[..., None]
             center_y = np.sum(sqrtwi[..., None] * accum_sqrtw[..., None] * yi, axis=-2) / sum_w[..., None]
-            cov_yx = np.sum(sqrtwi[..., None, None] * vector_outer(yi - center_y, accum_sqrtwx - accum_sqrtw[..., None] * center_x), axis=-3) / sum_w[..., None, None]
+            cov_yx = np.sum(sqrtwi[..., None, None] * vector_outer(yi - center_y[..., None, :], accum_sqrtwx - accum_sqrtw[..., None] * center_x[..., None, :]), axis=-3) / sum_w[..., None, None]
             if mode == 'affine' or mode == 'similar':
-                cov_xx = np.sum(sqrtwi[..., None, None] * (accum_sqrtwxx + accum_sqrtw[..., None, None] * vector_outer(mean_sqrtwx - center_x)), axis=-3) / sum_w[..., None, None]
-                cov_yy = np.sum(sqrtwi[..., None, None] * accum_sqrtw[..., None, None] * vector_outer(yi - center_y), axis=-3) / sum_w[..., None, None]
+                cov_xx = np.sum(sqrtwi[..., None, None] * (accum_sqrtwxx + accum_sqrtw[..., None, None] * vector_outer(mean_sqrtwx - center_x[..., None, :])), axis=-3) / sum_w[..., None, None]
+                cov_yy = np.sum(sqrtwi[..., None, None] * accum_sqrtw[..., None, None] * vector_outer(yi - center_y[..., None, :]), axis=-3) / sum_w[..., None, None]
         else:
             sum_w = np.add.reduceat(sqrtwi * accum_sqrtw, offsets[:-1], axis=0) + np.finfo(dtype).tiny
             center_x = np.add.reduceat(sqrtwi[:, None] * accum_sqrtwx, offsets[:-1], axis=0) / sum_w[:, None]
@@ -1769,23 +1769,23 @@ def solve_poses_sequential(
         # Update accum
         old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.copy(), accum_sqrtw.copy()
         accum_sqrtw += sqrtwi
-        accum_sqrtwx += sqrtwi[:, None] * xi
-        mean_sqrtwx = accum_sqrtwx / np.maximum(accum_sqrtw, np.finfo(dtype).tiny)[:, None]
-        accum_sqrtwxx += old_accum_sqrtw[:, None, None] * vector_outer(mean_sqrtwx - old_mean_sqrtwx) + sqrtwi[:, None, None] * vector_outer(xi - mean_sqrtwx)
+        accum_sqrtwx += sqrtwi[..., None] * xi
+        mean_sqrtwx = accum_sqrtwx / np.maximum(accum_sqrtw, np.finfo(dtype).tiny)[..., None]
+        accum_sqrtwxx += old_accum_sqrtw[..., None, None] * vector_outer(mean_sqrtwx - old_mean_sqrtwx) + sqrtwi[..., None, None] * vector_outer(xi - mean_sqrtwx)
 
-        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[..., None]
         old_mean_wx, old_accum_w = mean_wx.copy(), accum_w.copy()
         accum_w += wi
-        accum_wx += wi[:, None] * xi
-        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
-        accum_wxx += old_accum_w[:, None, None] * vector_outer(mean_wx - old_mean_wx) + wi[:, None, None] * vector_outer(xi - mean_wx)
+        accum_wx += wi[..., None] * xi
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[..., None]
+        accum_wxx += old_accum_w[..., None, None] * vector_outer(mean_wx - old_mean_wx) + wi[..., None, None] * vector_outer(xi - mean_wx)
         accum_nnz += wi > 0
 
     if offsets is None:
         tot_w = np.sum(accum_w, axis=-1)
-        mu = np.sum(accum_wx, axis=-2) / np.maximum(tot_w, np.finfo(dtype).tiny)[:, None]
-        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[:, None]
-        sigma = np.sum(accum_wxx + accum_w[:, None, None] * vector_outer(mu[..., None, :] - mean_wx), axis=-3) / np.maximum(tot_w, np.finfo(dtype).tiny)[:, None, None]
+        mu = np.sum(accum_wx, axis=-2) / np.maximum(tot_w, np.finfo(dtype).tiny)[..., None]
+        mean_wx = accum_wx / np.maximum(accum_w, np.finfo(dtype).tiny)[..., None]
+        sigma = np.sum(accum_wxx + accum_w[..., None, None] * vector_outer(mu[..., None, :] - mean_wx), axis=-3) / np.maximum(tot_w, np.finfo(dtype).tiny)[..., None, None]
         nnz = np.sum(accum_nnz, axis=-1)
         valid = np.sum(weights > 0, axis=-1) >= min_valid_size
     else:

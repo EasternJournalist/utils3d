@@ -316,7 +316,7 @@ def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]]) -
     utils3d.numpy.utils.segment_concatenate
 
 @overload
-def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> scipy.sparse._csr.csr_array:
+def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> 'csr_array':
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
 ## Parameters
@@ -2183,6 +2183,32 @@ def segment_take(data: torch_.Tensor, offsets: torch_.Tensor, taking: torch_.Ten
     """Take some segments from a segmented array
     """
     utils3d.torch.utils.segment_take
+
+@overload
+def segment_argmax(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+    """Compute the argmax of each segment in the segmented data.
+
+## Parameters
+- `data`: (Tensor) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+## Returns
+- `argmax_indices`: (Tensor) shape `(M, ...)` the argmax indices of each segment along the first dimension.
+NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
+    utils3d.torch.utils.segment_argmax
+
+@overload
+def segment_argmin(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+    """Compute the argmin of each segment in the segmented data.
+
+## Parameters
+- `data`: (Tensor) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+## Returns
+- `argmin_indices`: (Tensor) shape `(M, ...)` the argmin indices of each segment along the first dimension.
+NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
+    utils3d.torch.utils.segment_argmin
 
 @overload
 def csr_matrix_from_dense_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:

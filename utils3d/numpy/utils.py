@@ -1,12 +1,12 @@
 import numpy as np
 from numpy import ndarray
-import scipy.sparse as sp
-from scipy.sparse import csr_array
 from typing import *
 from numbers import Number, Integral
 import warnings
 import functools
 
+if TYPE_CHECKING:
+    from scipy.sparse import csr_array
 
 __all__ = [
     'sliding_window',
@@ -340,7 +340,7 @@ def segment_concatenate(segments: List[Tuple[ndarray, ndarray]]) -> Tuple[ndarra
     return data, offsets
 
 
-def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> csr_array:
+def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> 'csr_array':
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
     ## Parameters
@@ -350,6 +350,7 @@ def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> csr_array:
     ## Returns
         Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix
     """
+    from scipy.sparse import csr_array
     return csr_array((
         np.ones_like(indices, dtype=bool).ravel(), 
         indices.ravel(),

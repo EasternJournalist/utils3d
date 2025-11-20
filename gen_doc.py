@@ -36,7 +36,7 @@ def get_signature(fn):
 
 def get_function_source_location(fn):
     fn = inspect.unwrap(fn)
-    filepath = Path(inspect.getfile(fn)).relative_to(Path(__file__).parent)
+    filepath = Path(inspect.getfile(fn)).relative_to(Path(__file__).parent).as_posix()
     start_line = inspect.getsourcelines(fn)[1]
     return filepath, start_line
 

@@ -221,13 +221,13 @@ def segment_take(*args, **kwargs):
 @suppress_traceback
 def segment_argmax(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_argmax, None
+        utils3d.numpy.segment_argmax, utils3d.torch.segment_argmax
     return _call_based_on_args('segment_argmax', args, kwargs)
 
 @suppress_traceback
 def segment_argmin(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_argmin, None
+        utils3d.numpy.segment_argmin, utils3d.torch.segment_argmin
     return _call_based_on_args('segment_argmin', args, kwargs)
 
 @suppress_traceback
