@@ -77,7 +77,9 @@ __all__ = ["sliding_window",
 "vector_outer", 
 "procrustes", 
 "solve_pose", 
+"segment_solve_pose", 
 "solve_poses_sequential", 
+"segment_solve_poses_sequential", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -1062,24 +1064,14 @@ Returns
     utils3d.numpy.transforms.procrustes
 
 @overload
-def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, offsets: Optional[numpy_.ndarray] = None, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Parameters
 ----
-For batch input
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
 - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
-
-For segment input
-- `p`: (N, 3) source points
-- `q`: (N, 3) target points
-- `w`: (N,) weights for each point correspondence
-- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
-
-Optional parameters
-----
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
@@ -1093,22 +1085,35 @@ Returns
     utils3d.numpy.transforms.solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: Optional[numpy_.ndarray] = None, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 0, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
+    """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+Parameters
+----
+- `p`: (N, 3) source points
+- `q`: (N, 3) target points
+- `w`: (N,) weights for each point correspondence
+- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: regularization weight for 'affine' mode.
+- `niter`: number of iterations for 'affine' mode.
+
+Returns
+----
+- `pose`: (S, 4, 4) transformations matrix from p to q."""
+    utils3d.numpy.transforms.segment_solve_pose
+
+@overload
+def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
 ----
-For single or batch input
 - `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
 - `weights`: (T, ..., N) quardratic error term weights for each point at each frame
-
-For segment input
-- `trajectories`: (T, N, 3) posed points.
-- `weights`: (T, N) quardratic error term weights for each point at each frame
-- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
-
-Optional parameters
-----
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -1158,6 +1163,48 @@ for new_trajectories_chunk in data_stream:
 poses = np.concatenate(poses, axis=0)   # (T_all, 4, 4), poses over all frames
 valid = np.concatenate(valid, axis=0)   # (T_all,), poses' validity over all frames"""
     utils3d.numpy.transforms.solve_poses_sequential
+
+@overload
+def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray = None, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+    """Segment array mode for `solve_poses_sequential`.
+
+Parameters
+----
+- `trajectories`: (T, N, 3) posed points.
+- `weights`: (T, N) quardratic error term weights for each point at each frame
+- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+- `accum`: accumulated statistics from previous calls. If None, start fresh.
+- `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed. 
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: rigidity regularization weight for 'affine' mode.
+- `niter`: number of iterations for 'affine' mode.
+
+Returns
+----
+- `poses`: (T, S, 4, 4) transformations from canonical to each frame.
+- `valid`: (T, S) boolean mask indicating valid segments
+- `stats`: canonical statistics of each group,
+    It is a tuple of:
+    - `mu`: (S, 3) weighted mean of points
+    - `cov`: (S, 3, 3) weighted covariance of points
+    - `tot_w`: (S,) total weight of points
+    - `nnz`: (S,) number of non-zero weight points
+- `canonical_points`: (N, 3) canonical points.
+- `err`: (N,) per-point RMS error over all time := sqrt(sum_over_time(per_point_weights * per_point_squared_error) / per_point_nnz)
+    Use this to filter outliers as needed.
+- `accum`: per point accumulated statistics. Just pass it to the next call for incremental solving.
+    It is a tuple of:
+    - `accum_sqrtw`: (N,) sum of sqrt(weights)
+    - `accum_sqrtwx`: (N, 3) sum of sqrt(weights) * x
+    - `accum_sqrtwxx`: (N, 3, 3) sum of sqrt(weights) * outer(x - mean_sqrtwx, x - mean_sqrtwx)
+    - `accum_w`: (N,) sum of weights
+    - `accum_wx`: (N, 3) sum of weights * x
+    - `accum_wxx`: (N, 3, 3) sum of weights * outer(x - mean_wx, x - mean_wx)
+    - `accum_nnz`: (N,) number of non-zero weight accumulations"""
+    utils3d.numpy.transforms.segment_solve_poses_sequential
 
 @overload
 def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> numpy_.ndarray:

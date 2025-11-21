@@ -73,7 +73,9 @@ __all__ = ["sliding_window",
 "vector_outer", 
 "procrustes", 
 "solve_pose", 
+"segment_solve_pose", 
 "solve_poses_sequential", 
+"segment_solve_poses_sequential", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -585,10 +587,22 @@ def solve_pose(*args, **kwargs):
     return _call_based_on_args('solve_pose', args, kwargs)
 
 @suppress_traceback
+def segment_solve_pose(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_solve_pose, None
+    return _call_based_on_args('segment_solve_pose', args, kwargs)
+
+@suppress_traceback
 def solve_poses_sequential(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.solve_poses_sequential, None
     return _call_based_on_args('solve_poses_sequential', args, kwargs)
+
+@suppress_traceback
+def segment_solve_poses_sequential(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_solve_poses_sequential, None
+    return _call_based_on_args('segment_solve_poses_sequential', args, kwargs)
 
 @suppress_traceback
 def triangulate_mesh(*args, **kwargs):
