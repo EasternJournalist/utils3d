@@ -42,14 +42,14 @@ def totensor(
             else:
                 device = None
             args = tuple(
-                torch.tensor(x).to(device, inputs[dtype] if isinstance(dtype, str) else dtype)
+                torch.tensor(x).to(device, getattr(inputs[dtype], 'dtype', None) if isinstance(dtype, str) else dtype)
                 if isinstance(x, (Number, list, tuple)) \
                     and (dtype := dtypes_dict.get(argnames[i], _others)) is not None \
                 else x
                 for i, x in enumerate(args)
             )
             kwargs = {
-                k: torch.tensor(x).to(device, inputs[dtype] if isinstance(dtype, str) else dtype)
+                k: torch.tensor(x).to(device, getattr(inputs[dtype], 'dtype', None) if isinstance(dtype, str) else dtype)
                 if isinstance(x, (Number, list, tuple)) \
                     and (dtype := dtypes_dict.get(k, _others)) is not None \
                 else x
