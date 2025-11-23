@@ -218,24 +218,30 @@ def max_pool_2d(x: ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Un
 def lookup(key: ndarray, query: ndarray) -> ndarray:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
-    ## Parameters
-    - `key` (ndarray): shape `(K, ...)`, the array to search in
-    - `query` (ndarray): shape `(Q, ...)`, the array to search for
+    Parameters
+    ----
+    - `key` (ndarray): shape `(num_keys, *key_shape)`, the array to search in
+    - `query` (ndarray): shape `(..., *key_shape)`, the array to search for. `...` represents any number of batch dimensions.
 
-    ## Returns
-    - `indices` (ndarray): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
+    Returns
+    ----
+    - `indices` (ndarray): shape `(...,)` indices in `key` for each `query`. If a query is not found in key, the corresponding index will be -1.
 
-    ## NOTE
-    `O((Q + K) * log(Q + K))` complexity.
+    Notes
+    ----
+    `O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys.
     """
+    num_keys, *key_shape = key.shape
+    query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
+    
     _, index, inverse = np.unique(
-        np.concatenate([key, query], axis=0),
+        np.concatenate([key, query.reshape(-1, *key_shape)], axis=0),
         axis=0,
         return_index=True,
         return_inverse=True
     )
-    result = index[inverse[key.shape[0]:]]
-    return np.where(result < key.shape[0], result, -1)
+    result = index[inverse[num_keys:]].reshape(query_batch_shape)
+    return np.where(result < num_keys, result, -1)
 
 
 def lookup_get(key: ndarray, value: ndarray, get_key: ndarray, default_value: Union[Number, ndarray] = 0) -> ndarray:
@@ -244,14 +250,15 @@ def lookup_get(key: ndarray, value: ndarray, get_key: ndarray, default_value: Un
     ## Parameters
     - `key` (ndarray): shape `(N, *key_shape)`, the key array of the dictionary to get from
     - `value` (ndarray): shape `(N, *value_shape)`, the value array of the dictionary to get from
-    - `get_key` (ndarray): shape `(M, *key_shape)`, the key array to get for
+    - `get_key` (ndarray): shape `(..., *key_shape)`, the key array to get for. `...` represents any number of batch dimensions.
+    - `default_value` (Union[Number, ndarray]): a scalar or an array broadcastable to shape `(..., *value_shape)`. Value to return if a key in `get_key` is not found in `key`.
 
     ## Returns
-        `get_value` (ndarray): shape `(M, *value_shape)`, result values corresponding to `get_key`
+        `get_value` (ndarray): shape `(..., *value_shape)`, result values corresponding to `get_key`
     """
     indices = lookup(key, get_key)
     return np.where(
-        (indices >= 0)[(slice(None), *((None,) * (value.ndim - 1)))], 
+        (indices >= 0)[(..., *((None,) * (value.ndim - 1)))], 
         value[indices.clip(0, key.shape[0] - 1)], 
         default_value
     )
@@ -394,10 +401,10 @@ def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tup
     Assuming there are `M` difference labels:
 
     - `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
-    - `data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+    - `rearranged_data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
     - `offsets`: `(ndarray)` shape `(M + 1,)`
     
-    `data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
+    `rearranged_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
     """
     group_labels, inv, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
     offsets = np.concatenate([[0], np.cumsum(counts, axis=0)])

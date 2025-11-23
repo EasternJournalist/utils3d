@@ -167,24 +167,31 @@ def intrinsics_from_focal_center(
 @toarray(_others=np.float32)
 @batched(_others=0)
 def intrinsics_from_fov(
+    *,
     fov_x: Optional[Union[float, ndarray]] = None,
     fov_y: Optional[Union[float, ndarray]] = None,
     fov_max: Optional[Union[float, ndarray]] = None,
     fov_min: Optional[Union[float, ndarray]] = None,
+    cx: Union[float, ndarray] = 0.5,
+    cy: Union[float, ndarray] = 0.5,
     aspect_ratio: Optional[Union[float, ndarray]] = None,
 ) -> ndarray:
     """
     Get normalized OpenCV intrinsics matrix from given field of view.
     You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
-    ## Parameters
+    Parameters
+    ----
         fov_x (float | ndarray): field of view in x axis
         fov_y (float | ndarray): field of view in y axis
         fov_max (float | ndarray): field of view in largest dimension
         fov_min (float | ndarray): field of view in smallest dimension
+        cx (float | ndarray): principal point x coordinate
+        cy (float | ndarray): principal point y coordinate
         aspect_ratio (float | ndarray): aspect ratio of the image
 
-    ## Returns
+    Returns
+    ----
         (ndarray): [..., 3, 3] OpenCV intrinsics matrix
     """
     if fov_max is not None:
@@ -202,8 +209,6 @@ def intrinsics_from_fov(
     elif fov_y is not None:
         fy = 1 / (2 * np.tan(fov_y / 2))
         fx = fy / aspect_ratio
-    cx = 0.5
-    cy = 0.5
     ret = intrinsics_from_focal_center(fx, fy, cx, cy)
     return ret
 

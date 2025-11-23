@@ -215,15 +215,18 @@ def max_pool_2d(x: numpy_.ndarray, kernel_size: Union[int, Tuple[int, int]], str
 def lookup(key: numpy_.ndarray, query: numpy_.ndarray) -> numpy_.ndarray:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
-## Parameters
-- `key` (ndarray): shape `(K, ...)`, the array to search in
-- `query` (ndarray): shape `(Q, ...)`, the array to search for
+Parameters
+----
+- `key` (ndarray): shape `(num_keys, *key_shape)`, the array to search in
+- `query` (ndarray): shape `(..., *key_shape)`, the array to search for. `...` represents any number of batch dimensions.
 
-## Returns
-- `indices` (ndarray): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
+Returns
+----
+- `indices` (ndarray): shape `(...,)` indices in `key` for each `query`. If a query is not found in key, the corresponding index will be -1.
 
-## NOTE
-`O((Q + K) * log(Q + K))` complexity."""
+Notes
+----
+`O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys."""
     utils3d.numpy.utils.lookup
 
 @overload
@@ -233,10 +236,11 @@ def lookup_get(key: numpy_.ndarray, value: numpy_.ndarray, get_key: numpy_.ndarr
 ## Parameters
 - `key` (ndarray): shape `(N, *key_shape)`, the key array of the dictionary to get from
 - `value` (ndarray): shape `(N, *value_shape)`, the value array of the dictionary to get from
-- `get_key` (ndarray): shape `(M, *key_shape)`, the key array to get for
+- `get_key` (ndarray): shape `(..., *key_shape)`, the key array to get for. `...` represents any number of batch dimensions.
+- `default_value` (Union[Number, ndarray]): a scalar or an array broadcastable to shape `(..., *value_shape)`. Value to return if a key in `get_key` is not found in `key`.
 
 ## Returns
-    `get_value` (ndarray): shape `(M, *value_shape)`, result values corresponding to `get_key`"""
+    `get_value` (ndarray): shape `(..., *value_shape)`, result values corresponding to `get_key`"""
     utils3d.numpy.utils.lookup_get
 
 @overload
@@ -358,10 +362,10 @@ def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = N
 Assuming there are `M` difference labels:
 
 - `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
-- `data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+- `rearranged_data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
 - `offsets`: `(ndarray)` shape `(M + 1,)`
 
-`data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
+`rearranged_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
     utils3d.numpy.utils.group_as_segments
 
 @overload
@@ -381,18 +385,22 @@ def perspective_from_window(left: Union[float, numpy_.ndarray], right: Union[flo
     utils3d.numpy.transforms.perspective_from_window
 
 @overload
-def intrinsics_from_fov(fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None) -> numpy_.ndarray:
+def intrinsics_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, cx: Union[float, numpy_.ndarray] = 0.5, cy: Union[float, numpy_.ndarray] = 0.5, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None) -> numpy_.ndarray:
     """Get normalized OpenCV intrinsics matrix from given field of view.
 You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
-## Parameters
+Parameters
+----
     fov_x (float | ndarray): field of view in x axis
     fov_y (float | ndarray): field of view in y axis
     fov_max (float | ndarray): field of view in largest dimension
     fov_min (float | ndarray): field of view in smallest dimension
+    cx (float | ndarray): principal point x coordinate
+    cy (float | ndarray): principal point y coordinate
     aspect_ratio (float | ndarray): aspect ratio of the image
 
-## Returns
+Returns
+----
     (ndarray): [..., 3, 3] OpenCV intrinsics matrix"""
     utils3d.numpy.transforms.intrinsics_from_fov
 
@@ -2330,18 +2338,22 @@ def perspective_from_window(left: Union[float, torch_.Tensor], right: Union[floa
     utils3d.torch.transforms.perspective_from_window
 
 @overload
-def intrinsics_from_fov(fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None) -> torch_.Tensor:
+def intrinsics_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, cx: Union[float, torch_.Tensor] = 0.5, cy: Union[float, torch_.Tensor] = 0.5, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None) -> torch_.Tensor:
     """Get normalized OpenCV intrinsics matrix from given field of view.
 You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
-## Parameters
+Parameters
+----
     fov_x (float | Tensor): field of view in x axis
     fov_y (float | Tensor): field of view in y axis
     fov_max (float | Tensor): field of view in largest dimension
     fov_min (float | Tensor): field of view in smallest dimension
+    cx (float | Tensor): principal point x coordinate
+    cy (float | Tensor): principal point y coordinate
     aspect_ratio (float | Tensor): aspect ratio of the image
 
-## Returns
+Returns
+----
     (Tensor): [..., 3, 3] OpenCV intrinsics matrix"""
     utils3d.torch.transforms.intrinsics_from_fov
 

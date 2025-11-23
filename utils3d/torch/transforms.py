@@ -169,24 +169,31 @@ def intrinsics_from_focal_center(
 @totensor(_others=torch.float32)
 @batched(_others=0)
 def intrinsics_from_fov(
+    *,
     fov_x: Optional[Union[float, Tensor]] = None,
     fov_y: Optional[Union[float, Tensor]] = None,
     fov_max: Optional[Union[float, Tensor]] = None,
     fov_min: Optional[Union[float, Tensor]] = None,
+    cx: Union[float, Tensor] = 0.5,
+    cy: Union[float, Tensor] = 0.5,
     aspect_ratio: Optional[Union[float, Tensor]] = None,
 ) -> Tensor:
     """
     Get normalized OpenCV intrinsics matrix from given field of view.
     You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
-    ## Parameters
+    Parameters
+    ----
         fov_x (float | Tensor): field of view in x axis
         fov_y (float | Tensor): field of view in y axis
         fov_max (float | Tensor): field of view in largest dimension
         fov_min (float | Tensor): field of view in smallest dimension
+        cx (float | Tensor): principal point x coordinate
+        cy (float | Tensor): principal point y coordinate
         aspect_ratio (float | Tensor): aspect ratio of the image
 
-    ## Returns
+    Returns
+    ----
         (Tensor): [..., 3, 3] OpenCV intrinsics matrix
     """
     if fov_max is not None:
@@ -204,8 +211,6 @@ def intrinsics_from_fov(
     elif fov_y is not None:
         fy = 1 / (2 * torch.tan(fov_y / 2))
         fx = fy / aspect_ratio
-    cx = torch.full_like(fx, 0.5)
-    cy = torch.full_like(fy, 0.5)
     ret = intrinsics_from_focal_center(fx, fy, cx, cy)
     return ret
 
