@@ -129,25 +129,31 @@ def masked_max(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: 
 def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
-    ## Parameters
-    - `key` (Tensor): shape `(K, ...)`, the array to search in
-    - `query` (Tensor): shape `(Q, ...)`, the array to search for
+    Parameters
+    ----
+    - `key` (Tensor): shape `(K, *key_shape)`, the array to search in
+    - `query` (Tensor): shape `(..., *key_shape)`, the array to search for. `...` represents any number of batch dimensions.
 
-    ## Returns
-    - `indices` (Tensor): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
+    Returns
+    ----
+    - `indices` (Tensor): shape `(...,)` shape `(...,)` indices in `key` for each `query`. If a query is not found in key, the corresponding index will be -1.
 
-    ## NOTE
-    `O((Q + K) * log(Q + K))` complexity.
+    Notes
+    ----
+    `O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys.
     """
+    num_keys, *key_shape = key.shape
+    query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
+
     unique, inverse = torch.unique(
-        torch.cat([key, query], dim=0),
+        torch.cat([key, query.reshape(-1, *key_shape)], dim=0),
         dim=0,
         return_inverse=True
     )
     index = torch.full((unique.shape[0],), -1, dtype=torch.long, device=key.device)
-    index.scatter_(0, inverse[:key.shape[0]], torch.arange(key.shape[0], device=key.device))
-    result = index.index_select(0, inverse[key.shape[0]:])
-    return torch.where(result < key.shape[0], result, -1)
+    index.scatter_(0, inverse[:num_keys], torch.arange(num_keys, device=key.device))
+    result = index.index_select(0, inverse[num_keys:]).reshape(query_batch_shape)
+    return torch.where(result < num_keys, result, -1)
 
 
 def lookup_get(key: Tensor, value: Tensor, get_key: Tensor, default_value: Union[Number, Tensor] = 0) -> Tensor:
@@ -157,11 +163,17 @@ def lookup_get(key: Tensor, value: Tensor, get_key: Tensor, default_value: Union
     - `key` (Tensor): shape `(N, *key_shape)`, the key array of the dictionary to get from
     - `value` (Tensor): shape `(N, *value_shape)`, the value array of the dictionary to get from
     - `get_key` (Tensor): shape `(M, *key_shape)`, the key array to get for
+    - `default_value` (Union[Number, Tensor]): value to return if a key in `get_key` is not found in `key`. A scalar or tensor broadcastable to shape `(..., *value_shape)`
 
     ## Returns
         `get_value` (Tensor): shape `(M, *value_shape)`, result values corresponding to `get_key`
     """
     indices = lookup(key, get_key)
+    if key.shape[0] == 0:
+        return torch.broadcast_to(
+            torch.as_tensor(default_value, dtype=value.dtype, device=value.device), 
+            get_key.shape[:get_key.ndim - key.ndim + 1] + value.shape[1:]
+        )
     return torch.where(
         (indices >= 0)[(slice(None), *((None,) * (value.ndim - 1)))], 
         value[indices.clip(0, key.shape[0] - 1)], 

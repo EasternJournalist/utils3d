@@ -2186,15 +2186,18 @@ def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, k
 def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
-## Parameters
-- `key` (Tensor): shape `(K, ...)`, the array to search in
-- `query` (Tensor): shape `(Q, ...)`, the array to search for
+Parameters
+----
+- `key` (Tensor): shape `(K, *key_shape)`, the array to search in
+- `query` (Tensor): shape `(..., *key_shape)`, the array to search for. `...` represents any number of batch dimensions.
 
-## Returns
-- `indices` (Tensor): shape `(Q,)` indices of `query` in `key`. If a query is not found in key, the corresponding index will be -1.
+Returns
+----
+- `indices` (Tensor): shape `(...,)` shape `(...,)` indices in `key` for each `query`. If a query is not found in key, the corresponding index will be -1.
 
-## NOTE
-`O((Q + K) * log(Q + K))` complexity."""
+Notes
+----
+`O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys."""
     utils3d.torch.utils.lookup
 
 @overload
@@ -2205,6 +2208,7 @@ def lookup_get(key: torch_.Tensor, value: torch_.Tensor, get_key: torch_.Tensor,
 - `key` (Tensor): shape `(N, *key_shape)`, the key array of the dictionary to get from
 - `value` (Tensor): shape `(N, *value_shape)`, the value array of the dictionary to get from
 - `get_key` (Tensor): shape `(M, *key_shape)`, the key array to get for
+- `default_value` (Union[Number, Tensor]): value to return if a key in `get_key` is not found in `key`. A scalar or tensor broadcastable to shape `(..., *value_shape)`
 
 ## Returns
     `get_value` (Tensor): shape `(M, *value_shape)`, result values corresponding to `get_key`"""

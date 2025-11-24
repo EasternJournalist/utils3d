@@ -257,6 +257,8 @@ def lookup_get(key: ndarray, value: ndarray, get_key: ndarray, default_value: Un
         `get_value` (ndarray): shape `(..., *value_shape)`, result values corresponding to `get_key`
     """
     indices = lookup(key, get_key)
+    if key.shape[0] == 0:
+        return np.broadcast_to(np.asarray(default_value, dtype=value.dtype), get_key.shape[:get_key.ndim - key.ndim + 1] + value.shape[1:])
     return np.where(
         (indices >= 0)[(..., *((None,) * (value.ndim - 1)))], 
         value[indices.clip(0, key.shape[0] - 1)], 
