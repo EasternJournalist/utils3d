@@ -52,10 +52,4 @@ __all__ = [
     'piecewise_interpolate_se3_matrix',
     'transform_points',
     'angle_between',
-    'vector_outer',
-    'procrustes',
-    'solve_pose',
-    'segment_solve_pose',
-    'solve_poses_sequential',
-    'segment_solve_poses_sequential',
 ]

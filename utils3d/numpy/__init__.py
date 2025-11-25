@@ -5,7 +5,7 @@ from ..helpers import lazy_import_all_from
 
 module_members = {}
 
-for module_name in ['utils', 'transforms', 'mesh', 'maps', 'rasterization', 'io']:
+for module_name in ['utils', 'transforms', 'pose', 'segment_ops', 'mesh', 'maps', 'rasterization', 'io']:
     module_members[module_name] = lazy_import_all_from(globals(), '.' + module_name)
 
 __all__ = list(itertools.chain(*module_members.values()))

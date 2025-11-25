@@ -55,12 +55,21 @@ if __name__ == "__main__":
     numpy_impl = utils3d.numpy
     torch_impl = utils3d.torch
 
-    modules = ["transforms", "maps", "mesh", "rasterization", "utils", "io"]
+    modules = {
+        "transforms": "Camera & Projection & Coordinate Transforms",
+        "pose": "Pose Solver",
+        "maps": "Image & Maps",
+        "mesh": "Mesh",
+        "rasterization": "Rasterization",
+        "utils": "Array Utils",
+        "segment_ops": "Segment Array Operations",
+        "io": "IO"
+    }
     
 
     with open("_doc.md", "w", encoding="utf-8") as f:
-        for module_name in modules:
-            f.write(f"### {module_name.capitalize()}\n\n")
+        for module_name, module_title in modules.items():
+            f.write(f"### {module_title}\n\n")
             f.write("| Function | Numpy | Pytorch |\n")
             f.write("| ---- | ---- | ---- |\n")
             numpy_funcs = {name: getattr(utils3d.numpy, name) for name in utils3d.numpy.module_members.get(module_name, [])}

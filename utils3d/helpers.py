@@ -3,6 +3,7 @@ import warnings
 from typing import *
 from itertools import chain
 from functools import partial
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 import importlib
@@ -44,41 +45,58 @@ class no_warnings:
         self.warnings_manager.__exit__(exc_type, exc_val, exc_tb)
 
 
-def lazy_import(globals: Dict[str, Any], module: str, as_: str = None):
-    old_getattr = globals.get('__getattr__', None)
-    current_package = globals['__name__']
-    as_ = module if as_ is None else as_
+class LazyImportWarning(UserWarning):
+    pass
 
-    @suppress_traceback
-    def lazy_import_getattr(name):
-        if name == as_:
-            globals[as_] = importlib.import_module(module, current_package)
-            return globals[as_]
-        elif old_getattr is not None:
-            return old_getattr(name)
-        else:
-            raise AttributeError(f"module '{current_package}' has no attribute '{name}'")
-    
-    globals['__getattr__'] = lazy_import_getattr
+
+_lazy_import_lock = threading.RLock()
+
+
+def lazy_import(globals: Dict[str, Any], module: str, as_: str = None):
+    global _lazy_import_lock
+
+    with _lazy_import_lock:
+        old_getattr = globals.get('__getattr__', None)
+        current_package = globals['__name__']
+        as_ = module if as_ is None else as_
+
+        @suppress_traceback
+        def lazy_import_getattr(name):
+            with _lazy_import_lock:
+                if name == as_:
+                    globals[as_] = importlib.import_module(module, current_package)
+                    return globals[as_]
+                elif old_getattr is not None:
+                    return old_getattr(name)
+                else:
+                    raise AttributeError(f"module '{current_package}' has no attribute '{name}'")
+        
+        globals['__getattr__'] = lazy_import_getattr
 
 
 def lazy_import_from(globals: Dict[str, Any], module: str, members: List[str]):
-    old_getattr = globals.get('__getattr__', None)
-    current_package = globals['__name__']
-    
-    @suppress_traceback
-    def lazy_import_from_getattr(name):
-        if name in members:
-            imported_module = importlib.import_module(module, current_package)
-            for m in members:
-                globals[m] = getattr(imported_module, m)
-            return globals[name]
-        elif old_getattr is not None:
-            return old_getattr(name)
-        else:
-            raise AttributeError(f"module '{current_package}' has no attribute '{name}'")
-        
-    globals['__getattr__'] = lazy_import_from_getattr
+    global _lazy_import_lock
+
+    with _lazy_import_lock:
+        old_getattr = globals.get('__getattr__', None)
+        current_package = globals['__name__']
+
+        @suppress_traceback
+        def lazy_import_from_getattr(name):
+            with _lazy_import_lock:
+                if name in globals:
+                    return globals[name]
+                elif name in members:
+                    imported_module = importlib.import_module(module, current_package)
+                    for m in members:
+                        globals[m] = getattr(imported_module, m)
+                    return globals[name]
+                elif old_getattr is not None:
+                    return old_getattr(name)
+                else:
+                    raise AttributeError(f"module '{current_package}' has no attribute '{name}'")
+            
+        globals['__getattr__'] = lazy_import_from_getattr
 
 
 @suppress_traceback
@@ -99,68 +117,72 @@ def _write_all_members(meta_filepath: Path, all_members: Sequence[str]) -> dict:
         "]\n"
     )
 
-class LazyImportWarning(UserWarning):
-    pass
-
 
 def lazy_import_all_from(globals: Dict[str, Any], module: str) -> List[str]:
-    old_getattr = globals.get('__getattr__', None)
-    current_package = globals['__name__']
-    current_file = globals.get('__file__', None)
-    current_dir = Path(current_file).parent if current_file else Path().cwd()
+    global _lazy_import_lock
+    
+    with _lazy_import_lock:
+        old_getattr = globals.get('__getattr__', None)
+        current_package = globals['__name__']
+        current_file = globals.get('__file__', None)
+        current_dir = Path(current_file).parent if current_file else Path().cwd()
 
-    # Get all members
-    meta_filepath = Path(current_dir, f"{module.replace('.', '_')}.__all__.py")
-    if meta_filepath.exists():
-        # Read all members from meta file
-        namespace = {}
-        code = meta_filepath.read_text()
-        exec(code, namespace)
-        all_members = namespace.get("__all__", [])
-    else:
-        warnings.warn(
-            f"Meta file {meta_filepath} not found. Creating one by importing the module.", 
-            LazyImportWarning
-        )
-        # Import and dump the meta file
-        imported_module = importlib.import_module(module, current_package)
-        all_members = list(_get_all_members_from_module(imported_module).keys())
-        try:
-            _write_all_members(meta_filepath, all_members)
-        except Exception as e:
+        # Get all members
+        meta_filepath = Path(current_dir, f"{module.replace('.', '_')}.__all__.py")
+        if meta_filepath.exists():
+            # Read all members from meta file
+            namespace = {}
+            code = meta_filepath.read_text()
+            exec(code, namespace)
+            all_members = namespace.get("__all__", [])
+        else:
             warnings.warn(
-                f"Failed to write meta file {meta_filepath}: {e}", 
+                f"Meta file {meta_filepath} not found. Creating one by importing the module.", 
                 LazyImportWarning
             )
-
-    # Overiding __getattr__
-    @suppress_traceback
-    def lazy_import_all_from_getattr(name):
-        if name in all_members:
-            imported_module = importlib.import_module(f'{module}', current_package)
-            imported_all_members = _get_all_members_from_module(imported_module)
-            
-            if sorted(all_members) != sorted(imported_all_members):
+            # Import and dump the meta file
+            imported_module = importlib.import_module(module, current_package)
+            all_members = list(_get_all_members_from_module(imported_module).keys())
+            try:
+                _write_all_members(meta_filepath, all_members)
+            except Exception as e:
                 warnings.warn(
-                    f"lazy_import_all_from: The members in meta file {meta_filepath} do not match the actual members in module {module}. "
-                    "A new meta file will be generated.",
+                    f"Failed to write meta file {meta_filepath}: {e}", 
                     LazyImportWarning
                 )
-                _write_all_members(meta_filepath, list(imported_all_members.keys()))
-            
-            for m_name, m_attr in imported_all_members.items():
-                if m_name not in globals:
-                    globals[m_name] = m_attr
-            
-            return globals[name]
-        elif old_getattr is not None:
-            return old_getattr(name)
-        else:
-            raise AttributeError(f"module '{current_package}' has no attribute '{name}'")
-        
-    globals['__getattr__'] = lazy_import_all_from_getattr
 
-    return all_members
+        # Overiding __getattr__
+        @suppress_traceback
+        def lazy_import_all_from_getattr(name):
+            with _lazy_import_lock:
+                if name in globals:
+                    return globals[name]
+                elif name in all_members:
+                    # Trigger import all members from the module
+                    imported_module = importlib.import_module(f'{module}', current_package)
+                    imported_all_members = _get_all_members_from_module(imported_module)
+                    
+                    if sorted(all_members) != sorted(imported_all_members):
+                        warnings.warn(
+                            f"lazy_import_all_from: The members in meta file {meta_filepath} do not match the actual members in module {module}. "
+                            "A new meta file will be generated.",
+                            LazyImportWarning
+                        )
+                        _write_all_members(meta_filepath, list(imported_all_members.keys()))
+                    
+                    for m_name, m_attr in imported_all_members.items():
+                        if m_name not in globals:
+                            globals[m_name] = m_attr
+                    
+                    return globals[name]
+                elif old_getattr is not None:
+                    return old_getattr(name)
+                else:
+                    raise AttributeError(f"module '{current_package}' has no attribute '{name}'")
+            
+        globals['__getattr__'] = lazy_import_all_from_getattr
+
+        return all_members
 
 
 @contextmanager

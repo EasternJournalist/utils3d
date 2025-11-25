@@ -10,14 +10,8 @@ __all__ = ["sliding_window",
 "lookup", 
 "lookup_get", 
 "lookup_set", 
-"segment_roll", 
-"segment_take", 
-"segment_argmax", 
-"segment_argmin", 
-"segment_concatenate", 
-"csr_matrix_from_dense_indices", 
 "group", 
-"group_as_segments", 
+"csr_matrix_from_dense_indices", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -72,10 +66,17 @@ __all__ = ["sliding_window",
 "angle_between", 
 "vector_outer", 
 "procrustes", 
+"affine_procrustes", 
 "solve_pose", 
 "segment_solve_pose", 
 "solve_poses_sequential", 
 "segment_solve_poses_sequential", 
+"segment_roll", 
+"segment_take", 
+"segment_argmax", 
+"segment_argmin", 
+"segment_concatenate", 
+"group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -209,52 +210,16 @@ def lookup_set(*args, **kwargs):
     return _call_based_on_args('lookup_set', args, kwargs)
 
 @suppress_traceback
-def segment_roll(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_roll, utils3d.torch.segment_roll
-    return _call_based_on_args('segment_roll', args, kwargs)
-
-@suppress_traceback
-def segment_take(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_take, utils3d.torch.segment_take
-    return _call_based_on_args('segment_take', args, kwargs)
-
-@suppress_traceback
-def segment_argmax(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_argmax, utils3d.torch.segment_argmax
-    return _call_based_on_args('segment_argmax', args, kwargs)
-
-@suppress_traceback
-def segment_argmin(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_argmin, utils3d.torch.segment_argmin
-    return _call_based_on_args('segment_argmin', args, kwargs)
-
-@suppress_traceback
-def segment_concatenate(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_concatenate, None
-    return _call_based_on_args('segment_concatenate', args, kwargs)
-
-@suppress_traceback
-def csr_matrix_from_dense_indices(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.csr_matrix_from_dense_indices, utils3d.torch.csr_matrix_from_dense_indices
-    return _call_based_on_args('csr_matrix_from_dense_indices', args, kwargs)
-
-@suppress_traceback
 def group(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.group, utils3d.torch.group
     return _call_based_on_args('group', args, kwargs)
 
 @suppress_traceback
-def group_as_segments(*args, **kwargs):
+def csr_matrix_from_dense_indices(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.group_as_segments, utils3d.torch.group_as_segments
-    return _call_based_on_args('group_as_segments', args, kwargs)
+        utils3d.numpy.csr_matrix_from_dense_indices, utils3d.torch.csr_matrix_from_dense_indices
+    return _call_based_on_args('csr_matrix_from_dense_indices', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):
@@ -581,6 +546,12 @@ def procrustes(*args, **kwargs):
     return _call_based_on_args('procrustes', args, kwargs)
 
 @suppress_traceback
+def affine_procrustes(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.affine_procrustes, None
+    return _call_based_on_args('affine_procrustes', args, kwargs)
+
+@suppress_traceback
 def solve_pose(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.solve_pose, None
@@ -603,6 +574,42 @@ def segment_solve_poses_sequential(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.segment_solve_poses_sequential, None
     return _call_based_on_args('segment_solve_poses_sequential', args, kwargs)
+
+@suppress_traceback
+def segment_roll(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_roll, utils3d.torch.segment_roll
+    return _call_based_on_args('segment_roll', args, kwargs)
+
+@suppress_traceback
+def segment_take(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_take, utils3d.torch.segment_take
+    return _call_based_on_args('segment_take', args, kwargs)
+
+@suppress_traceback
+def segment_argmax(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_argmax, utils3d.torch.segment_argmax
+    return _call_based_on_args('segment_argmax', args, kwargs)
+
+@suppress_traceback
+def segment_argmin(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_argmin, utils3d.torch.segment_argmin
+    return _call_based_on_args('segment_argmin', args, kwargs)
+
+@suppress_traceback
+def segment_concatenate(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_concatenate, None
+    return _call_based_on_args('segment_concatenate', args, kwargs)
+
+@suppress_traceback
+def group_as_segments(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.group_as_segments, utils3d.torch.group_as_segments
+    return _call_based_on_args('group_as_segments', args, kwargs)
 
 @suppress_traceback
 def triangulate_mesh(*args, **kwargs):

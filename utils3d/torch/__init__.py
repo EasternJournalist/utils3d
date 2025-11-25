@@ -2,10 +2,14 @@ import itertools
 from typing import TYPE_CHECKING
 from ..helpers import lazy_import_all_from
 
+try:
+    import torch
+except ImportError:
+    raise ImportError("Pytorch is not installed. Please install Pytorch to use the torch functions of utils3d.")
 
 module_members = {}
 
-for module_name in ['utils', 'transforms', 'mesh', 'maps', 'rasterization']:
+for module_name in ['utils', 'transforms', 'segment_ops', 'mesh', 'maps', 'rasterization']:
     module_members[module_name] = lazy_import_all_from(globals(), '.' + module_name)
 
 __all__ = list(itertools.chain(*module_members.values()))

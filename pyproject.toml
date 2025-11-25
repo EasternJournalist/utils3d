@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "utils3d"
-version = "1.4"
-description = "A collection of useful functions for 3D computer vision and graphics researchers in Python"
+version = "1.5"
+description = "A pure-Python collection of useful functions for 3D computer vision and graphics research"
 readme = "README.md"
 authors = [
     {name = "EasternJournalist", email = "wangrc2081cs@mail.ustc.edu.cn"}
@@ -20,9 +20,8 @@ dependencies = [
     "moderngl",
     "numpy",
     "scipy",
-    "matplotlib"
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 
 [project.urls]
 Homepage = "https://github.com/EasternJournalist/utils3d"

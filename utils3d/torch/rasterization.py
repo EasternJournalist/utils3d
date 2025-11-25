@@ -4,7 +4,11 @@ import threading
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-import nvdiffrast.torch as dr
+
+try:
+    import nvdiffrast.torch as dr
+except ImportError:
+    raise ImportError("nvdiffrast is not installed. Please install nvdiffrast to use the rasterization functions of utils3d.")
 
 from .transforms import extrinsics_to_view, intrinsics_to_perspective
 

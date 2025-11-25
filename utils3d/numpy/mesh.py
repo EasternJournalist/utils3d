@@ -5,7 +5,9 @@ from scipy.sparse import csr_array
 from typing import *
 
 from .transforms import unproject_cv, angle_between
-from .utils import lookup, segment_roll, csr_matrix_from_dense_indices
+from .utils import lookup, csr_matrix_from_dense_indices
+from .segment_ops import segment_roll
+
 
 __all__ = [
     'triangulate_mesh',

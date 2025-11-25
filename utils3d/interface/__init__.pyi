@@ -14,14 +14,8 @@ __all__ = ["sliding_window",
 "lookup", 
 "lookup_get", 
 "lookup_set", 
-"segment_roll", 
-"segment_take", 
-"segment_argmax", 
-"segment_argmin", 
-"segment_concatenate", 
-"csr_matrix_from_dense_indices", 
 "group", 
-"group_as_segments", 
+"csr_matrix_from_dense_indices", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -76,10 +70,17 @@ __all__ = ["sliding_window",
 "angle_between", 
 "vector_outer", 
 "procrustes", 
+"affine_procrustes", 
 "solve_pose", 
 "segment_solve_pose", 
 "solve_poses_sequential", 
 "segment_solve_poses_sequential", 
+"segment_roll", 
+"segment_take", 
+"segment_argmax", 
+"segment_argmin", 
+"segment_concatenate", 
+"group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -261,79 +262,6 @@ def lookup_set(key: numpy_.ndarray, value: numpy_.ndarray, set_key: numpy_.ndarr
     utils3d.numpy.utils.lookup_set
 
 @overload
-def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> numpy_.ndarray:
-    """Roll the data within each segment.
-    """
-    utils3d.numpy.utils.segment_roll
-
-@overload
-def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Take some segments from a segmented array
-
-## Parameters
-- `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
-- `taking`: (ndarray) the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
-
-## Returns
-- `new_data`: (ndarray) shape `(N_new, *data_dims)`
-- `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data"""
-    utils3d.numpy.utils.segment_take
-
-@overload
-def segment_argmax(data: numpy_.ndarray, offsets: numpy_.ndarray) -> numpy_.ndarray:
-    """Compute the argmax of each segment in the segmented data.
-
-## Parameters
-- `data`: (ndarray) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
-
-## Returns
-- `argmax_indices`: (ndarray) shape `(M, ...)` the argmax indices of each segment along the first dimension.
-NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
-    utils3d.numpy.utils.segment_argmax
-
-@overload
-def segment_argmin(data: numpy_.ndarray, offsets: numpy_.ndarray) -> numpy_.ndarray:
-    """Compute the argmin of each segment in the segmented data.
-
-## Parameters
-- `data`: (ndarray) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
-
-## Returns
-- `argmin_indices`: (ndarray) shape `(M, ...)` the argmin indices of each segment along the first dimension.
-NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
-    utils3d.numpy.utils.segment_argmin
-
-@overload
-def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]]) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Concatenate a list of segmented arrays into a single segmented array
-
-## Parameters
-- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
-    Each element is a tuple of `(data, offsets)`:
-    - `data`: (ndarray) shape `(N_i, *data_dims)` the
-    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
-
-## Returns
-- `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data"""
-    utils3d.numpy.utils.segment_concatenate
-
-@overload
-def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> 'csr_array':
-    """Convert a regular indices array to a sparse CSR adjacency matrix format
-
-## Parameters
-    - `indices` (ndarray): shape (N, M) dense tensor. Each one in `N` has `M` connections.
-    - `n_cols` (int): total number of columns in the adjacency matrix
-
-## Returns
-    Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
-    utils3d.numpy.utils.csr_matrix_from_dense_indices
-
-@overload
 def group(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
     """Split the data into groups based on the provided labels.
 
@@ -350,23 +278,16 @@ def group(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List
     utils3d.numpy.utils.group
 
 @overload
-def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
-    """Group as segments by labels
+def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> 'csr_array':
+    """Convert a regular indices array to a sparse CSR adjacency matrix format
 
 ## Parameters
-- `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
-- `data` (ndarray, optional): shape `(N, *data_dims)` array.
-    If None, return the indices in each group instead.
+    - `indices` (ndarray): shape (N, M) dense tensor. Each one in `N` has `M` connections.
+    - `n_cols` (int): total number of columns in the adjacency matrix
 
 ## Returns
-Assuming there are `M` difference labels:
-
-- `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
-- `rearranged_data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
-- `offsets`: `(ndarray)` shape `(M + 1,)`
-
-`rearranged_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
-    utils3d.numpy.utils.group_as_segments
+    Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
+    utils3d.numpy.utils.csr_matrix_from_dense_indices
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
@@ -1037,7 +958,7 @@ Better precision than using the arccos dot product directly.
 
 @overload
 def vector_outer(x: numpy_.ndarray, y: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
-    utils3d.numpy.transforms.vector_outer
+    utils3d.numpy.pose.vector_outer
 
 @overload
 def procrustes(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
@@ -1069,7 +990,28 @@ Returns
 - `s`: (...) scale factor. None if both cov_xx and cov_yy are None. 
 - `R`: (..., 3, 3) rotation matrix.
 - `t`: (..., 3) translation vector. None if mean_x or mean_y is None."""
-    utils3d.numpy.transforms.procrustes
+    utils3d.numpy.pose.procrustes
+
+@overload
+def affine_procrustes(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
+
+Parameters
+----
+- `cov_yx`: (..., 3, 3) covariance matrix between y
+- `cov_xx`: (..., 3, 3) covariance matrix of x points.
+- `cov_yy`: (..., 3, 3) covariance matrix of y
+- `mean_x`: (..., 3) mean of x points.
+- `mean_y`: (..., 3) mean of y points.
+- `lam`: rigidity regularization weight.
+- `gamma`: symmetricity regularization annealing factor.
+- `niter`: number of iterations for solving.
+
+Returns
+----
+- `A`: (..., 3, 3) affine transformation matrix.
+- `t`: (..., 3) translation vector."""
+    utils3d.numpy.pose.affine_procrustes
 
 @overload
 def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
@@ -1090,7 +1032,7 @@ Parameters
 Returns
 ----
 - `pose`: (..., 4, 4) transformations matrix from p to q."""
-    utils3d.numpy.transforms.solve_pose
+    utils3d.numpy.pose.solve_pose
 
 @overload
 def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
@@ -1112,7 +1054,7 @@ Parameters
 Returns
 ----
 - `pose`: (S, 4, 4) transformations matrix from p to q."""
-    utils3d.numpy.transforms.segment_solve_pose
+    utils3d.numpy.pose.segment_solve_pose
 
 @overload
 def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
@@ -1170,10 +1112,10 @@ for new_trajectories_chunk in data_stream:
     # `stats`, `canonical_points` and `err` are returned and updated every chunk.
 poses = np.concatenate(poses, axis=0)   # (T_all, 4, 4), poses over all frames
 valid = np.concatenate(valid, axis=0)   # (T_all,), poses' validity over all frames"""
-    utils3d.numpy.transforms.solve_poses_sequential
+    utils3d.numpy.pose.solve_poses_sequential
 
 @overload
-def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray = None, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: numpy_.ndarray = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Segment array mode for `solve_poses_sequential`.
 
 Parameters
@@ -1212,7 +1154,87 @@ Returns
     - `accum_wx`: (N, 3) sum of weights * x
     - `accum_wxx`: (N, 3, 3) sum of weights * outer(x - mean_wx, x - mean_wx)
     - `accum_nnz`: (N,) number of non-zero weight accumulations"""
-    utils3d.numpy.transforms.segment_solve_poses_sequential
+    utils3d.numpy.pose.segment_solve_poses_sequential
+
+@overload
+def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> numpy_.ndarray:
+    """Roll the data within each segment.
+    """
+    utils3d.numpy.segment_ops.segment_roll
+
+@overload
+def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Take some segments from a segmented array
+
+## Parameters
+- `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+- `taking`: (ndarray) the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
+
+## Returns
+- `new_data`: (ndarray) shape `(N_new, *data_dims)`
+- `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data"""
+    utils3d.numpy.segment_ops.segment_take
+
+@overload
+def segment_argmax(data: numpy_.ndarray, offsets: numpy_.ndarray) -> numpy_.ndarray:
+    """Compute the argmax of each segment in the segmented data.
+
+## Parameters
+- `data`: (ndarray) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+
+## Returns
+- `argmax_indices`: (ndarray) shape `(M, ...)` the argmax indices of each segment along the first dimension.
+NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
+    utils3d.numpy.segment_ops.segment_argmax
+
+@overload
+def segment_argmin(data: numpy_.ndarray, offsets: numpy_.ndarray) -> numpy_.ndarray:
+    """Compute the argmin of each segment in the segmented data.
+
+## Parameters
+- `data`: (ndarray) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+
+## Returns
+- `argmin_indices`: (ndarray) shape `(M, ...)` the argmin indices of each segment along the first dimension.
+NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
+    utils3d.numpy.segment_ops.segment_argmin
+
+@overload
+def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]]) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Concatenate a list of segmented arrays into a single segmented array
+
+## Parameters
+- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
+    Each element is a tuple of `(data, offsets)`:
+    - `data`: (ndarray) shape `(N_i, *data_dims)` the
+    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+
+## Returns
+- `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data"""
+    utils3d.numpy.segment_ops.segment_concatenate
+
+@overload
+def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+    """Group as segments by labels
+
+## Parameters
+- `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+- `data` (ndarray, optional): shape `(N, *data_dims)` array.
+    If None, return the indices in each group instead.
+
+## Returns
+Assuming there are `M` difference labels:
+
+- `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
+- `rearranged_data`: `(ndarray)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+- `offsets`: `(ndarray)` shape `(M + 1,)`
+
+`rearranged_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
+    utils3d.numpy.segment_ops.group_as_segments
 
 @overload
 def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> numpy_.ndarray:
@@ -1737,7 +1759,7 @@ def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: nump
     utils3d.numpy.maps.chessboard
 
 @overload
-def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[typing_extensions.Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
+def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
     """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
 - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
 - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
@@ -1757,7 +1779,7 @@ def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tu
     utils3d.numpy.maps.masked_nearest_resize
 
 @overload
-def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[typing_extensions.Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
+def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters
@@ -2042,7 +2064,7 @@ def test_rasterization(ctx: Optional[utils3d.numpy.rasterization.RastContext] = 
     utils3d.numpy.rasterization.test_rasterization
 
 @overload
-def read_extrinsics_from_colmap(file: Union[str, pathlib.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
+def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
     """Read extrinsics from colmap `images.txt` file. 
 ## Parameters
     file: Path to `images.txt` file.
@@ -2053,7 +2075,7 @@ def read_extrinsics_from_colmap(file: Union[str, pathlib.Path]) -> Union[numpy_.
     utils3d.numpy.io.colmap.read_extrinsics_from_colmap
 
 @overload
-def read_intrinsics_from_colmap(file: Union[str, pathlib.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
+def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
     """Read intrinsics from colmap `cameras.txt` file.
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2065,7 +2087,7 @@ def read_intrinsics_from_colmap(file: Union[str, pathlib.Path], normalize: bool 
     utils3d.numpy.io.colmap.read_intrinsics_from_colmap
 
 @overload
-def write_extrinsics_as_colmap(file: Union[str, pathlib.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
+def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
     """Write extrinsics to colmap `images.txt` file.
 ## Parameters
     file: Path to `images.txt` file.
@@ -2077,7 +2099,7 @@ def write_extrinsics_as_colmap(file: Union[str, pathlib.Path], extrinsics: numpy
     utils3d.numpy.io.colmap.write_extrinsics_as_colmap
 
 @overload
-def write_intrinsics_as_colmap(file: Union[str, pathlib.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
+def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
     """Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2088,7 +2110,7 @@ def write_intrinsics_as_colmap(file: Union[str, pathlib.Path], intrinsics: numpy
     utils3d.numpy.io.colmap.write_intrinsics_as_colmap
 
 @overload
-def read_obj(file: Union[str, pathlib.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
+def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
     """Read wavefront .obj file.
 
 Parameters
@@ -2136,7 +2158,7 @@ Material library:
     utils3d.numpy.io.obj.read_obj
 
 @overload
-def write_obj(file: Union[str, pathlib.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
+def write_obj(file: Union[str, pathlib._local.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
     utils3d.numpy.io.obj.write_obj
 
 @overload
@@ -2232,44 +2254,6 @@ def lookup_set(key: torch_.Tensor, value: torch_.Tensor, set_key: torch_.Tensor,
     utils3d.torch.utils.lookup_set
 
 @overload
-def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int) -> torch_.Tensor:
-    """Roll the data within each segment.
-    """
-    utils3d.torch.utils.segment_roll
-
-@overload
-def segment_take(data: torch_.Tensor, offsets: torch_.Tensor, taking: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
-    """Take some segments from a segmented array
-    """
-    utils3d.torch.utils.segment_take
-
-@overload
-def segment_argmax(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
-    """Compute the argmax of each segment in the segmented data.
-
-## Parameters
-- `data`: (Tensor) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
-- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
-
-## Returns
-- `argmax_indices`: (Tensor) shape `(M, ...)` the argmax indices of each segment along the first dimension.
-NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
-    utils3d.torch.utils.segment_argmax
-
-@overload
-def segment_argmin(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
-    """Compute the argmin of each segment in the segmented data.
-
-## Parameters
-- `data`: (Tensor) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
-- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
-
-## Returns
-- `argmin_indices`: (Tensor) shape `(M, ...)` the argmin indices of each segment along the first dimension.
-NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
-    utils3d.torch.utils.segment_argmin
-
-@overload
 def csr_matrix_from_dense_indices(indices: torch_.Tensor, n_cols: int) -> torch_.Tensor:
     """Convert a regular indices array to a sparse CSR adjacency matrix format
 
@@ -2303,27 +2287,6 @@ def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[T
     - `data_in_group` (Tensor): shape (M, *data_dims) the data points in the group.
     If `data` is None, `data_in_group` will be the indices of the data points in the original array."""
     utils3d.torch.utils.group
-
-@overload
-def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
-    """Group as segments by labels
-
-## Parameters
-
-- `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
-- `data` (Tensor, optional): shape `(N, *data_dims)` array.
-    If None, return the indices in each group instead.
-
-## Returns
-
-Assuming there are `M` difference labels:
-
-- `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
-- `data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
-- `offsets`: `(Tensor)` shape `(M + 1,)`
-
-`data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
-    utils3d.torch.utils.group_as_segments
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
@@ -2997,6 +2960,65 @@ Better precision than using the arccos dot product directly.
     utils3d.torch.transforms.angle_between
 
 @overload
+def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int) -> torch_.Tensor:
+    """Roll the data within each segment.
+    """
+    utils3d.torch.segment_ops.segment_roll
+
+@overload
+def segment_take(data: torch_.Tensor, offsets: torch_.Tensor, taking: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Take some segments from a segmented array
+    """
+    utils3d.torch.segment_ops.segment_take
+
+@overload
+def segment_argmax(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+    """Compute the argmax of each segment in the segmented data.
+
+## Parameters
+- `data`: (Tensor) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+## Returns
+- `argmax_indices`: (Tensor) shape `(M, ...)` the argmax indices of each segment along the first dimension.
+NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
+    utils3d.torch.segment_ops.segment_argmax
+
+@overload
+def segment_argmin(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+    """Compute the argmin of each segment in the segmented data.
+
+## Parameters
+- `data`: (Tensor) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+## Returns
+- `argmin_indices`: (Tensor) shape `(M, ...)` the argmin indices of each segment along the first dimension.
+NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
+    utils3d.torch.segment_ops.segment_argmin
+
+@overload
+def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Group as segments by labels
+
+## Parameters
+
+- `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
+- `data` (Tensor, optional): shape `(N, *data_dims)` array.
+    If None, return the indices in each group instead.
+
+## Returns
+
+Assuming there are `M` difference labels:
+
+- `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
+- `data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+- `offsets`: `(Tensor)` shape `(M + 1,)`
+
+`data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
+    utils3d.torch.segment_ops.group_as_segments
+
+@overload
 def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> torch_.Tensor:
     """Triangulate a polygonal mesh.
 
@@ -3524,7 +3546,7 @@ def bounding_rect_from_mask(mask: torch_.BoolTensor):
     utils3d.torch.maps.bounding_rect_from_mask
 
 @overload
-def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[typing_extensions.Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
 - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
 - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
@@ -3545,7 +3567,7 @@ def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tupl
     utils3d.torch.maps.masked_nearest_resize
 
 @overload
-def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[typing_extensions.Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
+def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters

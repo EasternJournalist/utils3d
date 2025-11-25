@@ -3,7 +3,8 @@ from torch import Tensor
 import torch.nn.functional as F
 from typing import *
 from .transforms import angle_between, unproject_cv
-from .utils import lookup, csr_eliminate_zeros, csr_matrix_from_dense_indices, segment_roll
+from .utils import lookup, csr_eliminate_zeros, csr_matrix_from_dense_indices
+from .segment_ops import segment_roll
 
 
 __all__ = [

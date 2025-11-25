@@ -631,7 +631,11 @@ def colorize_depth_map(depth: ndarray, mask: ndarray = None, near: Optional[floa
         - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB [0, 255]
     """
     assert depth.ndim == 2, "depth should be of shape (H, W)"
-    import matplotlib
+    try:
+        import matplotlib
+    except ImportError:
+        raise ImportError("matplotlib is required for colorizing depth map")
+    
     if mask is None:
         depth = np.where(depth > 0, depth, np.nan)
     else:

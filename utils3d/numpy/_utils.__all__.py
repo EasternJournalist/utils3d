@@ -6,12 +6,6 @@ __all__ = [
     'lookup',
     'lookup_get',
     'lookup_set',
-    'segment_roll',
-    'segment_take',
-    'segment_argmax',
-    'segment_argmin',
-    'segment_concatenate',
-    'csr_matrix_from_dense_indices',
     'group',
-    'group_as_segments',
+    'csr_matrix_from_dense_indices',
 ]
