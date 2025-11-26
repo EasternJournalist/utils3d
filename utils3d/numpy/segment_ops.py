@@ -12,6 +12,7 @@ __all__ = [
     'segment_argmax',
     'segment_argmin',
     'segment_concatenate',
+    'segment_concat',
     'group_as_segments'
 ]
 
@@ -47,7 +48,7 @@ def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndar
     return new_data, new_offsets
 
 
-def segment_concatenate(segments: List[Tuple[ndarray, ndarray]]) -> Tuple[ndarray, ndarray]:
+def segment_concatenate(segments: List[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
     """Concatenate a list of segmented arrays into a single segmented array
 
     ## Parameters
@@ -55,20 +56,59 @@ def segment_concatenate(segments: List[Tuple[ndarray, ndarray]]) -> Tuple[ndarra
         Each element is a tuple of `(data, offsets)`:
         - `data`: (ndarray) shape `(N_i, *data_dims)` the
         - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+    - `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
 
     ## Returns
     - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
+        If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same).
     """
-    data_list = []
-    offsets_list = [np.array([0])]
-    for data, offsets in segments:
-        if len(offsets) > 1:
-            data_list.append(data)
-            offsets_list.append(offsets[1:] + offsets_list[-1][-1])
-    data = np.concatenate(data_list, axis=0)
-    offsets = np.concatenate(offsets_list, axis=0)
-    return data, offsets
+    if axis == 0:
+        data_list = []
+        offsets_list = [np.array([0])]
+        for data, offsets in segments:
+            if len(offsets) > 1:
+                data_list.append(data)
+                offsets_list.append(offsets[1:] + offsets_list[-1][-1])
+        new_data = np.concatenate(data_list, axis=0)
+        new_offsets = np.concatenate(offsets_list, axis=0)
+    else:
+        if len(segments) == 0:
+            return np.array([]), np.array([0])
+        M, K = len(segments[0][1]) - 1, len(segments)       # number of segments, number of inputs
+        assert all(M + 1 == len(seg[1]) for seg in segments), "All segments must have the same number of segments when concatenating along axis 1."
+        data_list, offsets_list = zip(*segments)
+        input_data = np.concatenate(data_list, axis=0)      # (sum(N_i), *data_dims)
+        lengths_concat_0 = np.diff(np.stack(offsets_list, axis=0), axis=1).reshape(-1)         # (K, M)
+        lengths_concat_1 = lengths_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1)            # (M, K)
+        offsets_concat_0 = np.cumsum(lengths_concat_0.reshape(-1), axis=0)                    # (K * M,)
+        offsets_concat_1 = np.cumsum(lengths_concat_1.reshape(-1), axis=0)     # (M * K,)
+
+        indices = np.arange(input_data.shape[0]) + np.repeat(offsets_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1) - offsets_concat_1, lengths_concat_1.reshape(-1))
+        new_data = input_data[indices]
+        new_lengths = np.sum(lengths_concat_0.reshape(K, M), axis=0)
+        new_offsets = np.concatenate([[0], np.cumsum(new_lengths)])
+        
+    return new_data, new_offsets
+
+
+def segment_concat(segments: List[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
+    """(Alias for segment_concatenate).
+    Concatenate a list of segmented arrays into a single segmented array
+
+    ## Parameters
+    - `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
+        Each element is a tuple of `(data, offsets)`:
+        - `data`: (ndarray) shape `(N_i, *data_dims)` the
+        - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+    - `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+
+    ## Returns
+    - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
+        If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same).
+    """
+    return segment_concatenate(segments, axis=axis)
 
 
 def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tuple[ndarray, ndarray, ndarray]:

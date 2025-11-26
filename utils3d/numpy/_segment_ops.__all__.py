@@ -5,5 +5,6 @@ __all__ = [
     'segment_argmax',
     'segment_argmin',
     'segment_concatenate',
+    'segment_concat',
     'group_as_segments',
 ]

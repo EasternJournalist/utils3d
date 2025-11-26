@@ -214,12 +214,13 @@ The links below will take you to the source code of each function with detailed 
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/segment_ops.py#L74) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/segment_ops.py#L45) | 
-| `utils3d.segment_argmax`<br>Compute the argmax of each segment in the segmented data. | [`utils3d.np.segment_argmax(data, offsets)`](utils3d/numpy/segment_ops.py#L101) | [`utils3d.pt.segment_argmax(data, offsets)`](utils3d/torch/segment_ops.py#L73) | 
-| `utils3d.segment_argmin`<br>Compute the argmin of each segment in the segmented data. | [`utils3d.np.segment_argmin(data, offsets)`](utils3d/numpy/segment_ops.py#L120) | [`utils3d.pt.segment_argmin(data, offsets)`](utils3d/torch/segment_ops.py#L92) | 
-| `utils3d.segment_concatenate`<br>Concatenate a list of segmented arrays into a single segmented array | [`utils3d.np.segment_concatenate(segments)`](utils3d/numpy/segment_ops.py#L50) | - | 
-| `utils3d.segment_roll`<br>Roll the data within each segment. | [`utils3d.np.segment_roll(data, offsets, shift)`](utils3d/numpy/segment_ops.py#L20) | [`utils3d.pt.segment_roll(data, offsets, shift)`](utils3d/torch/segment_ops.py#L24) | 
-| `utils3d.segment_take`<br>Take some segments from a segmented array | [`utils3d.np.segment_take(data, offsets, taking)`](utils3d/numpy/segment_ops.py#L30) | [`utils3d.pt.segment_take(data, offsets, taking)`](utils3d/torch/segment_ops.py#L34) | 
+| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/segment_ops.py#L114) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/segment_ops.py#L45) | 
+| `utils3d.segment_argmax`<br>Compute the argmax of each segment in the segmented data. | [`utils3d.np.segment_argmax(data, offsets)`](utils3d/numpy/segment_ops.py#L141) | [`utils3d.pt.segment_argmax(data, offsets)`](utils3d/torch/segment_ops.py#L73) | 
+| `utils3d.segment_argmin`<br>Compute the argmin of each segment in the segmented data. | [`utils3d.np.segment_argmin(data, offsets)`](utils3d/numpy/segment_ops.py#L160) | [`utils3d.pt.segment_argmin(data, offsets)`](utils3d/torch/segment_ops.py#L92) | 
+| `utils3d.segment_concat`<br>(Alias for segment_concatenate). | [`utils3d.np.segment_concat(segments, axis)`](utils3d/numpy/segment_ops.py#L95) | - | 
+| `utils3d.segment_concatenate`<br>Concatenate a list of segmented arrays into a single segmented array | [`utils3d.np.segment_concatenate(segments, axis)`](utils3d/numpy/segment_ops.py#L51) | - | 
+| `utils3d.segment_roll`<br>Roll the data within each segment. | [`utils3d.np.segment_roll(data, offsets, shift)`](utils3d/numpy/segment_ops.py#L21) | [`utils3d.pt.segment_roll(data, offsets, shift)`](utils3d/torch/segment_ops.py#L24) | 
+| `utils3d.segment_take`<br>Take some segments from a segmented array | [`utils3d.np.segment_take(data, offsets, taking)`](utils3d/numpy/segment_ops.py#L31) | [`utils3d.pt.segment_take(data, offsets, taking)`](utils3d/torch/segment_ops.py#L34) | 
 
 
 ### IO
