@@ -2218,9 +2218,9 @@ Tested on a few binary PLY files:
 
 | Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` |
 |-----------  |------------| -------- |-----------|-----------|
-| Point Cloud | 24.1 ms | 133.9 ms | 38.1 ms | 21.1 ms |
-| Triangle Mesh | 49.2 ms | 156.3 ms | 343.0 ms | 2643.4 ms |
-| Polygon Mesh | 28.8 ms | x | x | 80.2 ms |"""
+| Point Cloud (V=921,600) | 26.3 ms | 132.8 ms | 36.8 ms | 23.1 ms | 25.8 ms |
+| Triangle Mesh (V=425,949, F=841,148) | 17.4 ms | 144.8 ms | 341.9 ms | 2655.5 ms | 366.8 ms |
+| Polygon Mesh (V=437,645, F=871,414) | 505.2 ms | x | x | 1999.5 ms | 3905.3 ms |"""
     utils3d.numpy.io.ply.read_ply
 
 @overload
@@ -2251,11 +2251,11 @@ Parameters
 Performance
 -------
 
-| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` |
-|-----------  |------------| -------- |-----------|-----------|
-| Point Cloud | 39.5 ms | 171.3 ms | 51.7 ms | 13.0 ms |
-| Triangle Mesh | 77.7 ms | 135.3 ms | 66.3 ms | 1967.8 ms |
-| Polygon Mesh | 197.9 ms | x | x | 1511.7 ms |"""
+| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` | `meshio` |
+|-----------  |------------| -------- |-----------|-----------|---------|
+| Point Cloud (V=921,600)| 45.1 ms | 175.1 ms | 47.7 ms | 9.2 ms | 43.9 ms |
+| Triangle Mesh (V=425,949, F=841,148) | 38.3 ms | 137.9 ms | 41.3 ms | 2063.1 ms | 46.9 ms |
+| Polygon Mesh (V=437,645, F=871,414) | 234.0 ms | x | x | 1653.2 ms | 12360.8 ms |"""
     utils3d.numpy.io.ply.write_ply
 
 @overload

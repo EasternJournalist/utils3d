@@ -234,4 +234,4 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.write_extrinsics_as_colmap`<br>Write extrinsics to colmap `images.txt` file. | [`utils3d.np.write_extrinsics_as_colmap(file, extrinsics, image_names, camera_ids)`](utils3d/numpy/io/colmap.py#L11) | - | 
 | `utils3d.write_intrinsics_as_colmap`<br>Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion) | [`utils3d.np.write_intrinsics_as_colmap(file, intrinsics, width, height, normalized)`](utils3d/numpy/io/colmap.py#L43) | - | 
 | `utils3d.write_obj`<br> | [`utils3d.np.write_obj(file, obj, encoding)`](utils3d/numpy/io/obj.py#L306) | - | 
-| `utils3d.write_ply`<br>Write a PLY file. Supports arbitrary properties, polygonal meshes. | [`utils3d.np.write_ply(file, data, format_)`](utils3d/numpy/io/ply.py#L662) | - | 
+| `utils3d.write_ply`<br>Write a PLY file. Supports arbitrary properties, polygonal meshes. | [`utils3d.np.write_ply(file, data, format_)`](utils3d/numpy/io/ply.py#L661) | - | 
