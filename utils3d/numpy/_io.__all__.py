@@ -6,4 +6,6 @@ __all__ = [
     'write_intrinsics_as_colmap',
     'read_obj',
     'write_obj',
+    'read_ply',
+    'write_ply',
 ]

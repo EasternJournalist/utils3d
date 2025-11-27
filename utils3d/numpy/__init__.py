@@ -17,3 +17,5 @@ if TYPE_CHECKING:
     from .mesh import *
     from .maps import *
     from .rasterization import *
+    from .io import *
+    from .segment_ops import *

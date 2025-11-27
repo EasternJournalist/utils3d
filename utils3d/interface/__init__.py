@@ -76,6 +76,7 @@ __all__ = ["sliding_window",
 "segment_argmax", 
 "segment_argmin", 
 "segment_concatenate", 
+"segment_concat", 
 "group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -132,6 +133,8 @@ __all__ = ["sliding_window",
 "write_intrinsics_as_colmap", 
 "read_obj", 
 "write_obj", 
+"read_ply", 
+"write_ply", 
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
@@ -606,6 +609,12 @@ def segment_concatenate(*args, **kwargs):
     return _call_based_on_args('segment_concatenate', args, kwargs)
 
 @suppress_traceback
+def segment_concat(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_concat, None
+    return _call_based_on_args('segment_concat', args, kwargs)
+
+@suppress_traceback
 def group_as_segments(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.group_as_segments, utils3d.torch.group_as_segments
@@ -940,6 +949,18 @@ def write_obj(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.write_obj, None
     return _call_based_on_args('write_obj', args, kwargs)
+
+@suppress_traceback
+def read_ply(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.read_ply, None
+    return _call_based_on_args('read_ply', args, kwargs)
+
+@suppress_traceback
+def write_ply(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.write_ply, None
+    return _call_based_on_args('write_ply', args, kwargs)
 
 @suppress_traceback
 def masked_min(*args, **kwargs):

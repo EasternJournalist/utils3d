@@ -80,6 +80,7 @@ __all__ = ["sliding_window",
 "segment_argmax", 
 "segment_argmin", 
 "segment_concatenate", 
+"segment_concat", 
 "group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -136,6 +137,8 @@ __all__ = ["sliding_window",
 "write_intrinsics_as_colmap", 
 "read_obj", 
 "write_obj", 
+"read_ply", 
+"write_ply", 
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
@@ -1220,6 +1223,24 @@ def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]], a
     utils3d.numpy.segment_ops.segment_concatenate
 
 @overload
+def segment_concat(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """(Alias for segment_concatenate).
+Concatenate a list of segmented arrays into a single segmented array
+
+## Parameters
+- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
+    Each element is a tuple of `(data, offsets)`:
+    - `data`: (ndarray) shape `(N_i, *data_dims)` the
+    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+- `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+
+## Returns
+- `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
+    If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same)."""
+    utils3d.numpy.segment_ops.segment_concat
+
+@overload
 def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Group as segments by labels
 
@@ -2162,6 +2183,80 @@ Material library:
 @overload
 def write_obj(file: Union[str, pathlib.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
     utils3d.numpy.io.obj.write_obj
+
+@overload
+def read_ply(file: Union[str, os.PathLike, IO]) -> Dict[str, Dict[str, Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]]]:
+    """Read a PLY file. Supports arbitrary properties, polygonal meshes. Very fast.
+
+Parameters
+----------
+- `file` (str | os.PathLike | IO): Path to the PLY file or a file-like object.
+
+Returns
+-------
+- `data` (Dict): Parsed PLY data. Example
+    ```python
+        {
+            "vertex": {
+                "x": ndarray,
+                "y": ndarray,
+                "z": ndarray,
+                ... # other properties, like "nx", "ny", "nz", "red", "green", "blue", etc.
+            },
+            "face": {
+                "vertex_indices": ndarray for regular lists or (ndarray, offsets ndarray) for irregular lists,
+                ...
+            },
+            ...
+        }
+    ```
+
+Performance
+-------
+
+Tested on a few binary PLY files:
+
+| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` |
+|-----------  |------------| -------- |-----------|-----------|
+| Point Cloud | 24.1 ms | 133.9 ms | 38.1 ms | 21.1 ms |
+| Triangle Mesh | 49.2 ms | 156.3 ms | 343.0 ms | 2643.4 ms |
+| Polygon Mesh | 28.8 ms | x | x | 80.2 ms |"""
+    utils3d.numpy.io.ply.read_ply
+
+@overload
+def write_ply(file: Union[str, os.PathLike, IO], data: Dict[str, Dict[str, Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]]], format_: Literal['ascii', 'binary_little_endian', 'binary_big_endian'] = 'binary_little_endian') -> None:
+    """Write a PLY file. Supports arbitrary properties, polygonal meshes.
+
+Parameters
+----------
+- `file` (str | os.PathLike | IO): Path to the PLY file or a file-like object.
+- `data` (Dict): PLY data to write. The structure is like
+    ```python
+        {
+            "vertex": {
+                "x": ndarray,
+                "y": ndarray,
+                "z": ndarray,
+                ... # other properties, like "nx", "ny", "nz", "red", "green", "blue", etc.
+            },
+            "face": {
+                "vertex_indices": ndarray for regular lists or (ndarray, offsets ndarray) for irregular lists,
+                ...
+            },
+            ...
+        }
+    ```
+- `format` (str): PLY format. Options are 'ascii', 'binary_little_endian', 'binary_big_endian'.
+
+Performance
+-------
+
+| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` |
+|-----------  |------------| -------- |-----------|-----------|
+| Point Cloud | 39.5 ms | 171.3 ms | 51.7 ms | 13.0 ms |
+| Triangle Mesh | 77.7 ms | 135.3 ms | 66.3 ms | 1967.8 ms |
+| Polygon Mesh | 197.9 ms | x | x | 1511.7 ms |"""
+    utils3d.numpy.io.ply.write_ply
 
 @overload
 def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, dilation: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
