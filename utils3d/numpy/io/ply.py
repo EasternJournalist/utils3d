@@ -6,6 +6,7 @@ from numpy import ndarray
 import struct
 from pathlib import Path
 from functools import partial
+from itertools import chain
 
 from ...helpers import timeit
 from ..segment_ops import segment_concatenate
@@ -232,10 +233,14 @@ def parse_ply_data_ascii(header: PLYHeaderDict, data: str) -> Dict[str, Dict[str
                 for is_scalar, (maybe_offset_in_block, maybe_cnt) in zip(prop_is_scalar, prop_maybe):
                     if is_scalar:
                         continue
-                    counts_arr = np.array(
-                        tokens[token_ptr + maybe_offset_in_block:token_ptr + maybe_block_size * elem_count:maybe_block_size], 
-                        dtype=np.int32
-                    )
+                    try:
+                        counts_arr = np.array(
+                            tokens[token_ptr + maybe_offset_in_block:token_ptr + maybe_block_size * elem_count:maybe_block_size], 
+                            dtype=np.int32
+                        )
+                    except ValueError:
+                        is_fixed_block = False
+                        break
                     if not (counts_arr == maybe_cnt).all():
                         is_fixed_block = False
                         break
@@ -261,44 +266,45 @@ def parse_ply_data_ascii(header: PLYHeaderDict, data: str) -> Dict[str, Dict[str
                 token_ptr += maybe_block_size * elem_count
             else:
                 # --- Slow branch: variable-size block ---
-                temp_data = []  # (data_list, offsets_list)
+                temp_data_container = []  # (data_list, offsets_list)
                 for p in props:
                     if p['type'] == 'scalar':
-                        temp_data.append([])
+                        temp_data_container.append(([None] * elem_count, None))
                     else:
-                        temp_data.append(([], [0]))
+                        temp_data_container.append(([None] * elem_count, [None] * elem_count))
 
-                for _ in range(elem_count):
-                    for is_scalar, container in zip(prop_is_scalar, temp_data):
+                prop_infos = tuple((is_scalar, *container) for is_scalar, container in zip(prop_is_scalar, temp_data_container))
+                for i in range(elem_count):
+                    for is_scalar, chunks, counts in prop_infos:
                         if is_scalar:
-                            container.append(tokens[token_ptr])
+                            chunks[i] = tokens[token_ptr]
                             token_ptr += 1
                         else:   # 'list'
                             cnt = int(tokens[token_ptr])
                             token_ptr += 1
-
-                            list_vals = tokens[token_ptr:token_ptr + cnt]
-                            token_ptr += cnt
                             
-                            container[0].extend(list_vals)
-                            container[1].append(container[1][-1] + cnt)
+                            chunks[i] = tokens[token_ptr:token_ptr + cnt]
+                            counts[i] = cnt
+
+                            token_ptr += cnt
 
                 # Convert to NumPy arrays
-                for prop in props:
+                for prop, (chunks, counts) in zip(props, temp_data_container):
+                    p_name = prop['name']
                     dtype = C_TYPE_TO_NP_TYPE[prop['data_type']]
                     if prop['type'] == 'scalar':
-                        data_arr = np.array(temp_data[prop['name']], dtype=dtype)
-                        elem_result[prop['name']] = data_arr
+                        data_arr = np.array(chunks, dtype=dtype)
+                        elem_result[p_name] = data_arr
                     else:
-                        container = temp_data[prop['name']]
-                        data_arr = np.array(container['data'], dtype=dtype)
-                        offsets_arr = np.array(container['offsets'], dtype=np.int32)
-                        lengths = np.diff(offsets_arr)
-                        if np.all(lengths == lengths[0]):
+                        chunks = list(chain.from_iterable(chunks))
+                        data_arr = np.array(chunks, dtype=dtype)
+                        counts_arr = np.array(counts, dtype=np.int32)
+                        if np.all(counts_arr == counts_arr[0]):
                             data_arr = data_arr.reshape(elem_count, -1)
-                            elem_result[prop['name']] = data_arr
+                            elem_result[p_name] = data_arr
                         else:
-                            elem_result[prop['name']] = (data_arr, offsets_arr)
+                            offsets_arr = np.concatenate((np.array([0], dtype=counts_arr.dtype), np.cumsum(counts_arr)))
+                            elem_result[p_name] = (data_arr, offsets_arr)
     return result
 
 
@@ -341,14 +347,14 @@ def parse_ply_data_binary(header: PLYHeaderDict, data: Union[bytes, bytearray, n
         else:
             # --- mixed scalar and list ---
             # Prepare property configurations
-            prop_configs = []       # (is_scalar, name, item_size, cnt_from_bytes, cnt_size, maybe_offset_in_block, maybe_cnt)
+            prop_configs = []       # (is_scalar, item_size, unpack_cnt, cnt_size)
             prop_maybe = []         # (maybe_offset_in_block, maybe_cnt)
             maybe_block_size = 0
             for p in props:
                 if p['type'] == 'scalar':
                     maybe_offset_in_block = maybe_block_size
                     item_size = C_TYPE_TO_SIZE[p['data_type']]
-                    prop_configs.append((True, p['name'], item_size, None, None, maybe_offset_in_block, None))
+                    prop_configs.append((True, item_size, None, None))
                     maybe_block_size += item_size
                 else:
                     maybe_offset_in_block = maybe_block_size
@@ -358,13 +364,12 @@ def parse_ply_data_binary(header: PLYHeaderDict, data: Union[bytes, bytearray, n
                     item_size = C_TYPE_TO_SIZE[data_type]
 
                     cnt_fmt = endian_str + C_TYPE_TO_STRUCT_FMT[cnt_type]
-                    unpack_from_fn = struct.Struct(cnt_fmt).unpack_from
-                    cnt_from_bytes = lambda b, ptr: unpack_from_fn(b, ptr)[0]
-                    
-                    maybe_cnt = cnt_from_bytes(data, data_ptr + maybe_offset_in_block)
+                    unpack_cnt = struct.Struct(cnt_fmt).unpack_from
+
+                    maybe_cnt = unpack_cnt(data, data_ptr + maybe_offset_in_block)[0]
                     maybe_block_size += cnt_size + maybe_cnt * item_size
                     
-                    prop_configs.append((False, p['name'], item_size, cnt_from_bytes, cnt_size))
+                    prop_configs.append((False, item_size, unpack_cnt, cnt_size))
                     prop_maybe.append((maybe_offset_in_block, maybe_cnt))
 
             # Check if fixed-size block is possible
@@ -373,7 +378,7 @@ def parse_ply_data_binary(header: PLYHeaderDict, data: Union[bytes, bytearray, n
             else:
                 is_fixed_block = True
                 byte_arr = np.frombuffer(data[data_ptr:data_ptr + maybe_block_size * elem_count], dtype=np.uint8).reshape(elem_count, maybe_block_size)
-                for p, (is_scalar, p_name, item_size, cnt_from_bytes, cnt_size), (maybe_offset_in_block, maybe_cnt) in zip(props, prop_configs, prop_maybe):
+                for p, (is_scalar, item_size, unpack_cnt, cnt_size), (maybe_offset_in_block, maybe_cnt) in zip(props, prop_configs, prop_maybe):
                     if is_scalar:
                         continue
                     count_dtype = np.dtype(C_TYPE_TO_NP_TYPE[p['count_type']]).newbyteorder(endian_str)
@@ -384,7 +389,8 @@ def parse_ply_data_binary(header: PLYHeaderDict, data: Union[bytes, bytearray, n
             
             if is_fixed_block:
                 # --- Fast branch: fixed-size block ---
-                for p, (is_scalar, p_name, item_size, cnt_from_bytes, cnt_size), (maybe_offset_in_block, maybe_cnt) in zip(props, prop_configs, prop_maybe):
+                for p, (is_scalar, item_size, unpack_cnt, cnt_size), (maybe_offset_in_block, maybe_cnt) in zip(props, prop_configs, prop_maybe):
+                    p_name = p['name']
                     if is_scalar:
                         dtype = np.dtype(C_TYPE_TO_NP_TYPE[p['data_type']]).newbyteorder(endian_str)
                         data_arr = byte_arr[:, maybe_offset_in_block:maybe_offset_in_block + item_size].view(dtype).reshape(-1)
@@ -397,31 +403,30 @@ def parse_ply_data_binary(header: PLYHeaderDict, data: Union[bytes, bytearray, n
             else:
                 # --- Slow branch: variable-size block ---
                 if isinstance(data, np.memmap):
-                    data = data.tobytes()
+                    data = data.tobytes()   # Load all data into memory for faster access
                 temp_containers = []
                 for p in props:
                     if p['type'] == 'scalar':
-                        temp_containers.append(([], None))
+                        temp_containers.append(([None] * elem_count, None))
                     else:
-                        temp_containers.append(([], [0]))
-                for _ in range(elem_count):
-                    for (p_is_scalar, p_name, item_size, cnt_from_bytes, cnt_size), (chunks, offsets) in zip(prop_configs, temp_containers):
+                        temp_containers.append(([None] * elem_count, [None] * elem_count))  # (data_chunks, counts), preallocate for speed
+                
+                # Collect data chunks one by one
+                prop_config_containers = tuple((*prop_cfg, *container) for prop_cfg, container in zip(prop_configs, temp_containers))    
+                for i in range(elem_count):
+                    for p_is_scalar, item_size, unpack_cnt, cnt_size, chunks, counts in prop_config_containers:
                         if p_is_scalar:
-                            chunks.append(data[data_ptr:data_ptr + item_size])
+                            chunks[i] = data[data_ptr:data_ptr + item_size]
                             data_ptr += item_size
                         else:
-                            n = cnt_from_bytes(data, data_ptr)
+                            cnt = unpack_cnt(data, data_ptr)[0]
                             data_ptr += cnt_size
                             
-                            data_bytes_len = n * item_size
+                            chunks[i] = data[data_ptr:(data_ptr := data_ptr + cnt * item_size)]
+                            counts[i] = cnt
                             
-                            chunks.append(data[data_ptr:data_ptr + data_bytes_len])
-                            offsets.append(offsets[-1] + n)
-                            
-                            data_ptr += data_bytes_len
-
                 # Merge chunks and convert to NumPy arrays
-                for p, (chunks, offsets) in zip(props, temp_containers):
+                for p, (chunks, counts) in zip(props, temp_containers):
                     p_name = p['name']
                     if p['type'] == 'scalar':
                         dtype = np.dtype(C_TYPE_TO_NP_TYPE[p['data_type']]).newbyteorder(endian_str)
@@ -432,12 +437,12 @@ def parse_ply_data_binary(header: PLYHeaderDict, data: Union[bytes, bytearray, n
                         full_data_bytes = bytearray().join(chunks)
                         dtype = np.dtype(C_TYPE_TO_NP_TYPE[p['data_type']]).newbyteorder(endian_str)
                         data_arr = np.frombuffer(full_data_bytes, dtype=dtype)
-                        offsets_arr = np.array(offsets, dtype=np.int32)
-                        lengths = np.diff(offsets_arr)
-                        if np.all(lengths == lengths[0]):
+                        counts_arr = np.array(counts, dtype=np.int32)
+                        if np.all(counts_arr == counts_arr[0]):
                             data_arr = data_arr.reshape(elem_count, -1)
                             elem_result[p_name] = data_arr
                         else:
+                            offsets_arr = np.concatenate((np.array([0], dtype=counts_arr.dtype), np.cumsum(counts_arr)))
                             elem_result[p_name] = (data_arr, offsets_arr)
 
     return result
@@ -474,11 +479,11 @@ def read_ply(file: Union[str, os.PathLike, IO]) -> Dict[str, Dict[str, Union[nda
 
     Tested on a few binary PLY files:
 
-    | Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` |
-    |-----------  |------------| -------- |-----------|-----------|
+    | Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` | `meshio` |
+    |-----------  |------------| -------- |-----------|-----------| ---------|
     | Point Cloud (V=921,600) | 26.3 ms | 132.8 ms | 36.8 ms | 23.1 ms | 25.8 ms |
     | Triangle Mesh (V=425,949, F=841,148) | 17.4 ms | 144.8 ms | 341.9 ms | 2655.5 ms | 366.8 ms |
-    | Polygon Mesh (V=437,645, F=871,414) | 505.2 ms | x | x | 1999.5 ms | 3905.3 ms |
+    | Polygon Mesh (V=437,645, F=871,414) | 289.5 ms | x | x | 1999.5 ms | 3905.3 ms |
     """
     if isinstance(file, (str, os.PathLike)):
         fp = open(file, 'rb')
@@ -505,8 +510,6 @@ def read_ply(file: Union[str, os.PathLike, IO]) -> Dict[str, Dict[str, Union[nda
             result = parse_ply_data_binary(header, data)
 
     return result
-
-
 
 
 def get_ply_header_from_data(

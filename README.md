@@ -230,8 +230,8 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.read_extrinsics_from_colmap`<br>Read extrinsics from colmap `images.txt` file.  | [`utils3d.np.read_extrinsics_from_colmap(file)`](utils3d/numpy/io/colmap.py#L65) | - | 
 | `utils3d.read_intrinsics_from_colmap`<br>Read intrinsics from colmap `cameras.txt` file. | [`utils3d.np.read_intrinsics_from_colmap(file, normalize)`](utils3d/numpy/io/colmap.py#L103) | - | 
 | `utils3d.read_obj`<br>Read wavefront .obj file. | [`utils3d.np.read_obj(file, encoding, ignore_unknown)`](utils3d/numpy/io/obj.py#L49) | - | 
-| `utils3d.read_ply`<br>Read a PLY file. Supports arbitrary properties, polygonal meshes. Very fast. | [`utils3d.np.read_ply(file)`](utils3d/numpy/io/ply.py#L446) | - | 
+| `utils3d.read_ply`<br>Read a PLY file. Supports arbitrary properties, polygonal meshes. Very fast. | [`utils3d.np.read_ply(file)`](utils3d/numpy/io/ply.py#L452) | - | 
 | `utils3d.write_extrinsics_as_colmap`<br>Write extrinsics to colmap `images.txt` file. | [`utils3d.np.write_extrinsics_as_colmap(file, extrinsics, image_names, camera_ids)`](utils3d/numpy/io/colmap.py#L11) | - | 
 | `utils3d.write_intrinsics_as_colmap`<br>Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion) | [`utils3d.np.write_intrinsics_as_colmap(file, intrinsics, width, height, normalized)`](utils3d/numpy/io/colmap.py#L43) | - | 
 | `utils3d.write_obj`<br> | [`utils3d.np.write_obj(file, obj, encoding)`](utils3d/numpy/io/obj.py#L306) | - | 
-| `utils3d.write_ply`<br>Write a PLY file. Supports arbitrary properties, polygonal meshes. | [`utils3d.np.write_ply(file, data, format_)`](utils3d/numpy/io/ply.py#L661) | - | 
+| `utils3d.write_ply`<br>Write a PLY file. Supports arbitrary properties, polygonal meshes. | [`utils3d.np.write_ply(file, data, format_)`](utils3d/numpy/io/ply.py#L665) | - | 

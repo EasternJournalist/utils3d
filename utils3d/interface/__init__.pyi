@@ -2216,11 +2216,11 @@ Performance
 
 Tested on a few binary PLY files:
 
-| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` |
-|-----------  |------------| -------- |-----------|-----------|
+| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` | `meshio` |
+|-----------  |------------| -------- |-----------|-----------| ---------|
 | Point Cloud (V=921,600) | 26.3 ms | 132.8 ms | 36.8 ms | 23.1 ms | 25.8 ms |
 | Triangle Mesh (V=425,949, F=841,148) | 17.4 ms | 144.8 ms | 341.9 ms | 2655.5 ms | 366.8 ms |
-| Polygon Mesh (V=437,645, F=871,414) | 505.2 ms | x | x | 1999.5 ms | 3905.3 ms |"""
+| Polygon Mesh (V=437,645, F=871,414) | 289.5 ms | x | x | 1999.5 ms | 3905.3 ms |"""
     utils3d.numpy.io.ply.read_ply
 
 @overload
