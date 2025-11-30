@@ -19,3 +19,4 @@ if TYPE_CHECKING:
     from .rasterization import *
     from .io import *
     from .segment_ops import *
+    from .pose import *

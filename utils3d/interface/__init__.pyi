@@ -1260,7 +1260,7 @@ Assuming there are `M` difference labels:
     utils3d.numpy.segment_ops.group_as_segments
 
 @overload
-def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> numpy_.ndarray:
+def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan', return_face_indices: bool = False) -> numpy_.ndarray:
     """Triangulate a polygonal mesh.
 
 ## Parameters
@@ -1268,8 +1268,11 @@ def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, met
     vertices (ndarray, optional): [N, 3] 3-dimensional vertices.
         If given, the triangulation is performed according to the distance
         between vertices. Defaults to None.
-    backslash (ndarray, optional): [L] boolean array indicating
-        how to triangulate the quad faces. Defaults to None.
+    method (str, optional): triangulation method. Defaults to 'fan'.
+        - 'fan': connect the first vertex to all other vertex pairs
+        - 'strip': create a triangle strip
+        - 'diagonal': for quad faces only, split according to the shorter diagonal
+    return_face_indices (bool, optional): whether to return the original face indices for each triangle. Defaults to False.
 
 ## Returns
     (ndarray): [L * (P - 2), 3] triangular faces"""
@@ -1412,13 +1415,15 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
-def mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray]:
+def mesh_edges(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array')], return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, ForwardRef('csr_array')], ForwardRef('csr_array'), ForwardRef('ndarray')]:
     """Get undirected edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-- `faces` (ndarray): polygon faces
-    - `(F, P)` dense array of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+    - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+    - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+  (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
 - `return_counts` (bool): whether to return the counts of edges
@@ -1430,19 +1435,22 @@ If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_co
 
 - `face2edge` (ndarray | csr_array): mapping from faces to the indices of edges
     - `(F, P)` if input `faces` is a dense array
-    - `(F, E)` if input `faces` is a sparse csr array
+    - `(F, E)` if input `faces` is segmented array
 - `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
 - `counts` (ndarray): `(E,)` counts of each edge"""
     utils3d.numpy.mesh.mesh_edges
 
 @overload
-def mesh_half_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+def mesh_half_edges(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array')], return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, ForwardRef('csr_array')], ForwardRef('csr_array'), numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Get half edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-- `faces` (ndarray): polygon faces
-    - `(F, P)` dense array of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+    - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+    - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+  (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
 - `return_twin` (bool): whether to return the mapping from one edge to its opposite/twin edge
@@ -1468,14 +1476,16 @@ NOTE: If the mesh is not manifold, `twin`, `next`, and `prev` can point to arbit
     utils3d.numpy.mesh.mesh_half_edges
 
 @overload
-def mesh_connected_components(faces: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def mesh_connected_components(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array'), NoneType] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
     """Compute connected faces of a mesh.
 
 ## Parameters
-- `faces` (ndarray): polygon faces
-    - `(F, P)` dense array of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
-- `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+    - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+    - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+  (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
+- `num_vertices` (int, optional): total number of vertices. If not given, only presented vertices in `faces` are considered.
 
 ## Returns
 
@@ -1506,7 +1516,7 @@ If `num_vertices` is None, return:
     utils3d.numpy.mesh.graph_connected_components
 
 @overload
-def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array, NoneType] = None, edges: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None, self_loop: bool = False) -> scipy.sparse._csr.csr_array:
+def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array'), NoneType] = None, edges: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None, self_loop: bool = False) -> 'csr_array':
     """Get adjacency graph of a mesh.
 
 ## Parameters
@@ -1655,38 +1665,39 @@ This is commonly used in graphics APIs like OpenGL.
     utils3d.numpy.maps.screen_coord_map
 
 @overload
-def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
 ## Parameters
     *maps (ndarray): attribute maps in shape (height, width, [channels])
     mask (ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+    domain (Literal['vertex', 'face'], optional): whether the pixel attributes correspond to vertices or faces. Defaults to 'vertex'.
+    tri (bool, optional): whether to triangulate the mesh. Defaults to False.
 
 ## Returns
     faces (ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-    *attributes (ndarray): vertex attributes in corresponding order with input maps"""
+    *attributes (ndarray): vertex or face attributes in corresponding order with input maps"""
     utils3d.numpy.maps.build_mesh_from_map
 
 @overload
-def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = None, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_depth_map(depth: numpy_.ndarray, *maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
 ## Parameters
     depth (ndarray): [H, W] depth map
     extrinsics (ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
     intrinsics (ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
-    *other_maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
+    *maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
     atol (float, optional): absolute tolerance of difference. Defaults to None.
     rtol (float, optional): relative tolerance of difference. Defaults to None.
         triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
-    remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
-    return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
-    return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
+    domain (Literal['vertex', 'face'], optional): whether the pixel attributes correspond to vertices or faces. Defaults to 'vertex'.
+    tri (bool, optional): whether to triangulate the mesh. Defaults to False.
 
 ## Returns
     faces (ndarray): [T, 3] faces
     vertices (ndarray): [N, 3] vertices
-    *other_attrs (ndarray): [N, C] vertex attributes"""
+    *attributes (ndarray): [N, C] vertex attributes or [T, C] face attributes"""
     utils3d.numpy.maps.build_mesh_from_depth_map
 
 @overload
@@ -1782,7 +1793,7 @@ def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: nump
     utils3d.numpy.maps.chessboard
 
 @overload
-def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[typing_extensions.Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
+def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
     """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
 - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
 - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
@@ -1802,7 +1813,7 @@ def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tu
     utils3d.numpy.maps.masked_nearest_resize
 
 @overload
-def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[typing_extensions.Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
+def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters
@@ -2087,7 +2098,7 @@ def test_rasterization(ctx: Optional[utils3d.numpy.rasterization.RastContext] = 
     utils3d.numpy.rasterization.test_rasterization
 
 @overload
-def read_extrinsics_from_colmap(file: Union[str, pathlib.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
+def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
     """Read extrinsics from colmap `images.txt` file. 
 ## Parameters
     file: Path to `images.txt` file.
@@ -2098,7 +2109,7 @@ def read_extrinsics_from_colmap(file: Union[str, pathlib.Path]) -> Union[numpy_.
     utils3d.numpy.io.colmap.read_extrinsics_from_colmap
 
 @overload
-def read_intrinsics_from_colmap(file: Union[str, pathlib.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
+def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
     """Read intrinsics from colmap `cameras.txt` file.
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2110,7 +2121,7 @@ def read_intrinsics_from_colmap(file: Union[str, pathlib.Path], normalize: bool 
     utils3d.numpy.io.colmap.read_intrinsics_from_colmap
 
 @overload
-def write_extrinsics_as_colmap(file: Union[str, pathlib.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
+def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
     """Write extrinsics to colmap `images.txt` file.
 ## Parameters
     file: Path to `images.txt` file.
@@ -2122,7 +2133,7 @@ def write_extrinsics_as_colmap(file: Union[str, pathlib.Path], extrinsics: numpy
     utils3d.numpy.io.colmap.write_extrinsics_as_colmap
 
 @overload
-def write_intrinsics_as_colmap(file: Union[str, pathlib.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
+def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
     """Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2133,7 +2144,7 @@ def write_intrinsics_as_colmap(file: Union[str, pathlib.Path], intrinsics: numpy
     utils3d.numpy.io.colmap.write_intrinsics_as_colmap
 
 @overload
-def read_obj(file: Union[str, pathlib.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
+def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
     """Read wavefront .obj file.
 
 Parameters
@@ -2181,7 +2192,7 @@ Material library:
     utils3d.numpy.io.obj.read_obj
 
 @overload
-def write_obj(file: Union[str, pathlib.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
+def write_obj(file: Union[str, pathlib._local.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
     utils3d.numpy.io.obj.write_obj
 
 @overload
@@ -3643,7 +3654,7 @@ def bounding_rect_from_mask(mask: torch_.BoolTensor):
     utils3d.torch.maps.bounding_rect_from_mask
 
 @overload
-def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[typing_extensions.Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
 - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
 - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
@@ -3664,7 +3675,7 @@ def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tupl
     utils3d.torch.maps.masked_nearest_resize
 
 @overload
-def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[typing_extensions.Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
+def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters

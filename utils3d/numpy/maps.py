@@ -14,6 +14,7 @@ __all__ = [
     'uv_map',
     'pixel_coord_map',
     'screen_coord_map',
+    'build_grid_mesh',
     'build_mesh_from_map',
     'build_mesh_from_depth_map',
     'depth_map_edge',
@@ -158,9 +159,61 @@ def screen_coord_map(
     return np.stack([x, y], axis=2)
 
 
+def build_grid_mesh(height: int, width: int, *, shared_vertices: bool = True) -> ndarray:
+    """
+    Get mesh of `height * width` faces arranged in a 2D grid.
+
+    Parameters
+    ----
+        height (int): height of the grid
+        width (int): width of the grid
+        shared_vertices (bool, optional): whether the vertices are shared among faces. Defaults to True.
+
+    Returns
+    ----
+        faces (ndarray): faces in shape (height, width, 4). 
+        - If shared_vertices is `True`, the vertex indices are arranged from 0 to `(H + 1) * (W + 1) - 1` like
+            ```
+                0 ----------- 1 --- ...    -------- W-1 --------------- W
+                |    (0,0)    |       (0,1)         |        (0,W-1)    |
+                W+1 -------   W+2 --- ...  -------- 2*W --------------- 2*W+1
+                |    (1,0)    |       (1,1)         |   ...             |
+                                        ...
+                |    (H-1,0)  |     (H-1,1)         |       (H-1,W-1)   |
+                H*(W+1) ----- H*(W+1)+1 --- ... --- (H+1)*(W+1)-2 ----- (H+1)*(W+1)-1
+            ```
+        - If shared_vertices is `False`, each face has its own 4 vertices.
+            The vertex indices are arranged from 0 to `H * W * 4 - 1`, like
+            ```
+                0 ------- 3  4 ------- 7  ...  (W-1)*4 ---- (W-1)*4+3
+                |  (0,0)  |  |   (0,1)  |      |   (0,W-1)  |
+                1 ------- 2  5 ------- 6  ...  (W-1)*4+1 -- (W-1)*4+2
+                W*4 ----- W*4+3
+                |  (1,0)  |     ....
+                W*4+1 --- W*4+2
+                                        ...
+                (H-1)*W*4 ---- (H-1)*W*4+3  ...        H*W*4 - 4 -----  H*W*4 - 1
+                |   (H-1,0)         |                  |    (H-1,W-1)   |
+                (H-1)*W*4+1 -- (H-1)*W*4+2  ...        H*W*4 - 3 ------ H*W*4 - 2
+            ```
+    """
+    if shared_vertices:
+        single_row_faces = np.stack([
+            np.arange(0, width, dtype=np.int32), 
+            np.arange(width + 1, 2 * width + 1, dtype=np.int32), 
+            np.arange(width + 2, 2 * width + 2, dtype=np.int32), 
+            np.arange(1, width + 1, dtype=np.int32)
+        ], axis=1)
+        faces = (np.arange(0, height * (width + 1), width + 1, dtype=np.int32)[:, None, None] + single_row_faces[None, :, :])
+    else:
+        faces = np.arange(0, height * width * 4, dtype=np.int32).reshape((height, width, 4))
+    return faces
+
+
 def build_mesh_from_map(
     *maps: ndarray,
     mask: Optional[ndarray] = None,
+    domain: Literal['vertex', 'face'] = 'vertex',
     tri: bool = False,
 ) -> Tuple[ndarray, ...]:
     """
@@ -169,34 +222,50 @@ def build_mesh_from_map(
     ## Parameters
         *maps (ndarray): attribute maps in shape (height, width, [channels])
         mask (ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+        domain (Literal['vertex', 'face'], optional): whether the pixel attributes correspond to vertices or faces. Defaults to 'vertex'.
+        tri (bool, optional): whether to triangulate the mesh. Defaults to False.
 
     ## Returns
         faces (ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-        *attributes (ndarray): vertex attributes in corresponding order with input maps
+        *attributes (ndarray): vertex or face attributes in corresponding order with input maps
     """
     assert (len(maps) > 0) or (mask is not None), "At least one of maps or mask should be provided"
     height, width = maps[0].shape[:2] if mask is None else mask.shape
     assert all(x.shape[:2] == (height, width) for x in maps), "All maps should have the same shape"
 
-    row_faces = np.stack([np.arange(0, width - 1, dtype=np.int32), np.arange(width, 2 * width - 1, dtype=np.int32), np.arange(1 + width, 2 * width, dtype=np.int32), np.arange(1, width, dtype=np.int32)], axis=1)
-    faces = (np.arange(0, (height - 1) * width, width, dtype=np.int32)[:, None, None] + row_faces[None, :, :]).reshape((-1, 4))
-    attributes = tuple(x.reshape(-1, *x.shape[2:]) for x in maps)
-    if mask is not None:
-        quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
-        faces = faces[quad_mask]
-        faces, *attributes = remove_unused_vertices(faces, *attributes)
-    if tri:
-        faces = triangulate_mesh(faces)
-    return faces, *attributes
+    if domain == 'vertex':
+        faces = build_grid_mesh(height - 1, width - 1, shared_vertices=True).reshape(-1, 4)
+        if mask is not None:
+            quad_mask = (mask[:-1, :-1] & mask[1:, :-1] & mask[1:, 1:] & mask[:-1, 1:]).ravel()
+            faces = faces[quad_mask]
+        if tri:
+            faces = triangulate_mesh(faces)
+        vertex_attributes = tuple(x.reshape(-1, *x.shape[2:]) for x in maps)
+        faces, *vertex_attributes = remove_unused_vertices(faces, *vertex_attributes)
+        return faces, *vertex_attributes
+    elif domain == 'face':
+        faces = build_grid_mesh(height, width, shared_vertices=True).reshape(-1, 4)
+        face_attributes = tuple(x.reshape(-1, *x.shape[2:]) for x in maps)
+        if mask is not None:
+            where_mask = np.where(mask.reshape(-1))
+            faces = faces[where_mask]
+            face_attributes = face_attributes[where_mask]
+        if tri:
+            faces, face_indices = triangulate_mesh(faces, return_face_indices=True)
+            face_attributes = tuple(x[face_indices] for x in face_attributes)
+        return faces, *face_attributes
+    else:
+        raise ValueError(f"Unknown domain type: {domain}. Must be 'vertex' or 'face'.")
 
 
 def build_mesh_from_depth_map(
     depth: ndarray,
-    *other_maps: ndarray,
+    *maps: ndarray,
     intrinsics: ndarray,
     extrinsics: Optional[ndarray] = None,
     atol: Optional[float] = None,
     rtol: Optional[float] = None,
+    domain: Literal['vertex', 'face'] = 'vertex',
     tri: bool = False,
 ) -> Tuple[ndarray, ...]:
     """
@@ -206,30 +275,41 @@ def build_mesh_from_depth_map(
         depth (ndarray): [H, W] depth map
         extrinsics (ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
         intrinsics (ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
-        *other_maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
+        *maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
         atol (float, optional): absolute tolerance of difference. Defaults to None.
         rtol (float, optional): relative tolerance of difference. Defaults to None.
             triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
-        remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
-        return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
-        return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
+        domain (Literal['vertex', 'face'], optional): whether the pixel attributes correspond to vertices or faces. Defaults to 'vertex'.
+        tri (bool, optional): whether to triangulate the mesh. Defaults to False.
 
     ## Returns
         faces (ndarray): [T, 3] faces
         vertices (ndarray): [N, 3] vertices
-        *other_attrs (ndarray): [N, C] vertex attributes
+        *attributes (ndarray): [N, C] vertex attributes or [T, C] face attributes
     """
     height, width = depth.shape
-    uv = uv_map(height, width, dtype=depth.dtype)
+    
     mask = np.isfinite(depth)
+
     if atol is not None or rtol is not None:
         mask = mask & ~depth_map_edge(depth, atol=atol, rtol=rtol, kernel_size=3, mask=mask)
-    uv, depth, other_attrs, faces = build_mesh_from_map(uv, depth, *other_maps, mask=mask)
-    pts = unproject_cv(uv, depth, intrinsics, extrinsics)
+
+    if domain == 'vertex':
+        uv = uv_map(height, width, dtype=depth.dtype)
+        pts_map = unproject_cv(uv, depth, intrinsics, extrinsics)
+        faces, vertices, *attributes = build_mesh_from_map(pts_map, *maps, mask=mask, domain='vertex', tri=False)
+        faces, vertices, *attributes = remove_unused_vertices(faces, vertices, *attributes)
+
+    elif domain == 'face':
+        uv = np.stack(np.meshgrid(np.linspace(0, 1, width + 1), np.linspace(0, 1, height + 1), indexing='xy'), axis=-1)
+        depth = pooling(np.where(mask, depth, np.nan), kernel_size=2, stride=1, padding=1, axis=(0, 1), mode='mean')
+        vertices = unproject_cv(uv, depth, intrinsics, extrinsics).reshape(-1, 3)
+        faces, *attributes = build_mesh_from_map(*maps, mask=mask, domain='face', tri=False)
+        faces, vertices = remove_unused_vertices(faces, vertices)
+        
     if tri:
-        faces = triangulate_mesh(faces, vertices=pts, method='diagonal')
-        faces, pts, *other_attrs = remove_unused_vertices(faces, pts, *other_attrs)
-    return faces, pts, *other_attrs
+        faces = triangulate_mesh(faces, vertices=vertices, method='diagonal')
+    return faces, vertices, *attributes
 
 
 @no_warnings(category=RuntimeWarning)

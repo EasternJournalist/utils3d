@@ -349,6 +349,29 @@ def lite_norm(a: ndarray, ord: int = 2, axis: int = -1) -> ndarray:
         raise ValueError(f"Unsupported norm order {ord}. Supported orders are 1, 2, and inf.")
     
 
+def safe_inv(mat: ndarray, max_retries: int = 4) -> ndarray:
+    """Compute the inverse of a matrix, no matter it is singular or not. If the matrix is singular, use pseudo-inverse instead.
+    If both inverse and pseudo-inverse fail, return a matrix filled with NaNs.
+
+    ## Parameters
+    - `mat` (ndarray): shape `(..., M, M)` input square matrix/matrices to invert.
+
+    ## Returns
+    - `inv_mat` (ndarray): shape `(..., M, M)` inverse of the input matrix/matrices.
+    """
+    for i in range(max_retries):
+        try:
+            return np.linalg.inv(mat)
+        except np.linalg.LinAlgError:
+            eps = 10 ** i * np.finfo(mat.dtype).eps * np.linalg.norm(mat, ord='fro', axis=(-2, -1), keepdims=True) 
+            mat = mat + eps * np.eye(mat.shape[-1])
+    try:
+        return np.linalg.pinv(mat)
+    except np.linalg.LinAlgError:
+        warnings.warn("Matrix inversion and pseudo-inversion both failed. Returning NaN matrix.")
+        return np.full_like(mat, np.nan)
+
+
 def group(labels: ndarray, data: Optional[np.ndarray] = None) -> List[Tuple[ndarray, ndarray]]:
     """
     Split the data into groups based on the provided labels.
