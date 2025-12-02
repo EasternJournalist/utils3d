@@ -491,7 +491,7 @@ def segment_solve_poses_sequential(
             A, t = affine_procrustes(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
             poses[i] = make_affine_matrix(A, t)
 
-        xi = transform_points(yi, np.repeat(np.linalg.inv(poses[i]), lengths, axis=0))
+        xi = transform_points(yi, np.repeat(safe_inv(poses[i]), lengths, axis=0))
 
         # Update accum
         old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.copy(), accum_sqrtw.copy()
