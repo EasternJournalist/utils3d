@@ -135,10 +135,16 @@ __all__ = ["sliding_window",
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
+"lexsort", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"segment_sort", 
+"segment_argsort", 
+"segment_topk", 
+"stack_segments", 
+"segment_multinomial", 
 "mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
@@ -960,6 +966,12 @@ def csr_eliminate_zeros(*args, **kwargs):
     return _call_based_on_args('csr_eliminate_zeros', args, kwargs)
 
 @suppress_traceback
+def lexsort(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.lexsort
+    return _call_based_on_args('lexsort', args, kwargs)
+
+@suppress_traceback
 def rotation_matrix_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.rotation_matrix_2d
@@ -982,6 +994,36 @@ def scale_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.scale_2d
     return _call_based_on_args('scale_2d', args, kwargs)
+
+@suppress_traceback
+def segment_sort(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_sort
+    return _call_based_on_args('segment_sort', args, kwargs)
+
+@suppress_traceback
+def segment_argsort(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_argsort
+    return _call_based_on_args('segment_argsort', args, kwargs)
+
+@suppress_traceback
+def segment_topk(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_topk
+    return _call_based_on_args('segment_topk', args, kwargs)
+
+@suppress_traceback
+def stack_segments(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.stack_segments
+    return _call_based_on_args('stack_segments', args, kwargs)
+
+@suppress_traceback
+def segment_multinomial(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_multinomial
+    return _call_based_on_args('segment_multinomial', args, kwargs)
 
 @suppress_traceback
 def mesh_dual_graph(*args, **kwargs):

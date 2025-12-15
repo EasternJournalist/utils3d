@@ -9,4 +9,5 @@ __all__ = [
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
     'group',
+    'lexsort',
 ]

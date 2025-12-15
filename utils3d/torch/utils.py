@@ -20,7 +20,8 @@ __all__ = [
     'lookup_set',
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
-    'group'
+    'group',
+    'lexsort'
 ]
 
 
@@ -279,3 +280,34 @@ def group(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, T
         data = torch.arange(labels.shape[0], device=labels.device)
     data_groups = torch.split(data[torch.argsort(inv)], counts.tolist())
     return list(zip(group_labels, data_groups))
+
+
+def lexsort(keys: Union[Sequence[torch.Tensor], torch.Tensor], dim: int = -1) -> torch.Tensor:
+    """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.
+    
+    Given multiple sorting keys, lexsort returns an array of integer indices that describes the sort order by multiple keys. 
+    The last key in the sequence is used for the primary sort order, ties are broken by the second-to-last key, and so on.
+
+    Parameters
+    ----
+    - `keys`: (Sequence[Tensor]) sequence of Tensors to sort by, or a single Tensor with shape `(num_keys, ...)`.
+    - `dim`: (int) the dimension to sort along. Note that if `keys` is a single Tensor, `dim=0` refers to the second dimension of `keys`.
+
+    Returns
+    ----
+    - `indices`: (Tensor) the indices that would sort the keys lexicographically along the specified dimension.
+    """
+    if isinstance(keys, torch.Tensor):
+        keys = torch.unbind(keys, dim=0)
+
+    assert len(keys) > 0, "At least one key is required for lexsort"
+    
+    dim = dim % keys[0].ndim
+    for i, key in enumerate(keys):
+        if i == 0:
+            sorted_indices = torch.argsort(key, dim=dim, stable=True)
+        else:
+            key = torch.take_along_dim(key, sorted_indices, dim=dim)
+            sorted_indices = torch.take_along_dim(sorted_indices, torch.argsort(key, dim=dim, stable=True), dim=dim)
+    
+    return sorted_indices

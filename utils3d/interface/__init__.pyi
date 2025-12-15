@@ -139,10 +139,16 @@ __all__ = ["sliding_window",
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
+"lexsort", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"segment_sort", 
+"segment_argsort", 
+"segment_topk", 
+"stack_segments", 
+"segment_multinomial", 
 "mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
@@ -2289,6 +2295,23 @@ def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[T
     utils3d.torch.utils.group
 
 @overload
+def lexsort(keys: Union[Sequence[torch_.Tensor], torch_.Tensor], dim: int = -1) -> torch_.Tensor:
+    """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.
+
+Given multiple sorting keys, lexsort returns an array of integer indices that describes the sort order by multiple keys. 
+The last key in the sequence is used for the primary sort order, ties are broken by the second-to-last key, and so on.
+
+Parameters
+----
+- `keys`: (Sequence[Tensor]) sequence of Tensors to sort by, or a single Tensor with shape `(num_keys, ...)`.
+- `dim`: (int) the dimension to sort along. Note that if `keys` is a single Tensor, `dim=0` refers to the second dimension of `keys`.
+
+Returns
+----
+- `indices`: (Tensor) the indices that would sort the keys lexicographically along the specified dimension."""
+    utils3d.torch.utils.lexsort
+
+@overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
     """Get OpenGL perspective matrix from field of view 
 
@@ -3017,6 +3040,87 @@ Assuming there are `M` difference labels:
 
 `data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
     utils3d.torch.segment_ops.group_as_segments
+
+@overload
+def segment_sort(input: torch_.Tensor, offsets: torch_.Tensor = None, descending: bool = False) -> torch_.return_types.sort:
+    """Sort the data within each segment.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N, ...)` the data to sort.
+- `lengths`: (Tensor) shape `(M,)` the lengths of each segment, alternatively to `offsets`.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets
+- `descending`: (bool) whether to sort in descending order.
+Returns
+----
+- `sorted`: (Tensor) shape `(N, ...)` the sorted data.
+- `indices`: (Tensor) shape `(N, ...)` the indices that would sort the data within each segment."""
+    utils3d.torch.segment_ops.segment_sort
+
+@overload
+def segment_argsort(input: torch_.Tensor, offsets: torch_.Tensor, descending: bool = False) -> torch_.Tensor:
+    """Compute the argsort indices within each segment.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N, ...)` the data to sort. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `descending`: (bool) whether to sort in descending order.
+
+Returns
+----
+- `sorted_indices`: (Tensor) shape `(N, ...)` the indices that would"""
+    utils3d.torch.segment_ops.segment_argsort
+
+@overload
+def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True) -> torch_.return_types.topk:
+    """Compute the top-k values and indices within each segment.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N, ...)` the data to compute top
+- `k`: (int or Tensor) the number of top elements to retrieve from each segment. If a Tensor, it should have shape `(M,)` where `M` is the number of segments.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `largest`: (bool) whether to return the largest or smallest elements.
+Returns
+----
+- `values`: (Tensor) shape `(sum_k, ...)` the top-k values
+- `indices`: (Tensor) shape `(sum_k, ...)` the indices of the top-k values in the original input.
+where `sum_k` is the sum of all k's across segments."""
+    utils3d.torch.segment_ops.segment_topk
+
+@overload
+def stack_segments(input: torch_.Tensor, offsets: torch_.Tensor, max_length: int = None, padding_value: numbers.Number = 0) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Stack segments into a padded tensor.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N, ...)` the data to stack.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `max_length`: (int, optional) the maximum length to pad/truncate each segment to. If None, use the maximum segment length.
+- `padding_value`: (Number) the value to use for padding.
+
+Returns
+----
+- `stacked`: (Tensor) shape `(M, max_length, ...)` the stacked segments, where `max_length` is the maximum segment length.
+- `mask`: (Tensor) shape `(M, max_length)` boolean mask indicating valid entries in `stacked`.
+- `indices`: (Tensor) shape `(M, max_length)` the original indices of"""
+    utils3d.torch.segment_ops.stack_segments
+
+@overload
+def segment_multinomial(weights: torch_.Tensor, offsets: torch_.Tensor, num_samples: torch_.Tensor, eps: float = 1e-12, replacement: bool = False) -> torch_.LongTensor:
+    """Perform multinomial sampling within each segment.
+Parameters
+----
+- `weights`: (Tensor) shape `(N,)` the weights for sampling.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `n`: (int) the number of samples to draw from each segment.
+- `eps`: (float) a small value to avoid division by zero.
+- `replacement`: (bool) whether to sample with replacement.
+Returns
+----
+- `sampled_indices`: (LongTensor) shape `(M * n,)` the sampled indices from each segment."""
+    utils3d.torch.segment_ops.segment_multinomial
 
 @overload
 def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> torch_.Tensor:

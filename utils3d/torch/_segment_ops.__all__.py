@@ -5,4 +5,9 @@ __all__ = [
     'segment_argmax',
     'segment_argmin',
     'group_as_segments',
+    'segment_sort',
+    'segment_argsort',
+    'segment_topk',
+    'stack_segments',
+    'segment_multinomial',
 ]
