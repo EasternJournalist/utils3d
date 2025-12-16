@@ -5,6 +5,7 @@ from numbers import Number
 from ..helpers import no_warnings
 
 from .transforms import make_affine_matrix, transform_points
+from .utils import safe_inv
 
 
 __all__ = [
@@ -105,8 +106,8 @@ def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x:
     R = U @ Vh
     Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
     R = U @ Vh
-    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).eps)
-    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).eps)
+    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
+    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     
     cov_yx, cov_xy = cov_yx / tr_xx[..., None, None], cov_yx.swapaxes(-2, -1) / tr_yy[..., None, None]
     cov_xx, cov_yy = cov_xx / tr_xx[..., None, None], cov_yy / tr_yy[..., None, None]
@@ -115,8 +116,8 @@ def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x:
     I = np.eye(cov_yx.shape[-1], dtype=dtype)
     
     def _step(A, B, R, cov_yx, cov_xy, cov_xx, cov_yy, lam, gamma):
-        A = (cov_yx + lam * R + gamma * B.swapaxes(-2, -1)) @ np.linalg.inv(cov_xx + lam * I + gamma * (B @ B.swapaxes(-2, -1)))
-        B = (cov_xy + lam * R.swapaxes(-2, -1) + gamma * A.swapaxes(-2, -1)) @ np.linalg.inv(cov_yy + lam * I + gamma * (A @ A.swapaxes(-2, -1)))
+        A = (cov_yx + lam * R + gamma * B.swapaxes(-2, -1)) @ safe_inv(cov_xx + lam * I + gamma * (B @ B.swapaxes(-2, -1)))
+        B = (cov_xy + lam * R.swapaxes(-2, -1) + gamma * A.swapaxes(-2, -1)) @ safe_inv(cov_yy + lam * I + gamma * (A @ A.swapaxes(-2, -1)))
         err = np.square(A @ B - I).mean(axis=(-2, -1))
         return A, B, err
     
@@ -359,7 +360,7 @@ def solve_poses_sequential(
             A, t = affine_procrustes(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
             poses[i] = make_affine_matrix(A, t)
 
-        xi = transform_points(yi, np.linalg.inv(poses[i])[..., None, :, :])
+        xi = transform_points(yi, safe_inv(poses[i])[..., None, :, :])
 
         # Update accum
         old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.copy(), accum_sqrtw.copy()
@@ -490,7 +491,7 @@ def segment_solve_poses_sequential(
             A, t = affine_procrustes(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
             poses[i] = make_affine_matrix(A, t)
 
-        xi = transform_points(yi, np.repeat(np.linalg.inv(poses[i]), lengths, axis=0))
+        xi = transform_points(yi, np.repeat(safe_inv(poses[i]), lengths, axis=0))
 
         # Update accum
         old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.copy(), accum_sqrtw.copy()

@@ -80,6 +80,7 @@ __all__ = ["sliding_window",
 "segment_argmax", 
 "segment_argmin", 
 "segment_concatenate", 
+"segment_concat", 
 "group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -136,6 +137,8 @@ __all__ = ["sliding_window",
 "write_intrinsics_as_colmap", 
 "read_obj", 
 "write_obj", 
+"read_ply", 
+"write_ply", 
 "masked_min", 
 "masked_max", 
 "csr_eliminate_zeros", 
@@ -1209,7 +1212,7 @@ NOTE: If there are multiple minimum values in a segment, the index of the first 
     utils3d.numpy.segment_ops.segment_argmin
 
 @overload
-def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]]) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Concatenate a list of segmented arrays into a single segmented array
 
 ## Parameters
@@ -1217,11 +1220,31 @@ def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]]) -
     Each element is a tuple of `(data, offsets)`:
     - `data`: (ndarray) shape `(N_i, *data_dims)` the
     - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+- `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
 
 ## Returns
 - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data"""
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
+    If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same)."""
     utils3d.numpy.segment_ops.segment_concatenate
+
+@overload
+def segment_concat(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """(Alias for segment_concatenate).
+Concatenate a list of segmented arrays into a single segmented array
+
+## Parameters
+- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
+    Each element is a tuple of `(data, offsets)`:
+    - `data`: (ndarray) shape `(N_i, *data_dims)` the
+    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
+- `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+
+## Returns
+- `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
+    If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same)."""
+    utils3d.numpy.segment_ops.segment_concat
 
 @overload
 def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
@@ -1243,7 +1266,7 @@ Assuming there are `M` difference labels:
     utils3d.numpy.segment_ops.group_as_segments
 
 @overload
-def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> numpy_.ndarray:
+def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan', return_face_indices: bool = False) -> numpy_.ndarray:
     """Triangulate a polygonal mesh.
 
 ## Parameters
@@ -1251,8 +1274,11 @@ def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, met
     vertices (ndarray, optional): [N, 3] 3-dimensional vertices.
         If given, the triangulation is performed according to the distance
         between vertices. Defaults to None.
-    backslash (ndarray, optional): [L] boolean array indicating
-        how to triangulate the quad faces. Defaults to None.
+    method (str, optional): triangulation method. Defaults to 'fan'.
+        - 'fan': connect the first vertex to all other vertex pairs
+        - 'strip': create a triangle strip
+        - 'diagonal': for quad faces only, split according to the shorter diagonal
+    return_face_indices (bool, optional): whether to return the original face indices for each triangle. Defaults to False.
 
 ## Returns
     (ndarray): [L * (P - 2), 3] triangular faces"""
@@ -1395,13 +1421,15 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
-def mesh_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray]:
+def mesh_edges(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array')], return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, ForwardRef('csr_array')], ForwardRef('csr_array'), ForwardRef('ndarray')]:
     """Get undirected edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-- `faces` (ndarray): polygon faces
-    - `(F, P)` dense array of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+    - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+    - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+  (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
 - `return_counts` (bool): whether to return the counts of edges
@@ -1413,19 +1441,22 @@ If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_co
 
 - `face2edge` (ndarray | csr_array): mapping from faces to the indices of edges
     - `(F, P)` if input `faces` is a dense array
-    - `(F, E)` if input `faces` is a sparse csr array
+    - `(F, E)` if input `faces` is segmented array
 - `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
 - `counts` (ndarray): `(E,)` counts of each edge"""
     utils3d.numpy.mesh.mesh_edges
 
 @overload
-def mesh_half_edges(faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array], return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, scipy.sparse._csr.csr_array], scipy.sparse._csr.csr_array, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+def mesh_half_edges(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array')], return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, ForwardRef('csr_array')], ForwardRef('csr_array'), numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Get half edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
-- `faces` (ndarray): polygon faces
-    - `(F, P)` dense array of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+    - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+    - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+  (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
 - `return_face2edge` (bool): whether to return the face to edge mapping
 - `return_edge2face` (bool): whether to return the edge to face mapping
 - `return_twin` (bool): whether to return the mapping from one edge to its opposite/twin edge
@@ -1451,14 +1482,16 @@ NOTE: If the mesh is not manifold, `twin`, `next`, and `prev` can point to arbit
     utils3d.numpy.mesh.mesh_half_edges
 
 @overload
-def mesh_connected_components(faces: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def mesh_connected_components(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array'), NoneType] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
     """Compute connected faces of a mesh.
 
 ## Parameters
-- `faces` (ndarray): polygon faces
-    - `(F, P)` dense array of indices, where each face has `P` vertices.
-    - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
-- `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
+- `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+    - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+    - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+  (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
+- `num_vertices` (int, optional): total number of vertices. If not given, only presented vertices in `faces` are considered.
 
 ## Returns
 
@@ -1489,7 +1522,7 @@ If `num_vertices` is None, return:
     utils3d.numpy.mesh.graph_connected_components
 
 @overload
-def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: Union[numpy_.ndarray, scipy.sparse._csr.csr_array, NoneType] = None, edges: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None, self_loop: bool = False) -> scipy.sparse._csr.csr_array:
+def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array'), NoneType] = None, edges: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None, self_loop: bool = False) -> 'csr_array':
     """Get adjacency graph of a mesh.
 
 ## Parameters
@@ -1638,38 +1671,39 @@ This is commonly used in graphics APIs like OpenGL.
     utils3d.numpy.maps.screen_coord_map
 
 @overload
-def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
 ## Parameters
     *maps (ndarray): attribute maps in shape (height, width, [channels])
     mask (ndarray, optional): binary mask of shape (height, width), dtype=bool. Defaults to None.
+    domain (Literal['vertex', 'face'], optional): whether the pixel attributes correspond to vertices or faces. Defaults to 'vertex'.
+    tri (bool, optional): whether to triangulate the mesh. Defaults to False.
 
 ## Returns
     faces (ndarray): faces connecting neighboring pixels. shape (T, 4) if tri is False, else (T, 3)
-    *attributes (ndarray): vertex attributes in corresponding order with input maps"""
+    *attributes (ndarray): vertex or face attributes in corresponding order with input maps"""
     utils3d.numpy.maps.build_mesh_from_map
 
 @overload
-def build_mesh_from_depth_map(depth: numpy_.ndarray, *other_maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = None, tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_depth_map(depth: numpy_.ndarray, *maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
 ## Parameters
     depth (ndarray): [H, W] depth map
     extrinsics (ndarray, optional): [4, 4] extrinsics matrix. Defaults to None.
     intrinsics (ndarray, optional): [3, 3] intrinsics matrix. Defaults to None.
-    *other_maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
+    *maps (ndarray): [H, W, C] vertex attributes. Defaults to None.
     atol (float, optional): absolute tolerance of difference. Defaults to None.
     rtol (float, optional): relative tolerance of difference. Defaults to None.
         triangles with vertices having depth difference larger than atol + rtol * depth will be marked.
-    remove_by_depth (bool, optional): whether to remove triangles with large depth difference. Defaults to True.
-    return_uv (bool, optional): whether to return uv coordinates. Defaults to False.
-    return_indices (bool, optional): whether to return indices of vertices in the original mesh. Defaults to False.
+    domain (Literal['vertex', 'face'], optional): whether the pixel attributes correspond to vertices or faces. Defaults to 'vertex'.
+    tri (bool, optional): whether to triangulate the mesh. Defaults to False.
 
 ## Returns
     faces (ndarray): [T, 3] faces
     vertices (ndarray): [N, 3] vertices
-    *other_attrs (ndarray): [N, C] vertex attributes"""
+    *attributes (ndarray): [N, C] vertex attributes or [T, C] face attributes"""
     utils3d.numpy.maps.build_mesh_from_depth_map
 
 @overload
@@ -2166,6 +2200,80 @@ Material library:
 @overload
 def write_obj(file: Union[str, pathlib._local.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
     utils3d.numpy.io.obj.write_obj
+
+@overload
+def read_ply(file: Union[str, os.PathLike, IO]) -> Dict[str, Dict[str, Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]]]:
+    """Read a PLY file. Supports arbitrary properties, polygonal meshes. Very fast.
+
+Parameters
+----------
+- `file` (str | os.PathLike | IO): Path to the PLY file or a file-like object.
+
+Returns
+-------
+- `data` (Dict): Parsed PLY data. Example
+    ```python
+        {
+            "vertex": {
+                "x": ndarray,
+                "y": ndarray,
+                "z": ndarray,
+                ... # other properties, like "nx", "ny", "nz", "red", "green", "blue", etc.
+            },
+            "face": {
+                "vertex_indices": ndarray for regular lists or (ndarray, offsets ndarray) for irregular lists,
+                ...
+            },
+            ...
+        }
+    ```
+
+Performance
+-------
+
+Tested on a few binary PLY files:
+
+| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` | `meshio` |
+|-----------  |------------| -------- |-----------|-----------| ---------|
+| Point Cloud (V=921,600) | 26.3 ms | 132.8 ms | 36.8 ms | 23.1 ms | 25.8 ms |
+| Triangle Mesh (V=425,949, F=841,148) | 17.4 ms | 144.8 ms | 341.9 ms | 2655.5 ms | 366.8 ms |
+| Polygon Mesh (V=437,645, F=871,414) | 289.5 ms | x | x | 1999.5 ms | 3905.3 ms |"""
+    utils3d.numpy.io.ply.read_ply
+
+@overload
+def write_ply(file: Union[str, os.PathLike, IO], data: Dict[str, Dict[str, Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]]], format_: Literal['ascii', 'binary_little_endian', 'binary_big_endian'] = 'binary_little_endian') -> None:
+    """Write a PLY file. Supports arbitrary properties, polygonal meshes.
+
+Parameters
+----------
+- `file` (str | os.PathLike | IO): Path to the PLY file or a file-like object.
+- `data` (Dict): PLY data to write. The structure is like
+    ```python
+        {
+            "vertex": {
+                "x": ndarray,
+                "y": ndarray,
+                "z": ndarray,
+                ... # other properties, like "nx", "ny", "nz", "red", "green", "blue", etc.
+            },
+            "face": {
+                "vertex_indices": ndarray for regular lists or (ndarray, offsets ndarray) for irregular lists,
+                ...
+            },
+            ...
+        }
+    ```
+- `format` (str): PLY format. Options are 'ascii', 'binary_little_endian', 'binary_big_endian'.
+
+Performance
+-------
+
+| Content Type   |  `utils3d` | `Open3D` | `Trimesh` | `plyfile` | `meshio` |
+|-----------  |------------| -------- |-----------|-----------|---------|
+| Point Cloud (V=921,600)| 45.1 ms | 175.1 ms | 47.7 ms | 9.2 ms | 43.9 ms |
+| Triangle Mesh (V=425,949, F=841,148) | 38.3 ms | 137.9 ms | 41.3 ms | 2063.1 ms | 46.9 ms |
+| Polygon Mesh (V=437,645, F=871,414) | 234.0 ms | x | x | 1653.2 ms | 12360.8 ms |"""
+    utils3d.numpy.io.ply.write_ply
 
 @overload
 def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, dilation: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:

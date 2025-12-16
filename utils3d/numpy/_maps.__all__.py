@@ -3,6 +3,7 @@ __all__ = [
     'uv_map',
     'pixel_coord_map',
     'screen_coord_map',
+    'build_grid_mesh',
     'build_mesh_from_map',
     'build_mesh_from_depth_map',
     'depth_map_edge',

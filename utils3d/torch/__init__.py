@@ -21,3 +21,4 @@ if TYPE_CHECKING:
     from .utils import *
     from .maps import *
     from .rasterization import *
+    from .segment_ops import *

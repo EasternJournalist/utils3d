@@ -1,8 +1,9 @@
 import numpy as np
 from numpy import ndarray
-import scipy.sparse as sp
-from scipy.sparse import csr_array
 from typing import *
+if TYPE_CHECKING:
+    import scipy.sparse as sp
+    from scipy.sparse import csr_array
 
 from .transforms import unproject_cv, angle_between
 from .utils import lookup, csr_matrix_from_dense_indices
@@ -45,7 +46,8 @@ __all__ = [
 def triangulate_mesh(
     faces: ndarray,
     vertices: ndarray = None,
-    method: Literal['fan', 'strip', 'diagonal'] = 'fan'
+    method: Literal['fan', 'strip', 'diagonal'] = 'fan',
+    return_face_indices: bool = False,
 ) -> ndarray:
     """
     Triangulate a polygonal mesh.
@@ -55,8 +57,11 @@ def triangulate_mesh(
         vertices (ndarray, optional): [N, 3] 3-dimensional vertices.
             If given, the triangulation is performed according to the distance
             between vertices. Defaults to None.
-        backslash (ndarray, optional): [L] boolean array indicating
-            how to triangulate the quad faces. Defaults to None.
+        method (str, optional): triangulation method. Defaults to 'fan'.
+            - 'fan': connect the first vertex to all other vertex pairs
+            - 'strip': create a triangle strip
+            - 'diagonal': for quad faces only, split according to the shorter diagonal
+        return_face_indices (bool, optional): whether to return the original face indices for each triangle. Defaults to False.
 
     ## Returns
         (ndarray): [L * (P - 2), 3] triangular faces
@@ -66,8 +71,10 @@ def triangulate_mesh(
     P = faces.shape[-1]
     if method == 'fan':
         i = np.arange(P - 2, dtype=int)
-        loop_indices = np.stack([np.zeros_like(i), i + 1, i + 2], axis=1)
-        return faces[:, loop_indices].reshape((-1, 3))
+        triangle_loop = np.stack([np.zeros_like(i), i + 1, i + 2], axis=1)  # (P - 2, 3)
+        triangles = faces[:, triangle_loop].reshape((-1, 3))
+        if return_face_indices:
+            triangle_face_indices = np.repeat(np.arange(faces.shape[0], dtype=int), len(triangle_loop))
     elif method == 'strip':
         i = np.arange(P - 2, dtype=int)
         j = i // 2
@@ -76,18 +83,26 @@ def triangulate_mesh(
             np.stack([(P - j) % P, j + 1, P - j - 1], axis=1),
             np.stack([j + 1, j + 2, P - j - 1], axis=1)
         )
-        return faces[:, loop_indices].reshape((-1, 3))
+        triangles = faces[:, loop_indices].reshape((-1, 3))
+        if return_face_indices:
+            triangle_face_indices = np.repeat(np.arange(faces.shape[0], dtype=int), len(triangle_loop))
     elif method == 'diagonal':
         assert faces.shape[-1] == 4, "Diagonal-aware method is only supported for quad faces"
         assert vertices is not None, "Vertices must be provided for diagonal method"
         backslash = np.linalg.norm(vertices[faces[:, 0]] - vertices[faces[:, 2]], axis=-1) < \
                         np.linalg.norm(vertices[faces[:, 1]] - vertices[faces[:, 3]], axis=-1)
-        faces = np.where(
+        triangles = np.where(
             backslash[:, None],
             faces[:, [0, 1, 2, 0, 2, 3]],
             faces[:, [0, 1, 3, 3, 1, 2]]
         ).reshape((-1, 3))
-        return faces
+        if return_face_indices:
+            triangle_face_indices = np.repeat(np.arange(faces.shape[0], dtype=int), 2)
+    
+    if return_face_indices:
+        return triangles, triangle_face_indices
+    else:
+        return triangles
 
 
 def compute_face_corner_angles(
@@ -526,17 +541,19 @@ def merge_meshes(meshes: List[Tuple[ndarray, ...]]) -> Tuple[ndarray, ...]:
 
 
 def mesh_edges(
-    faces: Union[ndarray, csr_array], 
+    faces: Union[ndarray, Tuple[ndarray, ndarray], 'csr_array'], 
     return_face2edge: bool = False, 
     return_edge2face: bool = False, 
     return_counts: bool = False
-) -> Tuple[ndarray, Union[ndarray, csr_array], csr_array, ndarray]:
+) -> Tuple[ndarray, Union[ndarray, 'csr_array'], 'csr_array', 'ndarray']:
     """Get undirected edges of a mesh. Optionally return additional mappings.
 
     ## Parameters
-    - `faces` (ndarray): polygon faces
-        - `(F, P)` dense array of indices, where each face has `P` vertices.
-        - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+    - `faces` (ndarray): polygon faces, which can be in 3 formats:
+        - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+        - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+        - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+      (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
     - `return_face2edge` (bool): whether to return the face to edge mapping
     - `return_edge2face` (bool): whether to return the edge to face mapping
     - `return_counts` (bool): whether to return the counts of edges
@@ -548,15 +565,21 @@ def mesh_edges(
 
     - `face2edge` (ndarray | csr_array): mapping from faces to the indices of edges
         - `(F, P)` if input `faces` is a dense array
-        - `(F, E)` if input `faces` is a sparse csr array
+        - `(F, E)` if input `faces` is segmented array
     - `edge2face` (csr_array): `(E, F)` binary sparse CSR matrix of edge to face.
     - `counts` (ndarray): `(E,)` counts of each edge
     """
-    if isinstance(faces, csr_array):
-        edges = np.stack([faces.indices, segment_roll(faces.indices, faces.indptr, -1)], axis=-1) # (nzz, 2)
+    from scipy.sparse import csr_array
+    
+    if isinstance(faces, (tuple, csr_array)):
+        if isinstance(faces, csr_array):
+            vertex_indices, offsets = faces.indices, faces.indptr
+        else:
+            vertex_indices, offsets = faces
+        edges = np.stack([vertex_indices, segment_roll(vertex_indices, offsets, -1)], axis=-1) # (nzz, 2)
     else:
         edges = np.stack([faces, np.roll(faces, -1, axis=-1)], axis=-1).reshape(-1, 2)    # (F * P, 2)
-    
+
     a, b = edges[:, 0], edges[:, 1]
     edges = np.stack([np.minimum(a, b), np.maximum(a, b)], axis=-1)
     
@@ -570,19 +593,19 @@ def mesh_edges(
 
     ret = (edges,)
     if return_face2edge:
-        if isinstance(faces, csr_array):
-            face2edge = csr_array((np.ones_like(inv_map, dtype=bool), inv_map, faces.indptr), shape=(faces.shape[0], edges.shape[0]))
+        if isinstance(faces, tuple):
+            face2edge = csr_array((np.ones_like(inv_map, dtype=bool), inv_map, offsets), shape=(len(offsets) - 1, edges.shape[0]))
         else:
             face2edge = inv_map.reshape(faces.shape)
         ret += (face2edge,)
     if return_edge2face:
-        if isinstance(faces, csr_array):
-            lengths = faces.indptr[1:] - faces.indptr[:-1]
+        if isinstance(faces, (tuple, csr_array)):
+            lengths = np.diff(offsets)
             edge2face = csr_array((
                 np.ones_like(inv_map, dtype=bool),
-                np.repeat(np.arange(faces.shape[0]), lengths)[np.argsort(inv_map)],
+                np.repeat(np.arange(len(lengths)), lengths)[np.argsort(inv_map)],
                 np.concatenate([np.array([0], dtype=counts.dtype), np.cumsum(counts)]),
-            ), shape=(edges.shape[0], faces.shape[0]))
+            ), shape=(edges.shape[0], len(lengths)))
             ret += (edge2face,)
         else:
             edge2face = csr_array((
@@ -597,20 +620,23 @@ def mesh_edges(
 
 
 def mesh_half_edges(
-    faces: Union[ndarray, csr_array], 
+    faces: Union[ndarray, Tuple[ndarray, ndarray], 'csr_array'], 
     return_face2edge: bool = False, 
     return_edge2face: bool = False, 
     return_twin: bool = False,
     return_next: bool = False,
     return_prev: bool = False,
     return_counts: bool = False
-) -> Tuple[ndarray, Union[ndarray, csr_array], csr_array, ndarray, ndarray, ndarray, ndarray]:
+) -> Tuple[ndarray, Union[ndarray, 'csr_array'], 'csr_array', ndarray, ndarray, ndarray, ndarray]:
     """Get half edges of a mesh. Optionally return additional mappings.
 
     ## Parameters
-    - `faces` (ndarray): polygon faces
-        - `(F, P)` dense array of indices, where each face has `P` vertices.
-        - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
+    - `faces` (ndarray): polygon faces, which can be in 3 formats:
+    - `faces` (ndarray): polygon faces, which can be in 3 formats:
+        - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+        - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+        - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+      (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
     - `return_face2edge` (bool): whether to return the face to edge mapping
     - `return_edge2face` (bool): whether to return the edge to face mapping
     - `return_twin` (bool): whether to return the mapping from one edge to its opposite/twin edge
@@ -634,8 +660,14 @@ def mesh_half_edges(
 
     NOTE: If the mesh is not manifold, `twin`, `next`, and `prev` can point to arbitrary one of the candidates.
     """
-    if isinstance(faces, csr_array):
-        edges = np.stack([faces.indices, segment_roll(faces.indices, faces.indptr, -1)], axis=-1) # (nzz, 2)
+    from scipy.sparse import csr_array
+
+    if isinstance(faces, (tuple, csr_array)):
+        if isinstance(faces, csr_array):
+            vertex_indices, offsets = faces.indices, faces.indptr
+        else:
+            vertex_indices, offsets = faces
+        edges = np.stack([vertex_indices, segment_roll(vertex_indices, offsets, -1)], axis=-1) # (nzz, 2)
     else:
         edges = np.stack([faces, np.roll(faces, -1, axis=-1)], axis=-1).reshape(-1, 2)    # (F * P, 2)
     
@@ -652,20 +684,23 @@ def mesh_half_edges(
 
     ret = (edges,)
     if return_face2edge or return_next or return_prev:
-        if isinstance(faces, csr_array):
-            face2edge = csr_array((np.ones_like(inv_map, dtype=bool), inv_map, faces.indptr), shape=(faces.shape[0], edges.shape[0]))
+        if isinstance(faces, (tuple, csr_array)):
+            face2edge = csr_array(
+                (np.ones_like(inv_map, dtype=bool), inv_map, offsets), 
+                shape=(len(offsets) - 1, edges.shape[0])
+            )
         else:
             face2edge = inv_map.reshape(faces.shape)
         if return_face2edge:
             ret += (face2edge,)
     if return_edge2face:
-        if isinstance(faces, csr_array):
-            lengths = faces.indptr[1:] - faces.indptr[:-1]
+        if isinstance(faces, (tuple, csr_array)):
+            lengths = np.diff(offsets)
             edge2face = csr_array((
                 np.ones_like(inv_map, dtype=bool),
-                np.repeat(np.arange(faces.shape[0]), lengths)[np.argsort(inv_map)],
+                np.repeat(np.arange(len(lengths)), lengths)[np.argsort(inv_map)],
                 np.concatenate([np.array([0], dtype=counts.dtype), np.cumsum(counts, axis=0)]),
-            ), shape=(edges.shape[0], faces.shape[0]))
+            ), shape=(edges.shape[0], len(lengths)))
             ret += (edge2face,)
         else:
             edge2face = csr_array((
@@ -698,17 +733,19 @@ def mesh_half_edges(
 
 
 def mesh_connected_components(
-    faces: Optional[ndarray] = None,
+    faces: Optional[Union[ndarray, Tuple[ndarray, ndarray], 'csr_array']] = None,
     num_vertices: Optional[int] = None
 ) -> Union[ndarray, Tuple[ndarray, ndarray]]:
     """
     Compute connected faces of a mesh.
 
     ## Parameters
-    - `faces` (ndarray): polygon faces
-        - `(F, P)` dense array of indices, where each face has `P` vertices.
-        - `(F, V)` binary sparse csr array of indices, each row corresponds to the vertices of a face.
-    - `num_vertices` (int, optional): total number of vertices. If given, the returned components will include all vertices. Defaults to None.
+    - `faces` (ndarray): polygon faces, which can be in 3 formats:
+        - Regular mesh in regular array: `(F, P)`, where each face has `P` vertices.
+        - Irregular mesh in segmented array: tuple of `(vertex_indices, offsets)`, where vertex_indices[offsets[i]:offsets[i+1]] are the vertex indices of face i. 
+        - Irregular mesh in CSR array: `(F, V)` binary CSR array of indices, each row corresponds to the vertices of a face.
+      (Note that segmented array is almost equivalent to csr array: `vertex_indices` ~ `faces.indices`, `offsets` ~ `faces.indptr`.)
+    - `num_vertices` (int, optional): total number of vertices. If not given, only presented vertices in `faces` are considered.
 
     ## Returns
 
@@ -778,11 +815,11 @@ def mesh_adjacency_graph(
         'face2edge2face',
         'face2vertex2face',
     ],
-    faces: Optional[Union[ndarray, csr_array]] = None,
+    faces: Optional[Union[ndarray, Tuple[ndarray, ndarray], 'csr_array']] = None,
     edges: Optional[ndarray] = None,
     num_vertices: Optional[int] = None,
     self_loop: bool = False,
-) -> csr_array:
+) -> 'csr_array':
     """
     Get adjacency graph of a mesh.
     
@@ -810,11 +847,14 @@ def mesh_adjacency_graph(
     ## Returns
     - `graph` (csr_array): adjacency graph in csr format
     """
+    from scipy.sparse import csr_array
+
     if isinstance(faces, csr_array):
         if num_vertices is None:
             num_vertices = faces.shape[1]
         else:
             assert num_vertices == faces.shape[1], f'num_vertices ({num_vertices}) does not match csr array faces.shape[1] ({faces.shape[1]})'
+    
     if adjacency == 'vertex2edge':
         assert edges is not None and num_vertices is not None
         return mesh_adjacency_graph('edge2vertex', edges=edges, num_vertices=num_vertices).transpose().tocsr()
@@ -828,8 +868,9 @@ def mesh_adjacency_graph(
         return mesh_adjacency_graph('face2edge', faces=faces, edges=edges).transpose().tocsr() 
     elif adjacency == 'face2edge':
         assert edges is not None and faces is not None
-        if isinstance(faces, csr_array):
-            face_edges = np.stack([faces.indices, segment_roll(faces.indices, faces.indptr, -1)], axis=-1) # (nzz, 2)
+        if isinstance(faces, (tuple, csr_array)):
+            vertex_indices, offsets = faces if isinstance(faces, tuple) else (faces.indices, faces.indptr)
+            face_edges = np.stack([vertex_indices, segment_roll(vertex_indices, offsets, -1)], axis=-1) # (nzz, 2)
         else:
             face_edges = np.stack([faces, np.roll(faces, -1, axis=-1)], axis=-1).reshape(-1, 2)    # (F * P, 2)
         a, b = face_edges[:, 0], face_edges[:, 1]
@@ -838,12 +879,18 @@ def mesh_adjacency_graph(
         return csr_array((
             np.ones_like(indices, dtype=bool),
             indices, 
-            faces.indptr if isinstance(faces, csr_array) else np.arange(0, faces.size + 1, faces.shape[1])
+            offsets if isinstance(faces, (tuple, csr_array)) else np.arange(0, faces.size + 1, faces.shape[1])
         ), shape=(faces.shape[0], edges.shape[0])).tocsr()
     elif adjacency == 'face2vertex':
         assert faces is not None
         if isinstance(faces, csr_array):
             return faces
+        elif isinstance(faces, tuple):
+            assert num_vertices is not None
+            return csr_array(
+                (np.ones_like(faces[0], dtype=bool), vertex_indices, offsets), 
+                shape=(len(offsets) - 1, num_vertices)
+            )
         else:
             assert num_vertices is not None
             return csr_matrix_from_dense_indices(faces, num_vertices)
@@ -893,10 +940,17 @@ def mesh_adjacency_graph(
     elif adjacency == 'face2vertex2face':
         if isinstance(faces, csr_array):
             f2v = faces
+        elif isinstance(faces, tuple):
+            vertex_indices, offsets = faces
+            unique_vertices, vertex_indices = np.unique(vertex_indices, return_inverse=True)
+            f2v = csr_array(
+                (np.ones_like(vertex_indices, dtype=bool), vertex_indices, offsets), 
+                shape=(len(offsets) - 1, len(unique_vertices))
+            )
         else:
-            vertices_ids, inv = np.unique(faces.reshape(-1), return_inverse=True)
+            unique_vertices, inv = np.unique(faces.reshape(-1), return_inverse=True)
             faces = inv.reshape(-1, faces.shape[1])
-            f2v = csr_matrix_from_dense_indices(faces, len(vertices_ids))
+            f2v = csr_matrix_from_dense_indices(faces, len(unique_vertices))
         f2v2f = (f2v @ f2v.transpose()).tocsr()
         if not self_loop:
             f2v2f.setdiag(0)
