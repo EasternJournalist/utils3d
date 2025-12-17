@@ -4,10 +4,13 @@ __all__ = [
     'segment_take',
     'segment_argmax',
     'segment_argmin',
+    'segment_median',
+    'segment_sum',
     'group_as_segments',
     'segment_sort',
     'segment_argsort',
     'segment_topk',
     'stack_segments',
     'segment_multinomial',
+    'segment_combinations',
 ]

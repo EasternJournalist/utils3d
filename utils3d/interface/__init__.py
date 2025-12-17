@@ -143,11 +143,14 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"segment_median", 
+"segment_sum", 
 "segment_sort", 
 "segment_argsort", 
 "segment_topk", 
 "stack_segments", 
 "segment_multinomial", 
+"segment_combinations", 
 "mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
@@ -1017,6 +1020,18 @@ def scale_2d(*args, **kwargs):
     return _call_based_on_args('scale_2d', args, kwargs)
 
 @suppress_traceback
+def segment_median(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_median
+    return _call_based_on_args('segment_median', args, kwargs)
+
+@suppress_traceback
+def segment_sum(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_sum
+    return _call_based_on_args('segment_sum', args, kwargs)
+
+@suppress_traceback
 def segment_sort(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.segment_sort
@@ -1045,6 +1060,12 @@ def segment_multinomial(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.segment_multinomial
     return _call_based_on_args('segment_multinomial', args, kwargs)
+
+@suppress_traceback
+def segment_combinations(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_combinations
+    return _call_based_on_args('segment_combinations', args, kwargs)
 
 @suppress_traceback
 def mesh_dual_graph(*args, **kwargs):

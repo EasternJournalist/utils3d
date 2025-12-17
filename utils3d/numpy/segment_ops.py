@@ -18,109 +18,143 @@ __all__ = [
 
 
 
-def segment_roll(data: ndarray, offsets: ndarray, shift: int) -> ndarray:
+def segment_roll(data: ndarray, offsets: ndarray, shift: int, axis: int = 0) -> ndarray:
     """Roll the data within each segment.
+
+    Parameters
+    ------
+    - `data`: (ndarray).
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data. `M` is the number of segments. Starts with 0 and end with `data.shape[axis]`.
+    - `shift`: (int) the number of places by which elements are shifted. If negative, shift to left.
+    - `axis`: (int) the segment axis to roll along. Default is 0.
+
+    Returns
+    -------
+    - `data`: (ndarray) the rolled data, same shape as input.
     """
     lengths = np.diff(offsets)
     start = np.repeat(offsets[:-1], lengths)
-    elem_indices = start + (np.arange(data.shape[0], dtype=offsets.dtype) - start - shift) % np.repeat(lengths, lengths)
-    data = data[elem_indices]
+    elem_indices = start + (np.arange(data.shape[axis], dtype=offsets.dtype) - start - shift) % np.repeat(lengths, lengths)
+    data = np.take(data, elem_indices, axis=axis)
     return data
 
 
-def segment_take(data: ndarray, offsets: ndarray, taking: ndarray) -> Tuple[ndarray, ndarray]:
+def segment_take(data: ndarray, offsets: ndarray, taking: ndarray, axis: int = 0) -> Tuple[ndarray, ndarray]:
     """Take some segments from a segmented array
 
-    ## Parameters
-    - `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
-    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+    Parameters
+    ------
+    - `data`: (ndarray) the segmented data.
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data. `M` is the number of segments. Starts with 0 and end with `data.shape[axis]`.
     - `taking`: (ndarray) the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
+    - `axis`: (int) the segment axis to take along. Default is 0. Other axes are treated as batch dimensions.
 
-    ## Returns
-    - `new_data`: (ndarray) shape `(N_new, *data_dims)`
-    - `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data
+    Returns
+    -------
+    - `new_data`: (ndarray) the new segmented data.
+    - `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data. `K` is the number of taken segments.
     """
     lengths = np.diff(offsets)
     new_lengths = lengths[taking]
     new_offsets = np.concatenate([[0], np.cumsum(new_lengths)])
     indices = np.arange(new_offsets[-1]) + np.repeat(offsets[taking] - new_offsets[:-1], new_lengths)
-    new_data = data[indices]
+    new_data = np.take(data, indices, axis=axis)
     return new_data, new_offsets
 
 
-def segment_concatenate(segments: List[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
-    """Concatenate a list of segmented arrays into a single segmented array
+def segment_concatenate(segments: Sequence[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
+    """Concatenate segmented arrays within each segment. All numbers of segments remain the same.
 
-    ## Parameters
-    - `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
-        Each element is a tuple of `(data, offsets)`:
-        - `data`: (ndarray) shape `(N_i, *data_dims)` the
-        - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
-    - `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+    Parameters
+    ------
+    - `segments`: (Sequence[Tuple[ndarray, ndarray]]) A sequence of segmented arrays:
+        - `data`: (ndarray) shape `(..., N_i, ...)`
+        - `offsets`: (ndarray) shape `(M + 1,)` segment offsets.
+    - `axis`: (int) the segment axis.
 
-    ## Returns
-    - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
-        If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same).
+    Returns
+    -------
+    - `data`: (ndarray) shape `(..., sum(N_i), ...)` the concatenated data
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data.
     """
-    if axis == 0:
-        data_list = []
-        offsets_list = [np.array([0])]
-        for data, offsets in segments:
-            if len(offsets) > 1:
-                data_list.append(data)
-                offsets_list.append(offsets[1:] + offsets_list[-1][-1])
-        new_data = np.concatenate(data_list, axis=0)
-        new_offsets = np.concatenate(offsets_list, axis=0)
-    else:
-        if len(segments) == 0:
-            return np.array([]), np.array([0])
-        M, K = len(segments[0][1]) - 1, len(segments)       # number of segments, number of inputs
-        assert all(M + 1 == len(seg[1]) for seg in segments), "All segments must have the same number of segments when concatenating along axis 1."
-        data_list, offsets_list = zip(*segments)
-        input_data = np.concatenate(data_list, axis=0)      # (sum(N_i), *data_dims)
-        lengths_concat_0 = np.diff(np.stack(offsets_list, axis=0), axis=1).reshape(-1)         # (K, M)
-        lengths_concat_1 = lengths_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1)            # (M, K)
-        offsets_concat_0 = np.cumsum(lengths_concat_0.reshape(-1), axis=0)                    # (K * M,)
-        offsets_concat_1 = np.cumsum(lengths_concat_1.reshape(-1), axis=0)     # (M * K,)
+    if len(segments) == 0:
+        return np.array([]), np.array([0])
+    M, K = len(segments[0][1]) - 1, len(segments)       # number of segments, number of inputs
+    assert all(M + 1 == len(seg[1]) for seg in segments), "All segments must have the same number of segments when concatenating along axis 1."
+    data_list, offsets_list = zip(*segments)
+    input_data = np.concatenate(data_list, axis=axis)                               # (..., sum(N_i), ...)
+    lengths_concat_0 = np.diff(np.stack(offsets_list, axis=0), axis=1).reshape(-1)  # (K, M)
+    lengths_concat_1 = lengths_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1)    # (M, K)
+    offsets_concat_0 = np.cumsum(lengths_concat_0.reshape(-1), axis=0)              # (K * M,)
+    offsets_concat_1 = np.cumsum(lengths_concat_1.reshape(-1), axis=0)              # (M * K,)
 
-        indices = np.arange(input_data.shape[0]) + np.repeat(offsets_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1) - offsets_concat_1, lengths_concat_1.reshape(-1))
-        new_data = input_data[indices]
-        new_lengths = np.sum(lengths_concat_0.reshape(K, M), axis=0)
-        new_offsets = np.concatenate([[0], np.cumsum(new_lengths)])
+    indices = np.arange(input_data.shape[0]) + np.repeat(offsets_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1) - offsets_concat_1, lengths_concat_1.reshape(-1))
+    new_data = np.take(input_data, indices, axis=axis)
+    new_lengths = np.sum(lengths_concat_0.reshape(K, M), axis=0)
+    new_offsets = np.concatenate([[0], np.cumsum(new_lengths)])
         
     return new_data, new_offsets
 
 
-def segment_concat(segments: List[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
+def segment_concat(segments: Sequence[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
     """(Alias for segment_concatenate).
-    Concatenate a list of segmented arrays into a single segmented array
+    Concatenate segmented arrays within each segment.
 
-    ## Parameters
-    - `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
-        Each element is a tuple of `(data, offsets)`:
-        - `data`: (ndarray) shape `(N_i, *data_dims)` the
-        - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
-    - `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+    Parameters
+    ------
+    - `segments`: (Sequence[Tuple[ndarray, ndarray]]) A sequence of segmented arrays:
+        - `data`: (ndarray) shape `(..., N_i, ...)`
+        - `offsets`: (ndarray) shape `(M + 1,)` segment offsets.
+    - `axis`: (int) the segment axis.
 
-    ## Returns
+    Returns
+    -------
     - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
-        If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same).
+    - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data.
     """
     return segment_concatenate(segments, axis=axis)
+
+
+def segment_chain(segments: Sequence[Tuple[ndarray, ndarray]], axis: int = 0) -> Tuple[ndarray, ndarray]:
+    """Concatenate segmented arrays in sequence. The number of segments are summed.
+
+    Parameters
+    ------
+    - `segments`: (Sequence[Tuple[ndarray, ndarray]]) A sequence of segmente arrays:
+        - `data`: (ndarray) shape `(..., N_i, ...)`
+        - `offsets`: (ndarray) shape `(M + 1,)` segment offsets.
+    - `axis`: (int) the segment axis.
+
+    Returns
+    -------
+    - `data`: (ndarray) shape `(..., sum(N_i), ...)` the chain-concatenated data
+    - `offsets`: (ndarray) shape `(sum(M_i) + 1,)` the offsets of the concatenated segmented data.
+    """
+
+    data_list = []
+    offsets_list = [np.array([0])]
+    for data, offsets in segments:
+        if len(offsets) > 1:
+            data_list.append(data)
+            offsets_list.append(offsets[1:] + offsets_list[-1][-1])
+    new_data = np.concatenate(data_list, axis=axis)
+    new_offsets = np.concatenate(offsets_list, axis=0)
+
+    return new_data, new_offsets
 
 
 def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tuple[ndarray, ndarray, ndarray]:
     """
     Group as segments by labels
 
-    ## Parameters
+    Parameters
+    -----
     - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
     - `data` (ndarray, optional): shape `(N, *data_dims)` array.
         If None, return the indices in each group instead.
 
-    ## Returns
+    Returns
+    -------
     Assuming there are `M` difference labels:
 
     - `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
@@ -134,43 +168,58 @@ def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tup
     if data is None:
         data = np.argsort(inv)
     else:
-        data = data[np.argsort(inv)]
+        data = np.take(data, np.argsort(inv), axis=0)
     return group_labels, data, offsets
 
 
-def segment_argmax(data: ndarray, offsets: ndarray) -> ndarray:
+def segment_argmax(data: ndarray, offsets: ndarray, axis: int = 0) -> ndarray:
     """Compute the argmax of each segment in the segmented data.
 
-    ## Parameters
-    - `data`: (ndarray) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+    Parameters
+    -----
+    - `data`: (ndarray). shape `(..., N, ...)`. `N` is the segment dimension. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
     - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+    - `axis`: (int) the segment axis to compute along. Default is 0.
 
-    ## Returns
-    - `argmax_indices`: (ndarray) shape `(M, ...)` the argmax indices of each segment along the first dimension.
-    NOTE: If there are multiple maximum values in a segment, the index of the first one is returned.
+    Returns
+    -------
+    - `argmax_indices`: (ndarray) shape `(..., M, ...)` the argmax indices of each segment along the first dimension.
+    
+    NOTE: If there are multiple maximum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned.
     """
-    seg_maxs = np.maximum.reduceat(data, offsets[:-1], axis=0)
     lengths = np.diff(offsets)
-    is_max_mask = data == np.repeat(seg_maxs, lengths, axis=0)
-    candidate_indices = np.where(is_max_mask, np.arange(data.shape[0])[(..., *((None,) * (data.ndim - 1)))], data.shape[0])
-    argmax_indices = np.minimum.reduceat(candidate_indices, offsets[:-1], axis=0)
-    return argmax_indices
+    seg_maxs = np.maximum.reduceat(data, offsets[:-1], axis=axis)
+    seg_ids = np.repeat(np.arange(len(offsets) - 1), lengths)
+    where_in_data = np.where(data == seg_maxs.take(seg_ids, axis=axis))
+    where_in_argmax = where_in_data[:axis] + (seg_ids[where_in_data[axis]],) + where_in_data[axis + 1:]
+    value_in_argmax = where_in_data[axis]
+    argmax = np.full(data.shape[:axis] + (len(offsets) - 1,) + data.shape[axis + 1:], fill_value=np.iinfo(np.int64).max, dtype=np.int64)
+    np.minimum.at(argmax, where_in_argmax, value_in_argmax)
+    argmax[argmax == np.iinfo(np.int64).max] = -1
+    return argmax
 
 
-def segment_argmin(data: ndarray, offsets: ndarray) -> ndarray:
+def segment_argmin(data: ndarray, offsets: ndarray, axis: int = 0) -> ndarray:
     """Compute the argmin of each segment in the segmented data.
 
-    ## Parameters
-    - `data`: (ndarray) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+    Parameters
+    -----
+    - `data`: (ndarray) shape `(..., N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
     - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+    - `axis`: (int) the segment axis to compute along. Default is 0.
 
-    ## Returns
-    - `argmin_indices`: (ndarray) shape `(M, ...)` the argmin indices of each segment along the first dimension.
+    Returns
+    -----
+    - `argmin_indices`: (ndarray) shape `(..., M, ...)` the argmin indices of each segment along the first dimension.
     NOTE: If there are multiple minimum values in a segment, the index of the first one is returned.
     """
-    seg_mins = np.minimum.reduceat(data, offsets[:-1], axis=0)
     lengths = np.diff(offsets)
-    is_min_mask = data == np.repeat(seg_mins, lengths, axis=0)
-    candidate_indices = np.where(is_min_mask, np.arange(data.shape[0])[(..., *((None,) * (data.ndim - 1)))], data.shape[0])
-    argmin_indices = np.minimum.reduceat(candidate_indices, offsets[:-1], axis=0)
-    return argmin_indices
+    seg_mins = np.minimum.reduceat(data, offsets[:-1], axis=axis)
+    seg_ids = np.repeat(np.arange(len(offsets) - 1), lengths)
+    where_in_data = np.where(data == seg_mins.take(seg_ids, axis=axis))
+    where_in_argmin = where_in_data[:axis] + (seg_ids[where_in_data[axis]],) + where_in_data[axis + 1:]
+    value_in_argmin = where_in_data[axis]
+    argmin = np.full(data.shape[:axis] + (len(offsets) - 1,) + data.shape[axis + 1:], fill_value=np.iinfo(np.int64).max, dtype=np.int64)
+    np.minimum.at(argmin, where_in_argmin, value_in_argmin)
+    argmin[argmin == np.iinfo(np.int64).max] = -1
+    return argmin

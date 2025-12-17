@@ -657,7 +657,7 @@ def dump_ply_data_binary(
                     # scalar property
                     prop_data_bytes = prop_data.astype(data_np_type).view(np.uint8).reshape(-1)
                     prop_data_bytes_list.append((prop_data_bytes, np.arange(0, prop_data_bytes.size + 1, item_size)))
-            elem_data_bytes, _ = segment_concatenate(prop_data_bytes_list, axis=1)
+            elem_data_bytes, _ = segment_concatenate(prop_data_bytes_list)
             yield elem_data_bytes.data
 
 

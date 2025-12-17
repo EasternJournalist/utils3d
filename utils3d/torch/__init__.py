@@ -16,9 +16,10 @@ __all__ = list(itertools.chain(*module_members.values()))
 
 
 if TYPE_CHECKING:
-    from .transforms import *
-    from .mesh import *
     from .utils import *
+    from .transforms import *
+    from .segment_ops import *
+    from .mesh import *
     from .maps import *
     from .rasterization import *
     from .segment_ops import *

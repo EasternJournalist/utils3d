@@ -147,11 +147,14 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"segment_median", 
+"segment_sum", 
 "segment_sort", 
 "segment_argsort", 
 "segment_topk", 
 "stack_segments", 
 "segment_multinomial", 
+"segment_combinations", 
 "mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
@@ -3129,6 +3132,37 @@ NOTE: If there are multiple minimum values in a segment, the index of the first 
     utils3d.torch.segment_ops.segment_argmin
 
 @overload
+def segment_median(input: torch_.Tensor, offsets: torch_.Tensor) -> torch_.return_types.median:
+    """Compute the median of each segment.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N, ...)` the data to compute median from. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+
+Returns
+----
+- `medians`: (Tensor) shape `(M, ...)` the median of each segment.
+- `indices`: (Tensor) shape `(M, ...)` the indices of the median values in the original input."""
+    utils3d.torch.segment_ops.segment_median
+
+@overload
+def segment_sum(input: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+    """Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32.
+
+NOTE: Silently assumes that the input does not contain negative lengths.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N, ...)` the data to compute sum from. If `input` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+
+Returns
+----
+- `segment_sums`: (Tensor) shape `(M, ...)` the sum of each segment along the first dimension."""
+    utils3d.torch.segment_ops.segment_sum
+
+@overload
 def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Group as segments by labels
 
@@ -3183,6 +3217,7 @@ Returns
 @overload
 def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True) -> torch_.return_types.topk:
     """Compute the top-k values and indices within each segment.
+NOTE: if the length of a segment is less than k, the returns will contain all elements in that segment but fewer than k elements.
 
 Parameters
 ----
@@ -3229,6 +3264,23 @@ Returns
 ----
 - `sampled_indices`: (LongTensor) shape `(M * n,)` the sampled indices from each segment."""
     utils3d.torch.segment_ops.segment_multinomial
+
+@overload
+def segment_combinations(input: torch_.Tensor, offsets: torch_.Tensor, r: int = 2, with_replacement: bool = False) -> torch_.Tensor:
+    """Generate all combinations of elements within each segment. Vectorized implementation.
+
+Parameters
+----
+- `input`: (Tensor) shape `(N,)` the data to generate combinations from. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `r`: (int) the number of elements in each combination.
+- `with_replacement`: (bool) whether to allow repeated elements in a combination.
+
+Returns
+----
+- `combinations`: (Tensor) shape `(K, r,)` the combinations from all segments, where `K` is the total number of combinations across all segments.
+- `combination_offsets`: (Tensor) shape `(M + 1,)` the offsets of combinations for each segment. NOTE: may contain zero-length segments if a segment has less than `r` elements."""
+    utils3d.torch.segment_ops.segment_combinations
 
 @overload
 def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> torch_.Tensor:
