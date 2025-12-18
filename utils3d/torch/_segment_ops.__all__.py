@@ -6,6 +6,7 @@ __all__ = [
     'segment_argmin',
     'segment_median',
     'segment_sum',
+    'segment_cumsum',
     'group_as_segments',
     'segment_sort',
     'segment_argsort',
@@ -13,4 +14,5 @@ __all__ = [
     'stack_segments',
     'segment_multinomial',
     'segment_combinations',
+    'segment_searchsorted',
 ]

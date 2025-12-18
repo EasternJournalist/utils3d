@@ -10,4 +10,9 @@ __all__ = [
     'csr_eliminate_zeros',
     'group',
     'lexsort',
+    'index_reduce',
+    'index_reduce_',
+    'scatter_argmax',
+    'scatter_argmin',
+    'reverse_permutation',
 ]

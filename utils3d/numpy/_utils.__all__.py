@@ -8,4 +8,5 @@ __all__ = [
     'lookup_set',
     'group',
     'csr_matrix_from_dense_indices',
+    'reverse_permutation',
 ]

@@ -185,13 +185,16 @@ def segment_argmax(data: ndarray, offsets: ndarray, axis: int = 0) -> ndarray:
     -------
     - `argmax_indices`: (ndarray) shape `(..., M, ...)` the argmax indices of each segment along the first dimension.
     
-    NOTE: If there are multiple maximum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned.
+    Notes
+    -----
+    If there are multiple maximum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned.
     """
+    axis = axis % data.ndim
     lengths = np.diff(offsets)
     seg_maxs = np.maximum.reduceat(data, offsets[:-1], axis=axis)
     seg_ids = np.repeat(np.arange(len(offsets) - 1), lengths)
     where_in_data = np.where(data == seg_maxs.take(seg_ids, axis=axis))
-    where_in_argmax = where_in_data[:axis] + (seg_ids[where_in_data[axis]],) + where_in_data[axis + 1:]
+    where_in_argmax = (*where_in_data[:axis], seg_ids[where_in_data[axis]], *where_in_data[axis + 1:])
     value_in_argmax = where_in_data[axis]
     argmax = np.full(data.shape[:axis] + (len(offsets) - 1,) + data.shape[axis + 1:], fill_value=np.iinfo(np.int64).max, dtype=np.int64)
     np.minimum.at(argmax, where_in_argmax, value_in_argmax)
@@ -211,13 +214,17 @@ def segment_argmin(data: ndarray, offsets: ndarray, axis: int = 0) -> ndarray:
     Returns
     -----
     - `argmin_indices`: (ndarray) shape `(..., M, ...)` the argmin indices of each segment along the first dimension.
-    NOTE: If there are multiple minimum values in a segment, the index of the first one is returned.
+    
+    Notes
+    -----
+    If there are multiple minimum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned.
     """
+    axis = axis % data.ndim
     lengths = np.diff(offsets)
     seg_mins = np.minimum.reduceat(data, offsets[:-1], axis=axis)
     seg_ids = np.repeat(np.arange(len(offsets) - 1), lengths)
     where_in_data = np.where(data == seg_mins.take(seg_ids, axis=axis))
-    where_in_argmin = where_in_data[:axis] + (seg_ids[where_in_data[axis]],) + where_in_data[axis + 1:]
+    where_in_argmin = (*where_in_data[:axis], seg_ids[where_in_data[axis]], *where_in_data[axis + 1:])
     value_in_argmin = where_in_data[axis]
     argmin = np.full(data.shape[:axis] + (len(offsets) - 1,) + data.shape[axis + 1:], fill_value=np.iinfo(np.int64).max, dtype=np.int64)
     np.minimum.at(argmin, where_in_argmin, value_in_argmin)

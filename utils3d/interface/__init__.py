@@ -103,6 +103,7 @@ __all__ = ["sliding_window",
 "uv_map", 
 "pixel_coord_map", 
 "screen_coord_map", 
+"build_grid_mesh", 
 "build_mesh_from_map", 
 "build_mesh_from_depth_map", 
 "depth_map_edge", 
@@ -139,12 +140,17 @@ __all__ = ["sliding_window",
 "masked_max", 
 "csr_eliminate_zeros", 
 "lexsort", 
+"index_reduce", 
+"index_reduce_", 
+"scatter_argmax", 
+"scatter_argmin", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
 "segment_median", 
 "segment_sum", 
+"segment_cumsum", 
 "segment_sort", 
 "segment_argsort", 
 "segment_topk", 
@@ -780,6 +786,12 @@ def screen_coord_map(*args, **kwargs):
     return _call_based_on_args('screen_coord_map', args, kwargs)
 
 @suppress_traceback
+def build_grid_mesh(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.build_grid_mesh, None
+    return _call_based_on_args('build_grid_mesh', args, kwargs)
+
+@suppress_traceback
 def build_mesh_from_map(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.build_mesh_from_map, utils3d.torch.build_mesh_from_map
@@ -996,6 +1008,30 @@ def lexsort(*args, **kwargs):
     return _call_based_on_args('lexsort', args, kwargs)
 
 @suppress_traceback
+def index_reduce(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.index_reduce
+    return _call_based_on_args('index_reduce', args, kwargs)
+
+@suppress_traceback
+def index_reduce_(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.index_reduce_
+    return _call_based_on_args('index_reduce_', args, kwargs)
+
+@suppress_traceback
+def scatter_argmax(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.scatter_argmax
+    return _call_based_on_args('scatter_argmax', args, kwargs)
+
+@suppress_traceback
+def scatter_argmin(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.scatter_argmin
+    return _call_based_on_args('scatter_argmin', args, kwargs)
+
+@suppress_traceback
 def rotation_matrix_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.rotation_matrix_2d
@@ -1030,6 +1066,12 @@ def segment_sum(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.segment_sum
     return _call_based_on_args('segment_sum', args, kwargs)
+
+@suppress_traceback
+def segment_cumsum(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_cumsum
+    return _call_based_on_args('segment_cumsum', args, kwargs)
 
 @suppress_traceback
 def segment_sort(*args, **kwargs):

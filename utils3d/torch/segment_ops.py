@@ -2,12 +2,13 @@ from typing import *
 from numbers import Number
 from itertools import chain
 from numbers import Integral
+import math
 
 import torch
 from torch import Tensor
 import torch.nn.functional as F
 
-from .utils import lexsort
+from .utils import lexsort, index_reduce_, reverse_permutation
 
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     'segment_argmin',
     'segment_median',
     'segment_sum',
+    'segment_cumsum',
     'group_as_segments',
     'segment_sort',
     'segment_argsort',
@@ -24,6 +26,7 @@ __all__ = [
     'stack_segments',
     'segment_multinomial',
     'segment_combinations',
+    'segment_searchsorted'
 ]
 
 
@@ -119,16 +122,16 @@ def segment_argmax(data: Tensor, offsets: Tensor, dim: int = 0) -> Tensor:
 
     NOTE: If there are multiple maximum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned.
     """
+    dim = dim % data.ndim
     lengths = torch.diff(offsets)
     seg_maxs = torch.segment_reduce(data, 'max', offsets=offsets, axis=dim)
     seg_ids = torch.repeat_interleave(torch.arange(len(offsets) - 1, device=data.device), lengths)
     where_in_data = torch.where(data == seg_maxs.index_select(dim, seg_ids))
-    where_in_argmax = where_in_data[:dim] + (seg_ids[where_in_data[dim]],) + where_in_data[dim + 1:]
+    where_in_argmax = (*where_in_data[:dim], seg_ids[where_in_data[dim]], *where_in_data[dim + 1:])
     value_in_argmax = where_in_data[dim]
     sentinel_value = torch.iinfo(torch.int64).max
-    argmax = torch.full(data.shape[:dim] + (len(offsets) - 1,) + data.shape[dim + 1:], fill_value=sentinel_value, dtype=torch.int64)
-    flat_where_in_argmax = (torch.stack(where_in_argmax, dim=1) * torch.tensor(argmax.stride(), device=argmax.device)).sum(dim=1)
-    argmax.view(-1).scatter_reduce_(0, flat_where_in_argmax, value_in_argmax, reduce='amin')
+    argmax = torch.full((*data.shape[:dim], len(lengths), *data.shape[dim + 1:]), fill_value=sentinel_value, dtype=torch.int64)
+    index_reduce_(argmax, where_in_argmax, value_in_argmax, reduce='amin')
     argmax[argmax == sentinel_value] = -1
     return argmax
 
@@ -147,16 +150,16 @@ def segment_argmin(data: Tensor, offsets: Tensor, dim: int = 0) -> Tensor:
 
     NOTE: If there are multiple minimum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned.
     """
+    dim = dim % data.ndim
     lengths = torch.diff(offsets)
     seg_mins = torch.segment_reduce(data, 'min', offsets=offsets, axis=dim)
-    seg_ids = torch.repeat_interleave(torch.arange(len(offsets) - 1, device=data.device), lengths)
+    seg_ids = torch.repeat_interleave(torch.arange(len(lengths), device=data.device), lengths)
     where_in_data = torch.where(data == seg_mins.index_select(dim, seg_ids))
-    where_in_argmin = where_in_data[:dim] + (seg_ids[where_in_data[dim]],) + where_in_data[dim + 1:]
+    where_in_argmin = (*where_in_data[:dim], seg_ids[where_in_data[dim]], *where_in_data[dim + 1:])
     value_in_argmin = where_in_data[dim]
     sentinel_value = torch.iinfo(torch.int64).max
-    argmin = torch.full(data.shape[:dim] + (len(offsets) - 1,) + data.shape[dim + 1:], fill_value=sentinel_value, dtype=torch.int64)
-    flat_where_in_argmin = (torch.stack(where_in_argmin, dim=1) * torch.tensor(argmin.stride(), device=argmin.device)).sum(dim=1)
-    argmin.view(-1).scatter_reduce_(0, flat_where_in_argmin, value_in_argmin, reduce='amin')
+    argmin = torch.full((*data.shape[:dim], len(lengths), *data.shape[dim + 1:]), fill_value=sentinel_value, dtype=torch.int64)
+    index_reduce_(argmin, where_in_argmin, value_in_argmin, reduce='amin')
     argmin[argmin == sentinel_value] = -1
     return argmin
 
@@ -263,7 +266,13 @@ def segment_median(input: torch.Tensor, offsets: torch.Tensor, dim: int = 0) -> 
     ----
     - `medians`: (Tensor) shape `(..., M, ...)` the median of each segment.
     - `indices`: (Tensor) shape `(..., M, ...)` the indices of the median values in the original input.
+
+    Notes
+    -----
+    - If a segment has even length, the lower median is returned.
+    - If a segment is empty or has negative length, the median value is undefined.
     """
+    dim = dim % input.ndim
     lengths = torch.diff(offsets)
     sorted_indices = segment_argsort(input, offsets, descending=False, dim=dim)
     median_pos = offsets[:-1] + (lengths - 1) // 2
@@ -289,6 +298,7 @@ def stack_segments(input: torch.Tensor, offsets: torch.Tensor, max_length: int =
     - `mask`: (Tensor) shape `(..., M, max_length)` boolean mask indicating valid entries in `stacked`.
     - `indices`: (Tensor) shape `(..., M, max_length)` the indices of the stacked entries in the original input.
     """
+    dim = dim % input.ndim
     lengths = torch.diff(offsets)
 
     if max_length is None:
@@ -369,6 +379,7 @@ def segment_sum(input: torch.Tensor, offsets: torch.Tensor, dim: int = 0) -> tor
     ----
     - `segment_sums`: (Tensor) shape `(..., M, ...)` the sum of each segment along the specified dimension.
     """
+    dim = dim % input.ndim
     cumsum = torch.cat([
         torch.zeros((*input.shape[:dim], 1, *input.shape[dim + 1:]), dtype=input.dtype, device=input.device), 
         torch.cumsum(input, dim=dim)
@@ -391,6 +402,7 @@ def segment_cumsum(input: torch.Tensor, offsets: torch.Tensor, dim: int) -> torc
     ----
     - `segment_sums`: (Tensor) shape `(..., N, ...)` the cumulative sum of each segment along the specified dimension.
     """
+    dim = dim % input.ndim
     cumsum = torch.cat([
         torch.zeros((*input.shape[:dim], 1, *input.shape[dim + 1:]), dtype=input.dtype, device=input.device), 
         torch.cumsum(input, dim=dim)
@@ -414,7 +426,11 @@ def segment_combinations(input: torch.Tensor, offsets: torch.Tensor, r: int = 2,
     Returns
     ----
     - `combinations`: (Tensor) shape `(K, r,)` the combinations from all segments, where `K` is the total number of combinations across all segments.
-    - `combination_offsets`: (Tensor) shape `(M + 1,)` the offsets of combinations for each segment. NOTE: may contain zero-length segments if a segment has less than `r` elements.
+    - `combination_offsets`: (Tensor) shape `(M + 1,)` the offsets of combinations for each segment. 
+    
+    Notes
+    ----
+    - The result may contain zero-length segments if a segment has less than `r` elements.
     """
     lengths = torch.diff(offsets)
     
@@ -450,4 +466,121 @@ def segment_combinations(input: torch.Tensor, offsets: torch.Tensor, r: int = 2,
         combinations = input.index_select(0, comb_indices.flatten()).reshape(comb_indices.shape)
     
     return combinations, comb_offsets
+
+
+def _segment_searchsorted_pytorch(
+    sorted_sequence: Tensor,
+    offsets: Tensor,
+    input: Tensor,
+    segment_ids: Tensor,
+    side: Literal['left', 'right'] = 'left',
+) -> Tensor:
+    """Per-segment searchsorted operation implemented with pure PyTorch.
+    
+    Parameters
+    ----------
+    - `sorted_sequence: Tensor` of shape (..., N), the concatenated sorted sequences of all segments.
+    - `offsets: Tensor` of shape (M + 1,), segment offsets applied to the last dimension of `sorted_sequence`.
+    - `input: Tensor` of shape (..., Q), the values to search for.
+    - `segment_ids: Tensor` of shape (..., Q), the segment ids to search within for each value in `input`.
+
+    Returns
+    - `indices: Tensor` of shape (..., Q), the insertion indices for each value in `input` within its corresponding segment in `sorted_sequence`.
+    """
+    lengths = torch.diff(offsets)
+    sorted_sequence_segment_ids = torch.arange(len(offsets) - 1, device=sorted_sequence.device).repeat_interleave(lengths)
+
+    if side == 'left': 
+        # Combine input and sorted_sequence and lexsort (segment-wise sort)
+        all_vals = torch.cat([input, sorted_sequence], dim=-1) 
+        all_seg_ids = torch.cat([
+            segment_ids, 
+            sorted_sequence_segment_ids.expand(*input.shape[:-1], -1)
+        ], dim=-1)
+        sorted_indices = lexsort([all_vals, all_seg_ids], dim=-1)       # Indices of all_vals in sorted order
+        sorted_ranks = reverse_permutation(sorted_indices, dim=-1)      # Ranks in sorted order corresponding to all_vals
+        
+        # Count of sorted_sequence elements <= all_vals[..., i]
+        count = torch.cumsum(sorted_indices >= input.shape[-1], dim=-1)             
+        # Take counts for input elements
+        out = torch.take_along_dim(count, sorted_ranks[..., :input.shape[-1]], dim=-1) 
+    
+    elif side == 'right': 
+        all_vals = torch.cat([sorted_sequence, input], dim=-1) 
+        all_seg_ids = torch.cat([
+            sorted_sequence_segment_ids.expand(*input.shape[:-1], -1),
+            segment_ids,
+        ], dim=-1)
+        sorted_indices = lexsort([all_vals, all_seg_ids], dim=-1)
+        sorted_ranks = reverse_permutation(sorted_indices, dim=-1) 
+
+        count = torch.cumsum(sorted_indices < sorted_sequence.shape[-1], dim=-1)
+        out = torch.take_along_dim(count, sorted_ranks[..., sorted_sequence.shape[-1]:], dim=-1)
+
+    return out
+
+
+def segment_searchsorted(
+    sorted_sequence: Tensor,
+    offsets: Tensor,
+    input: Tensor,
+    segment_ids: Tensor,
+    side: Literal['left', 'right'] = 'left',
+) -> Tensor:
+    """Per-segment searchsorted operation implemented with triton.
+    
+    Parameters
+    ----------
+    - `sorted_sequence: Tensor` of shape (..., N), the concatenated sorted sequences of all segments.
+    - `offsets: Tensor` of shape (M + 1,), segment offsets applied to the last dimension of `sorted_sequence`.
+    - `input: Tensor` of shape (..., Q), the values to search for.
+    - `segment_ids: Tensor` of shape (..., Q), the segment ids to search within for each value in `input`.
+
+    Returns
+    - `indices: Tensor` of shape (..., Q), the insertion indices for each value in `input` within its corresponding segment in `sorted_sequence`.
+    """
+    device_type = sorted_sequence.device.type
+    assert side in ('left', 'right'), "side must be either 'left' or 'right'"
+    assert input.shape == segment_ids.shape, "input and segment_ids must have the same shape"
+    assert sorted_sequence.shape[:-1] == input.shape[:-1], "batch dimensions of sorted_sequence and input must match"
+
+    if device_type == 'cpu':
+        out = _segment_searchsorted_pytorch(
+            sorted_sequence,
+            offsets,
+            input,
+            segment_ids,
+            side=side,
+        )
+    
+    elif device_type == 'cuda':
+        from ._triton.searchsorted import _segment_searchsorted_1d_triton
+
+        # Flatten inputs, get seg_start and seg_end
+        batch_shape = sorted_sequence.shape[:-1]
+        batch_size = math.prod(batch_shape)
+        N = sorted_sequence.shape[-1]
+        
+        input_flat = input.reshape(-1)
+        sorted_sequence_flat = sorted_sequence.reshape(-1)
+        seg_base = torch.arange(0, batch_size * N, N, device=sorted_sequence.device).reshape(*batch_shape, 1) 
+        seg_start = seg_base + torch.take_along_dim(offsets.expand(*batch_shape, -1), segment_ids, dim=-1)
+        seg_end = seg_base + torch.take_along_dim(offsets.expand(*batch_shape, -1), segment_ids + 1, dim=-1) - 1
+        seg_start_flat = seg_start.reshape(-1)
+        seg_end_flat = seg_end.reshape(-1)
+
+        # Call triton 1D implementation
+        max_length = torch.diff(offsets).max().item()
+        out_flat = _segment_searchsorted_1d_triton(
+            sorted_sequence_flat,
+            input_flat,
+            seg_start_flat,
+            seg_end_flat,
+            max_length=max_length,
+            side=side,
+        )
+
+        out = out_flat.reshape(*batch_shape, -1) - seg_base
+
+    return out
 

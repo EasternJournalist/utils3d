@@ -21,7 +21,12 @@ __all__ = [
     'csr_matrix_from_dense_indices',
     'csr_eliminate_zeros',
     'group',
-    'lexsort'
+    'lexsort',
+    'index_reduce',
+    'index_reduce_',
+    'scatter_argmax',
+    'scatter_argmin',
+    'reverse_permutation'
 ]
 
 
@@ -283,7 +288,7 @@ def group(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, T
 
 
 def lexsort(keys: Union[Sequence[torch.Tensor], torch.Tensor], dim: int = -1) -> torch.Tensor:
-    """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.
+    """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`. 
     
     Given multiple sorting keys, lexsort returns an array of integer indices that describes the sort order by multiple keys. 
     The last key in the sequence is used for the primary sort order, ties are broken by the second-to-last key, and so on.
@@ -296,9 +301,15 @@ def lexsort(keys: Union[Sequence[torch.Tensor], torch.Tensor], dim: int = -1) ->
     Returns
     ----
     - `indices`: (Tensor) the indices that would sort the keys lexicographically along the specified dimension.
+
+    Notes
+    -----
+    Sorting is always stable.
     """
     if isinstance(keys, torch.Tensor):
         keys = torch.unbind(keys, dim=0)
+    else:
+        torch.broadcast_shapes(*[key.shape for key in keys])
 
     assert len(keys) > 0, "At least one key is required for lexsort"
     
@@ -311,3 +322,123 @@ def lexsort(keys: Union[Sequence[torch.Tensor], torch.Tensor], dim: int = -1) ->
             sorted_indices = torch.take_along_dim(sorted_indices, torch.argsort(key, dim=dim, stable=True), dim=dim)
     
     return sorted_indices
+
+
+def index_reduce(input: Tensor, indices: Union[Tuple[Tensor], List[Tensor]], values: Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> Tensor:
+    """Put values into the input tensor at the specified indices (like `index_put`), with reduction support.
+    Behaves like `numpy.ufunc.at`.
+
+    Parameters
+    ----
+    - `input`: (Tensor) the input tensor to modify.
+    - `indices`: (Tensor) the indices at which to put the values.
+    - `values`: (Tensor) the values to put into the input tensor.
+    - `reduce`: (str) the reduction method to use when multiple values are put at the same index. Options are 'amin', 'amax', 'sum', 'prod', and 'mean'.
+
+    Returns
+    ----
+    - (Tensor) the modified tensor after putting the values.
+    """
+    flat_idx = (torch.stack(indices, dim=1) * torch.tensor(input.stride(), dtype=torch.long, device=input.device)).sum(dim=1)
+    output = input.reshape(-1).scatter_reduce(0, flat_idx, values.view(-1), reduce=reduce, include_self=include_self)
+    output = output.reshape(input.shape)
+    return output
+
+
+def index_reduce_(input: Tensor, indices: Union[Tuple[Tensor], List[Tensor]], values: Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> Tensor:
+    """In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support.
+    Behaves like `numpy.ufunc.at`.
+
+    Parameters
+    ----
+    - `input`: (Tensor) the input tensor to modify.
+    - `indices`: (Tensor) the indices at which to put the values.
+    - `values`: (Tensor) the values to put into the input tensor.
+    - `reduce`: (str) the reduction method to use when multiple values are put at the same index. Options are 'amin', 'amax', 'sum', 'prod', and 'mean'.
+
+    Returns
+    ----
+    - (Tensor) the modified tensor after putting the values.
+    """
+    assert input.is_contiguous(), "Input tensor must be contiguous for in-place index_reduce_"
+    flat_idx = (torch.stack(indices, dim=1) * torch.tensor(input.stride(), dtype=torch.long, device=input.device)).sum(dim=1)
+    input.view(-1).scatter_reduce_(0, flat_idx, values.view(-1), reduce=reduce, include_self=include_self)
+    return input
+
+
+def scatter_argmin(input: Tensor, dim: int, index: torch.LongTensor, src: Tensor, include_self: bool = True) -> torch.Tensor:
+    """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
+    
+    Parameters
+    ----
+    - `input`: (Tensor) the input tensor to scatter into.
+    - `dim`: (int) the dimension along which to index.
+    - `index`: (LongTensor) the indices at which to scatter.
+    - `src`: (Tensor) the source tensor to scatter from.
+    - `include_self`: (bool) whether to include the original values in `input` when computing the min.
+
+    Returns
+    ----
+    - `argmin`: (LongTensor) shape same as `input`, the indices of the min values in `src`.
+    
+    Notes
+    ----
+    - If multiple values in `src` are equal to the min value at a position, the one with the smallest index in `src` will be chosen.
+    - If none of src was scattered to a position (i.e., not presented, or the min value is from the original input), the index will be -1.
+    """
+    dim = dim % input.ndim
+    min_values = input.scatter_reduce(dim=dim, index=index, src=src, reduce='amin', include_self=include_self)
+    min_where_in_src = torch.where(src == torch.gather(min_values, dim=dim, index=index))
+    min_indices = torch.full_like(min_values, -1, dtype=torch.long)
+    index_reduce_(min_indices, (*min_where_in_src[:dim], index[min_where_in_src[dim]], *min_where_in_src[dim + 1:]), include_self=False)
+    return min_indices
+
+
+def scatter_argmax(input: Tensor, dim: int, index: torch.LongTensor, src: Tensor, include_self: bool = True) -> torch.Tensor:
+    """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
+    
+    Parameters
+    ----
+    - `input`: (Tensor) the input tensor to scatter into.
+    - `dim`: (int) the dimension along which to index.
+    - `index`: (LongTensor) the indices at which to scatter.
+    - `src`: (Tensor) the source tensor to scatter from.
+    - `include_self`: (bool) whether to include the original values in `input` when computing the min.
+
+    Returns
+    ----
+    - `argmin`: (LongTensor) shape same as `input`, the indices of the min values in `src`.
+    
+    Notes
+    ----
+    - If multiple values in `src` are equal to the min value at a position, the one with the smallest index in `src` will be chosen.
+    - If none of src was scattered to a position (i.e., not presented, or the min value is from the original input), the index will be -1.
+    """
+    dim = dim % input.ndim
+    max_values = input.scatter_reduce(dim=dim, index=index, src=src, reduce='amax', include_self=include_self)
+    max_where_in_src = torch.where(src == torch.gather(max_values, dim=dim, index=index))
+    max_indices = torch.full_like(max_values, -1, dtype=torch.long)
+    index_reduce_(max_indices, (*max_where_in_src[:dim], index[max_where_in_src[dim]], *max_where_in_src[dim + 1:]), include_self=False)
+    return max_indices
+
+
+def reverse_permutation(perm: torch.LongTensor, dim: int = 0) -> torch.LongTensor:
+    """Reverse a permutation tensor along a specified dimension. 
+    Parameters
+    ----
+    - `perm`: (LongTensor) the permutation tensor to reverse.
+    - `dim`: (int) the dimension of permutation indices. Other dimensions are treated as batch dimensions.
+
+    Returns
+    ----
+    - (LongTensor) the reversed permutation tensor, such that `reversed_perm[perm] == torch.arange(perm.shape[dim])`
+
+    Notes
+    -----
+    Equivalent to `torch.argsort(perm, dim=dim)`, but more efficient.
+    """
+    dim = dim % perm.ndim
+    reversed_perm = torch.empty_like(perm)
+    indices = torch.arange(perm.shape[dim], device=perm.device)[(None,) * dim + (slice(None),) + (None,) * (perm.ndim - dim - 1)]
+    reversed_perm.scatter_(dim, perm, indices.expand_as(perm))
+    return reversed_perm

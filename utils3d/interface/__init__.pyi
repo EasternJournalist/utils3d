@@ -107,6 +107,7 @@ __all__ = ["sliding_window",
 "uv_map", 
 "pixel_coord_map", 
 "screen_coord_map", 
+"build_grid_mesh", 
 "build_mesh_from_map", 
 "build_mesh_from_depth_map", 
 "depth_map_edge", 
@@ -143,12 +144,17 @@ __all__ = ["sliding_window",
 "masked_max", 
 "csr_eliminate_zeros", 
 "lexsort", 
+"index_reduce", 
+"index_reduce_", 
+"scatter_argmax", 
+"scatter_argmin", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
 "segment_median", 
 "segment_sum", 
+"segment_cumsum", 
 "segment_sort", 
 "segment_argsort", 
 "segment_topk", 
@@ -1169,96 +1175,123 @@ Returns
     utils3d.numpy.pose.segment_solve_poses_sequential
 
 @overload
-def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int) -> numpy_.ndarray:
+def segment_roll(data: numpy_.ndarray, offsets: numpy_.ndarray, shift: int, axis: int = 0) -> numpy_.ndarray:
     """Roll the data within each segment.
-    """
+
+Parameters
+------
+- `data`: (ndarray).
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data. `M` is the number of segments. Starts with 0 and end with `data.shape[axis]`.
+- `shift`: (int) the number of places by which elements are shifted. If negative, shift to left.
+- `axis`: (int) the segment axis to roll along. Default is 0.
+
+Returns
+-------
+- `data`: (ndarray) the rolled data, same shape as input."""
     utils3d.numpy.segment_ops.segment_roll
 
 @overload
-def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.ndarray) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def segment_take(data: numpy_.ndarray, offsets: numpy_.ndarray, taking: numpy_.ndarray, axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Take some segments from a segmented array
 
-## Parameters
-- `data`: (ndarray) shape `(N, *data_dims)` the data to take segments from
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+Parameters
+------
+- `data`: (ndarray) the segmented data.
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data. `M` is the number of segments. Starts with 0 and end with `data.shape[axis]`.
 - `taking`: (ndarray) the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
+- `axis`: (int) the segment axis to take along. Default is 0. Other axes are treated as batch dimensions.
 
-## Returns
-- `new_data`: (ndarray) shape `(N_new, *data_dims)`
-- `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data"""
+Returns
+-------
+- `new_data`: (ndarray) the new segmented data.
+- `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data. `K` is the number of taken segments."""
     utils3d.numpy.segment_ops.segment_take
 
 @overload
-def segment_argmax(data: numpy_.ndarray, offsets: numpy_.ndarray) -> numpy_.ndarray:
+def segment_argmax(data: numpy_.ndarray, offsets: numpy_.ndarray, axis: int = 0) -> numpy_.ndarray:
     """Compute the argmax of each segment in the segmented data.
 
-## Parameters
-- `data`: (ndarray) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+Parameters
+-----
+- `data`: (ndarray). shape `(..., N, ...)`. `N` is the segment dimension. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
 - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+- `axis`: (int) the segment axis to compute along. Default is 0.
 
-## Returns
-- `argmax_indices`: (ndarray) shape `(M, ...)` the argmax indices of each segment along the first dimension.
-NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
+Returns
+-------
+- `argmax_indices`: (ndarray) shape `(..., M, ...)` the argmax indices of each segment along the first dimension.
+
+Notes
+-----
+If there are multiple maximum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned."""
     utils3d.numpy.segment_ops.segment_argmax
 
 @overload
-def segment_argmin(data: numpy_.ndarray, offsets: numpy_.ndarray) -> numpy_.ndarray:
+def segment_argmin(data: numpy_.ndarray, offsets: numpy_.ndarray, axis: int = 0) -> numpy_.ndarray:
     """Compute the argmin of each segment in the segmented data.
 
-## Parameters
-- `data`: (ndarray) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+Parameters
+-----
+- `data`: (ndarray) shape `(..., N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
 - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the segmented data
+- `axis`: (int) the segment axis to compute along. Default is 0.
 
-## Returns
-- `argmin_indices`: (ndarray) shape `(M, ...)` the argmin indices of each segment along the first dimension.
-NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
+Returns
+-----
+- `argmin_indices`: (ndarray) shape `(..., M, ...)` the argmin indices of each segment along the first dimension.
+
+Notes
+-----
+If there are multiple minimum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned."""
     utils3d.numpy.segment_ops.segment_argmin
 
 @overload
-def segment_concatenate(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
-    """Concatenate a list of segmented arrays into a single segmented array
+def segment_concatenate(segments: Sequence[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Concatenate segmented arrays within each segment. All numbers of segments remain the same.
 
-## Parameters
-- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
-    Each element is a tuple of `(data, offsets)`:
-    - `data`: (ndarray) shape `(N_i, *data_dims)` the
-    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
-- `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+Parameters
+------
+- `segments`: (Sequence[Tuple[ndarray, ndarray]]) A sequence of segmented arrays:
+    - `data`: (ndarray) shape `(..., N_i, ...)`
+    - `offsets`: (ndarray) shape `(M + 1,)` segment offsets.
+- `axis`: (int) the segment axis.
 
-## Returns
-- `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
-    If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same)."""
+Returns
+-------
+- `data`: (ndarray) shape `(..., sum(N_i), ...)` the concatenated data
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data."""
     utils3d.numpy.segment_ops.segment_concatenate
 
 @overload
-def segment_concat(segments: List[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def segment_concat(segments: Sequence[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """(Alias for segment_concatenate).
-Concatenate a list of segmented arrays into a single segmented array
+Concatenate segmented arrays within each segment.
 
-## Parameters
-- `segments`: (List[Tuple[ndarray, ndarray]]) list of segmented arrays to concatenate.
-    Each element is a tuple of `(data, offsets)`:
-    - `data`: (ndarray) shape `(N_i, *data_dims)` the
-    - `offsets`: (ndarray) shape `(M_i + 1,)` the offsets of the segmented data
-- `axis`: (int) the axis to concatenate along, must be 0 or 1. 0 - concatenate along segments, 1 - concatenate within each segment.
+Parameters
+------
+- `segments`: (Sequence[Tuple[ndarray, ndarray]]) A sequence of segmented arrays:
+    - `data`: (ndarray) shape `(..., N_i, ...)`
+    - `offsets`: (ndarray) shape `(M + 1,)` segment offsets.
+- `axis`: (int) the segment axis.
 
-## Returns
+Returns
+-------
 - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
-- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data. 
-    If concatenating along axis 0, `M = sum(M_i)`. If concatenating along axis 1, `M = M_i` (all `M_i` must be the same)."""
+- `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data."""
     utils3d.numpy.segment_ops.segment_concat
 
 @overload
 def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Group as segments by labels
 
-## Parameters
+Parameters
+-----
 - `labels` (ndarray): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
 - `data` (ndarray, optional): shape `(N, *data_dims)` array.
     If None, return the indices in each group instead.
 
-## Returns
+Returns
+-------
 Assuming there are `M` difference labels:
 
 - `segment_labels`: `(ndarray)` shape `(M, *label_dims)` labels of of each segment
@@ -1672,6 +1705,45 @@ This is commonly used in graphics APIs like OpenGL.
 ## Returns
     (ndarray): shape (height, width, 2)"""
     utils3d.numpy.maps.screen_coord_map
+
+@overload
+def build_grid_mesh(height: int, width: int, *, shared_vertices: bool = True) -> numpy_.ndarray:
+    """Get mesh of `height * width` faces arranged in a 2D grid.
+
+Parameters
+----
+    height (int): height of the grid
+    width (int): width of the grid
+    shared_vertices (bool, optional): whether the vertices are shared among faces. Defaults to True.
+
+Returns
+----
+    faces (ndarray): faces in shape (height, width, 4). 
+    - If shared_vertices is `True`, the vertex indices are arranged from 0 to `(H + 1) * (W + 1) - 1` like
+        ```
+            0 ----------- 1 --- ...    -------- W-1 --------------- W
+            |    (0,0)    |       (0,1)         |        (0,W-1)    |
+            W+1 -------   W+2 --- ...  -------- 2*W --------------- 2*W+1
+            |    (1,0)    |       (1,1)         |   ...             |
+                                    ...
+            |    (H-1,0)  |     (H-1,1)         |       (H-1,W-1)   |
+            H*(W+1) ----- H*(W+1)+1 --- ... --- (H+1)*(W+1)-2 ----- (H+1)*(W+1)-1
+        ```
+    - If shared_vertices is `False`, each face has its own 4 vertices.
+        The vertex indices are arranged from 0 to `H * W * 4 - 1`, like
+        ```
+            0 ------- 3  4 ------- 7  ...  (W-1)*4 ---- (W-1)*4+3
+            |  (0,0)  |  |   (0,1)  |      |   (0,W-1)  |
+            1 ------- 2  5 ------- 6  ...  (W-1)*4+1 -- (W-1)*4+2
+            W*4 ----- W*4+3
+            |  (1,0)  |     ....
+            W*4+1 --- W*4+2
+                                    ...
+            (H-1)*W*4 ---- (H-1)*W*4+3  ...        H*W*4 - 4 -----  H*W*4 - 1
+            |   (H-1,0)         |                  |    (H-1,W-1)   |
+            (H-1)*W*4+1 -- (H-1)*W*4+2  ...        H*W*4 - 3 ------ H*W*4 - 2
+        ```"""
+    utils3d.numpy.maps.build_grid_mesh
 
 @overload
 def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
@@ -2407,7 +2479,7 @@ def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[T
 
 @overload
 def lexsort(keys: Union[Sequence[torch_.Tensor], torch_.Tensor], dim: int = -1) -> torch_.Tensor:
-    """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.
+    """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`. 
 
 Given multiple sorting keys, lexsort returns an array of integer indices that describes the sort order by multiple keys. 
 The last key in the sequence is used for the primary sort order, ties are broken by the second-to-last key, and so on.
@@ -2419,8 +2491,90 @@ Parameters
 
 Returns
 ----
-- `indices`: (Tensor) the indices that would sort the keys lexicographically along the specified dimension."""
+- `indices`: (Tensor) the indices that would sort the keys lexicographically along the specified dimension.
+
+Notes
+-----
+Sorting is always stable."""
     utils3d.torch.utils.lexsort
+
+@overload
+def index_reduce(input: torch_.Tensor, indices: Union[Tuple[torch_.Tensor], List[torch_.Tensor]], values: torch_.Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> torch_.Tensor:
+    """Put values into the input tensor at the specified indices (like `index_put`), with reduction support.
+Behaves like `numpy.ufunc.at`.
+
+Parameters
+----
+- `input`: (Tensor) the input tensor to modify.
+- `indices`: (Tensor) the indices at which to put the values.
+- `values`: (Tensor) the values to put into the input tensor.
+- `reduce`: (str) the reduction method to use when multiple values are put at the same index. Options are 'amin', 'amax', 'sum', 'prod', and 'mean'.
+
+Returns
+----
+- (Tensor) the modified tensor after putting the values."""
+    utils3d.torch.utils.index_reduce
+
+@overload
+def index_reduce_(input: torch_.Tensor, indices: Union[Tuple[torch_.Tensor], List[torch_.Tensor]], values: torch_.Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> torch_.Tensor:
+    """In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support.
+Behaves like `numpy.ufunc.at`.
+
+Parameters
+----
+- `input`: (Tensor) the input tensor to modify.
+- `indices`: (Tensor) the indices at which to put the values.
+- `values`: (Tensor) the values to put into the input tensor.
+- `reduce`: (str) the reduction method to use when multiple values are put at the same index. Options are 'amin', 'amax', 'sum', 'prod', and 'mean'.
+
+Returns
+----
+- (Tensor) the modified tensor after putting the values."""
+    utils3d.torch.utils.index_reduce_
+
+@overload
+def scatter_argmax(input: torch_.Tensor, dim: int, index: torch_.LongTensor, src: torch_.Tensor, include_self: bool = True) -> torch_.Tensor:
+    """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
+
+Parameters
+----
+- `input`: (Tensor) the input tensor to scatter into.
+- `dim`: (int) the dimension along which to index.
+- `index`: (LongTensor) the indices at which to scatter.
+- `src`: (Tensor) the source tensor to scatter from.
+- `include_self`: (bool) whether to include the original values in `input` when computing the min.
+
+Returns
+----
+- `argmin`: (LongTensor) shape same as `input`, the indices of the min values in `src`.
+
+Notes
+----
+- If multiple values in `src` are equal to the min value at a position, the one with the smallest index in `src` will be chosen.
+- If none of src was scattered to a position (i.e., not presented, or the min value is from the original input), the index will be -1."""
+    utils3d.torch.utils.scatter_argmax
+
+@overload
+def scatter_argmin(input: torch_.Tensor, dim: int, index: torch_.LongTensor, src: torch_.Tensor, include_self: bool = True) -> torch_.Tensor:
+    """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
+
+Parameters
+----
+- `input`: (Tensor) the input tensor to scatter into.
+- `dim`: (int) the dimension along which to index.
+- `index`: (LongTensor) the indices at which to scatter.
+- `src`: (Tensor) the source tensor to scatter from.
+- `include_self`: (bool) whether to include the original values in `input` when computing the min.
+
+Returns
+----
+- `argmin`: (LongTensor) shape same as `input`, the indices of the min values in `src`.
+
+Notes
+----
+- If multiple values in `src` are equal to the min value at a position, the one with the smallest index in `src` will be chosen.
+- If none of src was scattered to a position (i.e., not presented, or the min value is from the original input), the index will be -1."""
+    utils3d.torch.utils.scatter_argmin
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
@@ -3094,86 +3248,137 @@ Better precision than using the arccos dot product directly.
     utils3d.torch.transforms.angle_between
 
 @overload
-def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int) -> torch_.Tensor:
+def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int, dim: int = 0) -> torch_.Tensor:
     """Roll the data within each segment.
-    """
+
+Parameters
+------
+- `data`: (Tensor).
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data. `M` is the number of segments. Starts with 0 and end with `data.shape[dim]`.
+- `shift`: (int) the number of places by which elements are shifted. If negative, shift to left.
+- `dim`: (int) the segment dimension to roll along. Default is 0.
+
+Returns
+-------
+- `data`: (Tensor) the rolled data, same shape as input."""
     utils3d.torch.segment_ops.segment_roll
 
 @overload
-def segment_take(data: torch_.Tensor, offsets: torch_.Tensor, taking: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def segment_take(data: torch_.Tensor, offsets: torch_.Tensor, taking: torch_.Tensor, dim: int = 0) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Take some segments from a segmented array
-    """
+
+Parameters
+------
+- `data`: (Tensor) the segmented data.
+- `offsets`: (Tensor) 1-D tensor of shape `(M + 1,)` the offsets of the segmented data. `M` is the number of segments. Starts with 0 and end with `data.shape[dim]`.
+- `taking`: (Tensor) 1-D tensor of the indices of segments to take of shape `(K,)`, or boolean mask of shape `(M,)`
+- `dim`: (int) the segment dimension to take along. Default is 0. Other dimensions are treated as batch dimensions.
+
+Returns
+-------
+- `new_data`: (Tensor) the new segmented data.
+- `new_offsets`: (Tensor) shape `(K + 1,)` the offsets of the new segmented data. `K` is the number of taken segments."""
     utils3d.torch.segment_ops.segment_take
 
 @overload
-def segment_argmax(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+def segment_argmax(data: torch_.Tensor, offsets: torch_.Tensor, dim: int = 0) -> torch_.Tensor:
     """Compute the argmax of each segment in the segmented data.
 
-## Parameters
-- `data`: (Tensor) shape `(N, ...)` the data to compute argmax from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+Parameters
+----------
+- `data`: (Tensor) shape `(..., N, ...)` the data to compute argmax from. If `data` may have multiple dimensions, extra dimensions are treated as batch dimensions.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+- `dim`: (int) the segment axis to compute along. Default is 0.
 
-## Returns
-- `argmax_indices`: (Tensor) shape `(M, ...)` the argmax indices of each segment along the first dimension.
-NOTE: If there are multiple maximum values in a segment, the index of the first one is returned."""
+Returns
+-------
+- `argmax_indices`: (Tensor) shape `(..., M, ...)` the argmax indices of each segment along the first dimension.
+
+NOTE: If there are multiple maximum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned."""
     utils3d.torch.segment_ops.segment_argmax
 
 @overload
-def segment_argmin(data: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+def segment_argmin(data: torch_.Tensor, offsets: torch_.Tensor, dim: int = 0) -> torch_.Tensor:
     """Compute the argmin of each segment in the segmented data.
 
-## Parameters
-- `data`: (Tensor) shape `(N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+Parameters
+----------
+- `data`: (Tensor) shape `(..., N, ...)` the data to compute argmin from. If `data` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+- `dim`: (int) the segment axis to compute along. Default is 0.
+Returns
+-------
+- `argmin_indices`: (Tensor) shape `(..., M, ...)` the argmin indices of each segment along the first dimension.
 
-## Returns
-- `argmin_indices`: (Tensor) shape `(M, ...)` the argmin indices of each segment along the first dimension.
-NOTE: If there are multiple minimum values in a segment, the index of the first one is returned."""
+NOTE: If there are multiple minimum values in a segment, the index of the first one is returned. If a segment is empty, -1 is returned."""
     utils3d.torch.segment_ops.segment_argmin
 
 @overload
-def segment_median(input: torch_.Tensor, offsets: torch_.Tensor) -> torch_.return_types.median:
+def segment_median(input: torch_.Tensor, offsets: torch_.Tensor, dim: int = 0) -> torch_.return_types.median:
     """Compute the median of each segment.
 
 Parameters
 ----
-- `input`: (Tensor) shape `(N, ...)` the data to compute median from. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
+- `input`: (Tensor) shape `(..., N, ...)` the data to compute median from. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `dim`: (int) the segment axis to compute along. Default is 0.
 
 Returns
 ----
-- `medians`: (Tensor) shape `(M, ...)` the median of each segment.
-- `indices`: (Tensor) shape `(M, ...)` the indices of the median values in the original input."""
+- `medians`: (Tensor) shape `(..., M, ...)` the median of each segment.
+- `indices`: (Tensor) shape `(..., M, ...)` the indices of the median values in the original input.
+
+Notes
+-----
+- If a segment has even length, the lower median is returned.
+- If a segment is empty or has negative length, the median value is undefined."""
     utils3d.torch.segment_ops.segment_median
 
 @overload
-def segment_sum(input: torch_.Tensor, offsets: torch_.Tensor) -> torch_.Tensor:
+def segment_sum(input: torch_.Tensor, offsets: torch_.Tensor, dim: int = 0) -> torch_.Tensor:
     """Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32.
 
 NOTE: Silently assumes that the input does not contain negative lengths.
 
 Parameters
 ----
-- `input`: (Tensor) shape `(N, ...)` the data to compute sum from. If `input` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `input`: (Tensor) shape `(..., N, ...)` the data to compute sum from. If `input` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
+- `dim`: (int) the segment axis to compute sum along. Default is 0.
+
+Returns
+----
+- `segment_sums`: (Tensor) shape `(..., M, ...)` the sum of each segment along the specified dimension."""
+    utils3d.torch.segment_ops.segment_sum
+
+@overload
+def segment_cumsum(input: torch_.Tensor, offsets: torch_.Tensor, dim: int) -> torch_.Tensor:
+    """Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32.
+
+NOTE: Silently assumes that the input does not contain negative lengths.
+
+Parameters
+----
+- `input`: (Tensor) shape `(..., N, ...)` the data to compute sum from. If `input` may have multiple dimensionsm, extra dimensions are treated as batch dimensions.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the segmented data
 
 Returns
 ----
-- `segment_sums`: (Tensor) shape `(M, ...)` the sum of each segment along the first dimension."""
-    utils3d.torch.segment_ops.segment_sum
+- `segment_sums`: (Tensor) shape `(..., N, ...)` the cumulative sum of each segment along the specified dimension."""
+    utils3d.torch.segment_ops.segment_cumsum
 
 @overload
 def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Group as segments by labels
 
-## Parameters
-
+Parameters
+----
 - `labels` (Tensor): shape `(N, *label_dims)` array of labels for each data point. Labels can be multi-dimensional.
 - `data` (Tensor, optional): shape `(N, *data_dims)` array.
     If None, return the indices in each group instead.
 
-## Returns
-
+Returns
+-------
 Assuming there are `M` difference labels:
 
 - `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
@@ -3184,38 +3389,41 @@ Assuming there are `M` difference labels:
     utils3d.torch.segment_ops.group_as_segments
 
 @overload
-def segment_sort(input: torch_.Tensor, offsets: torch_.Tensor = None, descending: bool = False) -> torch_.return_types.sort:
+def segment_sort(input: torch_.Tensor, offsets: torch_.Tensor = None, descending: bool = False, dim: int = 0) -> torch_.return_types.sort:
     """Sort the data within each segment.
 
 Parameters
 ----
-- `input`: (Tensor) shape `(N, ...)` the data to sort.
+- `input`: (Tensor) shape `(..., N, ...)` the data to sort.
 - `lengths`: (Tensor) shape `(M,)` the lengths of each segment, alternatively to `offsets`.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets
 - `descending`: (bool) whether to sort in descending order.
+- `dim`: (int) the segment axis to sort along. Default is 0.
+
 Returns
 ----
-- `sorted`: (Tensor) shape `(N, ...)` the sorted data.
-- `indices`: (Tensor) shape `(N, ...)` the indices that would sort the data within each segment."""
+- `sorted`: (Tensor) shape `(..., N, ...)` the sorted data.
+- `indices`: (Tensor) shape `(..., N, ...)` the indices that would sort the data within each segment."""
     utils3d.torch.segment_ops.segment_sort
 
 @overload
-def segment_argsort(input: torch_.Tensor, offsets: torch_.Tensor, descending: bool = False) -> torch_.Tensor:
+def segment_argsort(input: torch_.Tensor, offsets: torch_.Tensor, descending: bool = False, dim: int = 0) -> torch_.Tensor:
     """Compute the argsort indices within each segment.
 
 Parameters
 ----
-- `input`: (Tensor) shape `(N, ...)` the data to sort. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
+- `input`: (Tensor) shape `(..., N, ...)` the data to sort. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
 - `descending`: (bool) whether to sort in descending order.
+- `dim`: (int) the segment axis to sort along. Default is 0.
 
 Returns
 ----
-- `sorted_indices`: (Tensor) shape `(N, ...)` the indices that would"""
+- `sorted_indices`: (Tensor) shape `(..., N, ...)` the indices that would sort the data within each segment."""
     utils3d.torch.segment_ops.segment_argsort
 
 @overload
-def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True) -> torch_.return_types.topk:
+def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True, dim: int = 0) -> torch_.return_types.topk:
     """Compute the top-k values and indices within each segment.
 NOTE: if the length of a segment is less than k, the returns will contain all elements in that segment but fewer than k elements.
 
@@ -3224,7 +3432,9 @@ Parameters
 - `input`: (Tensor) shape `(N, ...)` the data to compute top
 - `k`: (int or Tensor) the number of top elements to retrieve from each segment. If a Tensor, it should have shape `(M,)` where `M` is the number of segments.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
-- `largest`: (bool) whether to return the largest or smallest elements.
+- `largest`: (bool) whether to return the largest or smallest elements. Otherwise, return the smallest elements.
+- `dim`: (int) the segment axis to compute along. Default is 0.
+
 Returns
 ----
 - `values`: (Tensor) shape `(sum_k, ...)` the top-k values
@@ -3233,33 +3443,36 @@ where `sum_k` is the sum of all k's across segments."""
     utils3d.torch.segment_ops.segment_topk
 
 @overload
-def stack_segments(input: torch_.Tensor, offsets: torch_.Tensor, max_length: int = None, padding_value: numbers.Number = 0) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+def stack_segments(input: torch_.Tensor, offsets: torch_.Tensor, max_length: int = None, padding_value: numbers.Number = 0, dim: int = 0) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Stack segments into a padded tensor.
 
 Parameters
 ----
-- `input`: (Tensor) shape `(N, ...)` the data to stack.
+- `input`: (Tensor) shape `(..., N, ...)` the data to stack.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
 - `max_length`: (int, optional) the maximum length to pad/truncate each segment to. If None, use the maximum segment length.
 - `padding_value`: (Number) the value to use for padding.
+- `dim`: (int) the segment axis to stack along. Default is 0.
 
 Returns
 ----
-- `stacked`: (Tensor) shape `(M, max_length, ...)` the stacked segments, where `max_length` is the maximum segment length.
-- `mask`: (Tensor) shape `(M, max_length)` boolean mask indicating valid entries in `stacked`.
-- `indices`: (Tensor) shape `(M, max_length)` the original indices of"""
+- `stacked`: (Tensor) shape `(..., M, max_length, ...)` the stacked segments, where `max_length` is the maximum segment length.
+- `mask`: (Tensor) shape `(..., M, max_length)` boolean mask indicating valid entries in `stacked`.
+- `indices`: (Tensor) shape `(..., M, max_length)` the indices of the stacked entries in the original input."""
     utils3d.torch.segment_ops.stack_segments
 
 @overload
 def segment_multinomial(weights: torch_.Tensor, offsets: torch_.Tensor, num_samples: torch_.Tensor, eps: float = 1e-12, replacement: bool = False) -> torch_.LongTensor:
     """Perform multinomial sampling within each segment.
+
 Parameters
 ----
-- `weights`: (Tensor) shape `(N,)` the weights for sampling.
-- `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
+- `weights`: (Tensor) 1-D tensor of shape `(N,)` the weights for sampling.
+- `offsets`: (Tensor) 1-D tensor of shape `(M + 1,)` the offsets of each segment.
 - `n`: (int) the number of samples to draw from each segment.
 - `eps`: (float) a small value to avoid division by zero.
 - `replacement`: (bool) whether to sample with replacement.
+
 Returns
 ----
 - `sampled_indices`: (LongTensor) shape `(M * n,)` the sampled indices from each segment."""
@@ -3279,7 +3492,11 @@ Parameters
 Returns
 ----
 - `combinations`: (Tensor) shape `(K, r,)` the combinations from all segments, where `K` is the total number of combinations across all segments.
-- `combination_offsets`: (Tensor) shape `(M + 1,)` the offsets of combinations for each segment. NOTE: may contain zero-length segments if a segment has less than `r` elements."""
+- `combination_offsets`: (Tensor) shape `(M + 1,)` the offsets of combinations for each segment. 
+
+Notes
+----
+- The result may contain zero-length segments if a segment has less than `r` elements."""
     utils3d.torch.segment_ops.segment_combinations
 
 @overload

@@ -18,6 +18,7 @@ __all__ = [
     'lookup_set',
     'group',
     'csr_matrix_from_dense_indices',
+    'reverse_permutation'
 ]
 
 
@@ -411,3 +412,26 @@ def csr_matrix_from_dense_indices(indices: ndarray, n_cols: int) -> 'csr_array':
         indices.ravel(),
         np.arange(0, indices.size + 1, indices.shape[1])
     ), shape=(indices.shape[0], n_cols))
+
+
+def reverse_permutation(perm: ndarray, axis: int = 0) -> ndarray:
+    """Compute the reverse of a permutation array. 
+
+    Parameters
+    ----
+    - `perm` (ndarray): shape `(..., N, ...)` permutation array.
+    - `axis` (int): axis of the permutation array. Other axes are treated as batch dimensions.
+
+    Returns
+    ----
+    - `rev_perm` (ndarray): shape `(N,)` reverse permutation array.
+
+    Notes
+    -----
+    Equivalent to `np.argsort(perm, axis=axis)`, but more efficient.
+    """
+    axis = axis % perm.ndim
+    rev_perm = np.empty_like(perm)
+    indices = np.arange(perm.shape[axis], dtype=perm.dtype)[(None,) * axis + (slice(None),) + (None,) * (perm.ndim - axis - 1)]
+    np.put_along_axis(rev_perm, perm, indices, axis=axis)
+    return rev_perm
