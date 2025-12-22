@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "utils3d"
-version = "1.5"
+version = "1.6"
 description = "A pure-Python collection of useful functions for 3D computer vision and graphics research"
 readme = "README.md"
 authors = [
