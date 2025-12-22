@@ -15,4 +15,5 @@ __all__ = [
     'scatter_argmax',
     'scatter_argmin',
     'reverse_permutation',
+    'large_multinomial',
 ]

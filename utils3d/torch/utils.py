@@ -26,7 +26,8 @@ __all__ = [
     'index_reduce_',
     'scatter_argmax',
     'scatter_argmin',
-    'reverse_permutation'
+    'reverse_permutation',
+    'large_multinomial'
 ]
 
 
@@ -287,7 +288,7 @@ def group(labels: Tensor, data: Optional[Tensor] = None) -> List[Tuple[Tensor, T
     return list(zip(group_labels, data_groups))
 
 
-def lexsort(keys: Union[Sequence[torch.Tensor], torch.Tensor], dim: int = -1) -> torch.Tensor:
+def lexsort(keys: Union[Sequence[Tensor], Tensor], dim: int = -1) -> Tensor:
     """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`. 
     
     Given multiple sorting keys, lexsort returns an array of integer indices that describes the sort order by multiple keys. 
@@ -306,7 +307,7 @@ def lexsort(keys: Union[Sequence[torch.Tensor], torch.Tensor], dim: int = -1) ->
     -----
     Sorting is always stable.
     """
-    if isinstance(keys, torch.Tensor):
+    if isinstance(keys, Tensor):
         keys = torch.unbind(keys, dim=0)
     else:
         torch.broadcast_shapes(*[key.shape for key in keys])
@@ -366,7 +367,7 @@ def index_reduce_(input: Tensor, indices: Union[Tuple[Tensor], List[Tensor]], va
     return input
 
 
-def scatter_argmin(input: Tensor, dim: int, index: torch.LongTensor, src: Tensor, include_self: bool = True) -> torch.Tensor:
+def scatter_argmin(input: Tensor, dim: int, index: Tensor, src: Tensor, include_self: bool = True) -> Tensor:
     """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
     
     Parameters
@@ -394,7 +395,7 @@ def scatter_argmin(input: Tensor, dim: int, index: torch.LongTensor, src: Tensor
     return min_indices
 
 
-def scatter_argmax(input: Tensor, dim: int, index: torch.LongTensor, src: Tensor, include_self: bool = True) -> torch.Tensor:
+def scatter_argmax(input: Tensor, dim: int, index: Tensor, src: Tensor, include_self: bool = True) -> Tensor:
     """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
     
     Parameters
@@ -422,7 +423,7 @@ def scatter_argmax(input: Tensor, dim: int, index: torch.LongTensor, src: Tensor
     return max_indices
 
 
-def reverse_permutation(perm: torch.LongTensor, dim: int = 0) -> torch.LongTensor:
+def reverse_permutation(perm: Tensor, dim: int = 0) -> Tensor:
     """Reverse a permutation tensor along a specified dimension. 
     Parameters
     ----
@@ -442,3 +443,18 @@ def reverse_permutation(perm: torch.LongTensor, dim: int = 0) -> torch.LongTenso
     indices = torch.arange(perm.shape[dim], device=perm.device)[(None,) * dim + (slice(None),) + (None,) * (perm.ndim - dim - 1)]
     reversed_perm.scatter_(dim, perm, indices.expand_as(perm))
     return reversed_perm
+
+
+@torch.no_grad()
+def large_multinomial(weights: Tensor, num_samples: int, replacement: bool = False) -> Tensor:
+    weights = weights.double()
+    weights = weights / weights.sum()
+
+    if replacement:
+        cum_weights = torch.cumsum(weights, dim=0)
+        rand = torch.rand(num_samples, dtype=torch.float64, device=weights.device)
+        indices = torch.searchsorted(cum_weights, rand)
+    else:
+        scores = weights.log() - torch.empty_like(weights).exponential_().log()
+        indices = torch.topk(scores, num_samples).indices
+    return indices

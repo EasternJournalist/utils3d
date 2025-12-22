@@ -5,6 +5,8 @@ from numbers import Number, Integral
 import warnings
 import functools
 
+from .utils import reverse_permutation
+
 
 __all__ = [
     'segment_roll',
@@ -54,6 +56,8 @@ def segment_take(data: ndarray, offsets: ndarray, taking: ndarray, axis: int = 0
     - `new_data`: (ndarray) the new segmented data.
     - `new_offsets`: (ndarray) shape `(K + 1,)` the offsets of the new segmented data. `K` is the number of taken segments.
     """
+    if taking.dtype == np.bool_:
+        taking = np.where(taking)[0]
     lengths = np.diff(offsets)
     new_lengths = lengths[taking]
     new_offsets = np.concatenate([[0], np.cumsum(new_lengths)])
@@ -143,7 +147,7 @@ def segment_chain(segments: Sequence[Tuple[ndarray, ndarray]], axis: int = 0) ->
     return new_data, new_offsets
 
 
-def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tuple[ndarray, ndarray, ndarray]:
+def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[ndarray, ndarray, ndarray]:
     """
     Group as segments by labels
 
@@ -163,12 +167,19 @@ def group_as_segments(labels: ndarray, data: Optional[np.ndarray] = None) -> Tup
     
     `rearranged_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
     """
-    group_labels, inv, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
+    group_labels, group_ids, counts = np.unique(labels, return_inverse=True, return_counts=True, axis=0)
     offsets = np.concatenate([[0], np.cumsum(counts, axis=0)])
+    indices = np.argsort(group_ids)
     if data is None:
-        data = np.argsort(inv)
+        data = indices
     else:
-        data = np.take(data, np.argsort(inv), axis=0)
+        data = data[indices]
+    ret = (group_labels, data, offsets)
+    if return_inverse:
+        inverse_indices = reverse_permutation(indices)
+        ret += (inverse_indices,)
+    if return_group_ids:
+        ret += (group_ids,)
     return group_labels, data, offsets
 
 
@@ -230,3 +241,4 @@ def segment_argmin(data: ndarray, offsets: ndarray, axis: int = 0) -> ndarray:
     np.minimum.at(argmin, where_in_argmin, value_in_argmin)
     argmin[argmin == np.iinfo(np.int64).max] = -1
     return argmin
+

@@ -14,6 +14,9 @@ from .utils import lexsort, index_reduce_, reverse_permutation
 __all__ = [
     'segment_roll',
     'segment_take',
+    'segment_concatenate',
+    'segment_concat',
+    'segment_chain',
     'segment_argmax',
     'segment_argmin',
     'segment_median',
@@ -70,15 +73,98 @@ def segment_take(data: Tensor, offsets: Tensor, taking: Tensor, dim: int = 0) ->
     - `new_data`: (Tensor) the new segmented data.
     - `new_offsets`: (Tensor) shape `(K + 1,)` the offsets of the new segmented data. `K` is the number of taken segments.
     """
+    if taking.dtype == torch.bool:
+        taking = torch.where(taking)[0]
     lengths = torch.diff(offsets)
     new_lengths = lengths[taking]
     new_offsets = _lengths_to_offsets(new_lengths)
-    indices = torch.arange(data.shape[dim], device=data.device) + torch.repeat_interleave(offsets[taking] - new_offsets[:-1], new_lengths)
+    indices = torch.arange(new_offsets[-1], device=data.device) + torch.repeat_interleave(offsets[taking] - new_offsets[:-1], new_lengths)
     new_data = data.index_select(dim, indices)
     return new_data, new_offsets
 
 
-def group_as_segments(labels: Tensor, data: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:
+def segment_concatenate(segments: Sequence[Tuple[Tensor, Tensor]], dim: int = 0) -> Tuple[Tensor, Tensor]:
+    """Concatenate segmented arrays within each segment. All numbers of segments remain the same.
+
+    Parameters
+    ------
+    - `segments`: (Sequence[Tuple[Tensor, Tensor]]) A sequence of segmented arrays:
+        - `data`: (Tensor) shape `(..., N_i, ...)`
+        - `offsets`: (Tensor) shape `(M + 1,)` segment offsets.
+    - `axis`: (int) the segment axis.
+
+    Returns
+    -------
+    - `data`: (Tensor) shape `(..., sum(N_i), ...)` the concatenated data
+    - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the concatenated segmented data.
+    """
+    if len(segments) == 0:
+        return torch.tensor([]), torch.tensor([0])
+    M, K = len(segments[0][1]) - 1, len(segments)       # number of segments, number of inputs
+    assert all(M + 1 == len(seg[1]) for seg in segments), "All segments must have the same number of segments when concatenating along axis 1."
+    data_list, offsets_list = zip(*segments)
+    input_data = torch.cat(data_list, dim=dim)                               # (..., sum(N_i), ...)
+    lengths_concat_0 = torch.diff(torch.stack(offsets_list, dim=0), dim=1).reshape(-1)  # (K, M)
+    lengths_concat_1 = lengths_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1)    # (M, K)
+    offsets_concat_0 = torch.cumsum(lengths_concat_0.reshape(-1), dim=0)              # (K * M,)
+    offsets_concat_1 = torch.cumsum(lengths_concat_1.reshape(-1), dim=0)              # (M * K,)
+
+    indices = torch.arange(input_data.shape[0]) + torch.repeat_interleave(offsets_concat_0.reshape(K, M).swapaxes(0, 1).reshape(-1) - offsets_concat_1, lengths_concat_1.reshape(-1))
+    new_data = input_data.index_select(dim, indices)
+    new_lengths = torch.sum(lengths_concat_0.reshape(K, M), dim=0)
+    new_offsets = _lengths_to_offsets(new_lengths)
+        
+    return new_data, new_offsets
+
+
+def segment_concat(segments: Sequence[Tuple[Tensor, Tensor]], axis: int = 0) -> Tuple[Tensor, Tensor]:
+    """(Alias for segment_concatenate).
+    Concatenate segmented arrays within each segment.
+
+    Parameters
+    ------
+    - `segments`: (Sequence[Tuple[Tensor, Tensor]]) A sequence of segmented arrays:
+        - `data`: (Tensor) shape `(..., N_i, ...)`
+        - `offsets`: (Tensor) shape `(M + 1,)` segment offsets.
+    - `axis`: (int) the segment axis.
+
+    Returns
+    -------
+    - `data`: (Tensor) shape `(N, *data_dims)` the concatenated data
+    - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the concatenated segmented data.
+    """
+    return segment_concatenate(segments, axis=axis)
+
+
+def segment_chain(segments: Sequence[Tuple[Tensor, Tensor]], axis: int = 0) -> Tuple[Tensor, Tensor]:
+    """Concatenate segmented arrays in sequence. The number of segments are summed.
+
+    Parameters
+    ------
+    - `segments`: (Sequence[Tuple[Tensor, Tensor]]) A sequence of segmente arrays:
+        - `data`: (Tensor) shape `(..., N_i, ...)`
+        - `offsets`: (Tensor) shape `(M + 1,)` segment offsets.
+    - `axis`: (int) the segment axis.
+
+    Returns
+    -------
+    - `data`: (Tensor) shape `(..., sum(N_i), ...)` the chain-concatenated data
+    - `offsets`: (Tensor) shape `(sum(M_i) + 1,)` the offsets of the concatenated segmented data.
+    """
+
+    data_list = []
+    offsets_list = [torch.tensor([0], dtype=segments[0][1].dtype, device=segments[0][1].device)]
+    for data, offsets in segments:
+        if len(offsets) > 1:
+            data_list.append(data)
+            offsets_list.append(offsets[1:] + offsets_list[-1][-1])
+    new_data = torch.cat(data_list, dim=axis)
+    new_offsets = torch.cat(offsets_list, dim=0)
+
+    return new_data, new_offsets
+
+
+def group_as_segments(labels: Tensor, data: Optional[Tensor] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[Tensor, ...]:
     """
     Group as segments by labels
 
@@ -92,19 +178,28 @@ def group_as_segments(labels: Tensor, data: Optional[Tensor] = None) -> Tuple[Te
     -------
     Assuming there are `M` difference labels:
 
-    - `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
-    - `data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
-    - `offsets`: `(Tensor)` shape `(M + 1,)`
-    
-    `data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`
+    - `grouped_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
+    - `grouped_data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+    - `offsets`: `(Tensor)` shape `(M + 1,)`. `grouped_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `grouped_labels[i]`
+    - `inverse_indices` (Tensor, optional): shape `(N,)`. `data[inverse_indices]` recovers the original data order, 
+        i.e., `inverse_indices[i]` gives the position that `data[i]` goes to in the `grouped_data`.
+    - `group_ids` (Tensor, optional): shape `(N,)`. The group id for each data point in the original order,
+        i.e., `group_ids[i]` gives the group index that `data[i]` belongs to. 
     """
-    group_labels, inv, counts = torch.unique(labels, return_inverse=True, return_counts=True, dim=0)
+    group_labels, group_ids, counts = labels.unique(sorted=True, return_inverse=True, return_counts=True, dim=0)
     offsets = _lengths_to_offsets(counts)
+    indices = torch.argsort(group_ids)
     if data is None:
-        data = torch.argsort(inv)
+        data = indices
     else:
-        data = data.index_select(0, torch.argsort(inv))
-    return group_labels, data, offsets
+        data = data.index_select(0, indices)
+    ret = (group_labels, data, offsets)
+    if return_inverse:
+        inverse_indices = reverse_permutation(indices)
+        ret += (inverse_indices,)
+    if return_group_ids:
+        ret += (group_ids,)
+    return ret
 
 
 def segment_argmax(data: Tensor, offsets: Tensor, dim: int = 0) -> Tensor:
@@ -164,22 +259,7 @@ def segment_argmin(data: Tensor, offsets: Tensor, dim: int = 0) -> Tensor:
     return argmin
 
 
-@torch.no_grad()
-def large_multinomial(weights: torch.Tensor, num_samples: int, replacement: bool = False) -> torch.LongTensor:
-    weights = weights.double()
-    weights = weights / weights.sum()
-
-    if replacement:
-        cum_weights = torch.cumsum(weights, dim=0)
-        rand = torch.rand(num_samples, dtype=torch.float64, device=weights.device)
-        indices = torch.searchsorted(cum_weights, rand)
-    else:
-        scores = weights.log() - torch.empty_like(weights).exponential_().log()
-        indices = torch.topk(scores, num_samples).indices
-    return indices
-
-
-def segment_argsort(input: torch.Tensor, offsets: torch.Tensor, descending: bool = False, dim: int = 0) -> torch.Tensor:
+def segment_argsort(input: torch.Tensor, offsets: torch.Tensor, descending: bool = False, dim: int = -1) -> torch.Tensor:
     """Compute the argsort indices within each segment.
     
     Parameters
@@ -187,21 +267,22 @@ def segment_argsort(input: torch.Tensor, offsets: torch.Tensor, descending: bool
     - `input`: (Tensor) shape `(..., N, ...)` the data to sort. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
     - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
     - `descending`: (bool) whether to sort in descending order.
-    - `dim`: (int) the segment axis to sort along. Default is 0.
+    - `dim`: (int) the segment axis to sort along. Default is -1.
 
     Returns
     ----
     - `sorted_indices`: (Tensor) shape `(..., N, ...)` the indices that would sort the data within each segment.
 
     """
+    dim = dim % input.ndim
     lengths = torch.diff(offsets)
     segment_ids = torch.repeat_interleave(torch.arange(len(lengths), device=input.device), lengths)
-    segment_ids = segment_ids.reshape(segment_ids.shape + (1,) * (input.ndim - 1))
+    segment_ids = segment_ids.reshape((1,) * dim + segment_ids.shape + (1,) * (input.ndim - 1 - dim))
     sorted_indices = lexsort([-input if descending else input, segment_ids], dim=dim)
     return sorted_indices
 
 
-def segment_sort(input: torch.Tensor, offsets: torch.Tensor = None, descending: bool = False, dim: int = 0) -> torch.return_types.sort:
+def segment_sort(input: torch.Tensor, offsets: torch.Tensor = None, descending: bool = False, dim: int = -1) -> torch.return_types.sort:
     """Sort the data within each segment.
     
     Parameters
@@ -210,7 +291,7 @@ def segment_sort(input: torch.Tensor, offsets: torch.Tensor = None, descending: 
     - `lengths`: (Tensor) shape `(M,)` the lengths of each segment, alternatively to `offsets`.
     - `offsets`: (Tensor) shape `(M + 1,)` the offsets
     - `descending`: (bool) whether to sort in descending order.
-    - `dim`: (int) the segment axis to sort along. Default is 0.
+    - `dim`: (int) the segment axis to sort along. Default is -1.
 
     Returns
     ----
@@ -221,23 +302,28 @@ def segment_sort(input: torch.Tensor, offsets: torch.Tensor = None, descending: 
     return torch.return_types.sort((input.index_select(dim, sorted_indices), sorted_indices))
 
 
-def segment_topk(input: torch.Tensor, offsets: torch.Tensor, k: Union[int, torch.Tensor], largest: bool = True, dim: int = 0) -> torch.return_types.topk:
-    """Compute the top-k values and indices within each segment.
-    NOTE: if the length of a segment is less than k, the returns will contain all elements in that segment but fewer than k elements.
+def segment_topk(input: torch.Tensor, offsets: torch.Tensor, k: Union[int, torch.Tensor], largest: bool = True, dim: int = -1) -> Tuple[torch.return_types.topk, torch.Tensor]:
+    """Select the top-k values and indices within each segment.
 
     Parameters
     ----
-    - `input`: (Tensor) shape `(N, ...)` the data to compute top
+    - `input`: (Tensor) shape `(..., N, ...)` the data to compute top
     - `k`: (int or Tensor) the number of top elements to retrieve from each segment. If a Tensor, it should have shape `(M,)` where `M` is the number of segments.
     - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
     - `largest`: (bool) whether to return the largest or smallest elements. Otherwise, return the smallest elements.
-    - `dim`: (int) the segment axis to compute along. Default is 0.
+    - `dim`: (int) the segment axis to compute along. Default is -1.
 
     Returns
     ----
-    - `values`: (Tensor) shape `(sum_k, ...)` the top-k values
-    - `indices`: (Tensor) shape `(sum_k, ...)` the indices of the top-k values in the original input.
-    where `sum_k` is the sum of all k's across segments.
+    - `topk`: (namedtuple) with fields `values` and `indices`.
+        - `values`: (Tensor) shape `(sum_k, ...)` the top-k values  where `sum_k` is the sum of all k's across segments.
+        - `indices`: (Tensor) shape `(sum_k, ...)` the indices of the top-k values in the original input.
+    - `offsets`: (Tensor) shape `(M + 1,)` the offsets of the top-k values for each segment.
+    
+    Notes
+    -----
+    - If the length of a segment is less than k, the returns will contain all elements in that segment but fewer than k elements.
+
     """
     lengths = torch.diff(offsets)
     
@@ -250,7 +336,10 @@ def segment_topk(input: torch.Tensor, offsets: torch.Tensor, k: Union[int, torch
         topk_indices = sorted_indices.index_select(dim, local_index < torch.repeat_interleave(k, lengths))
     
     topk_values = input.index_select(dim, topk_indices)
-    return torch.return_types.topk((topk_values, topk_indices))
+    
+    result_offsets = _lengths_to_offsets(torch.minimum(lengths, k))
+
+    return torch.return_types.topk((topk_values, topk_indices)), result_offsets
 
 
 def segment_median(input: torch.Tensor, offsets: torch.Tensor, dim: int = 0) -> torch.return_types.median:
@@ -329,7 +418,8 @@ def segment_multinomial(weights: torch.Tensor, offsets: torch.Tensor, num_sample
 
     Returns
     ----
-    - `sampled_indices`: (LongTensor) shape `(M * n,)` the sampled indices from each segment.
+    - `sampled_indices`: (LongTensor) shape `(tot_samples,)` the sampled indices from each segment.
+    - `offsets`: (LongTensor) shape `(M + 1,)` the offsets of the sampled indices for each segment.
     """
     
     dtype, device = weights.dtype, weights.device
@@ -350,9 +440,9 @@ def segment_multinomial(weights: torch.Tensor, offsets: torch.Tensor, num_sample
         )
     else:
         scores = weights.clamp_min_(eps).log() - torch.empty_like(weights).exponential_().clamp_min(eps).log()
-        sampled_indices = segment_topk(scores, offsets, k=num_samples).indices
+        topk, offsets = segment_topk(scores, offsets, k=num_samples)
 
-    return sampled_indices
+    return topk.indices, offsets
 
 
 def _segment_local_indices(lengths: torch.Tensor = None, offsets: torch.Tensor = None):
@@ -384,7 +474,7 @@ def segment_sum(input: torch.Tensor, offsets: torch.Tensor, dim: int = 0) -> tor
         torch.zeros((*input.shape[:dim], 1, *input.shape[dim + 1:]), dtype=input.dtype, device=input.device), 
         torch.cumsum(input, dim=dim)
     ], dim=dim)
-    segsum = torch.diff(torch.take_along_dim(cumsum, offsets, dim=dim), dim=dim)
+    segsum = torch.diff(torch.index_select(cumsum, dim=dim, index=offsets), dim=dim)
     return segsum
 
 
@@ -409,7 +499,7 @@ def segment_cumsum(input: torch.Tensor, offsets: torch.Tensor, dim: int) -> torc
     ], dim=dim)
     lengths = torch.diff(offsets)
     segcumsum = cumsum[(slice(None),) * dim + (slice(1, None),) + (slice(None),) * (input.ndim - dim - 1)]\
-        - torch.take_along_dim(cumsum, offsets[(slice(None),) * dim + (slice(None, -1),) + (slice(None),) * (input.ndim - dim - 1)], dim=dim).repeat_interleave(lengths, dim=dim)
+                - cumsum.index_select(dim=dim, index=offsets[:-1]).repeat_interleave(lengths, dim=dim)
     return segcumsum
 
 
@@ -583,4 +673,3 @@ def segment_searchsorted(
         out = out_flat.reshape(*batch_shape, -1) - seg_base
 
     return out
-

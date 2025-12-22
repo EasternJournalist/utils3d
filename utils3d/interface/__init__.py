@@ -12,6 +12,7 @@ __all__ = ["sliding_window",
 "lookup_set", 
 "group", 
 "csr_matrix_from_dense_indices", 
+"reverse_permutation", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -144,6 +145,7 @@ __all__ = ["sliding_window",
 "index_reduce_", 
 "scatter_argmax", 
 "scatter_argmin", 
+"large_multinomial", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -157,6 +159,7 @@ __all__ = ["sliding_window",
 "stack_segments", 
 "segment_multinomial", 
 "segment_combinations", 
+"segment_searchsorted", 
 "mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
@@ -238,6 +241,12 @@ def csr_matrix_from_dense_indices(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.csr_matrix_from_dense_indices, utils3d.torch.csr_matrix_from_dense_indices
     return _call_based_on_args('csr_matrix_from_dense_indices', args, kwargs)
+
+@suppress_traceback
+def reverse_permutation(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.reverse_permutation, utils3d.torch.reverse_permutation
+    return _call_based_on_args('reverse_permutation', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):
@@ -1032,6 +1041,12 @@ def scatter_argmin(*args, **kwargs):
     return _call_based_on_args('scatter_argmin', args, kwargs)
 
 @suppress_traceback
+def large_multinomial(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.large_multinomial
+    return _call_based_on_args('large_multinomial', args, kwargs)
+
+@suppress_traceback
 def rotation_matrix_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.rotation_matrix_2d
@@ -1108,6 +1123,12 @@ def segment_combinations(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.segment_combinations
     return _call_based_on_args('segment_combinations', args, kwargs)
+
+@suppress_traceback
+def segment_searchsorted(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_searchsorted
+    return _call_based_on_args('segment_searchsorted', args, kwargs)
 
 @suppress_traceback
 def mesh_dual_graph(*args, **kwargs):

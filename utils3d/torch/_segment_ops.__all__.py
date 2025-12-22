@@ -2,6 +2,9 @@
 __all__ = [
     'segment_roll',
     'segment_take',
+    'segment_concatenate',
+    'segment_concat',
+    'segment_chain',
     'segment_argmax',
     'segment_argmin',
     'segment_median',

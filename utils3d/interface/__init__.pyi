@@ -16,6 +16,7 @@ __all__ = ["sliding_window",
 "lookup_set", 
 "group", 
 "csr_matrix_from_dense_indices", 
+"reverse_permutation", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -148,6 +149,7 @@ __all__ = ["sliding_window",
 "index_reduce_", 
 "scatter_argmax", 
 "scatter_argmin", 
+"large_multinomial", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -161,6 +163,7 @@ __all__ = ["sliding_window",
 "stack_segments", 
 "segment_multinomial", 
 "segment_combinations", 
+"segment_searchsorted", 
 "mesh_dual_graph", 
 "compute_boundaries", 
 "remove_isolated_pieces", 
@@ -306,6 +309,24 @@ def csr_matrix_from_dense_indices(indices: numpy_.ndarray, n_cols: int) -> 'csr_
 ## Returns
     Tensor: shape `(N, n_cols)` sparse CSR adjacency matrix"""
     utils3d.numpy.utils.csr_matrix_from_dense_indices
+
+@overload
+def reverse_permutation(perm: numpy_.ndarray, axis: int = 0) -> numpy_.ndarray:
+    """Compute the reverse of a permutation array. 
+
+Parameters
+----
+- `perm` (ndarray): shape `(..., N, ...)` permutation array.
+- `axis` (int): axis of the permutation array. Other axes are treated as batch dimensions.
+
+Returns
+----
+- `rev_perm` (ndarray): shape `(N,)` reverse permutation array.
+
+Notes
+-----
+Equivalent to `np.argsort(perm, axis=axis)`, but more efficient."""
+    utils3d.numpy.utils.reverse_permutation
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
@@ -1281,7 +1302,7 @@ Returns
     utils3d.numpy.segment_ops.segment_concat
 
 @overload
-def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Group as segments by labels
 
 Parameters
@@ -2533,7 +2554,7 @@ Returns
     utils3d.torch.utils.index_reduce_
 
 @overload
-def scatter_argmax(input: torch_.Tensor, dim: int, index: torch_.LongTensor, src: torch_.Tensor, include_self: bool = True) -> torch_.Tensor:
+def scatter_argmax(input: torch_.Tensor, dim: int, index: torch_.Tensor, src: torch_.Tensor, include_self: bool = True) -> torch_.Tensor:
     """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
 
 Parameters
@@ -2555,7 +2576,7 @@ Notes
     utils3d.torch.utils.scatter_argmax
 
 @overload
-def scatter_argmin(input: torch_.Tensor, dim: int, index: torch_.LongTensor, src: torch_.Tensor, include_self: bool = True) -> torch_.Tensor:
+def scatter_argmin(input: torch_.Tensor, dim: int, index: torch_.Tensor, src: torch_.Tensor, include_self: bool = True) -> torch_.Tensor:
     """Scatter src into input at index along dim with min reduction. Return the indices of the winners in src.
 
 Parameters
@@ -2575,6 +2596,27 @@ Notes
 - If multiple values in `src` are equal to the min value at a position, the one with the smallest index in `src` will be chosen.
 - If none of src was scattered to a position (i.e., not presented, or the min value is from the original input), the index will be -1."""
     utils3d.torch.utils.scatter_argmin
+
+@overload
+def reverse_permutation(perm: torch_.Tensor, dim: int = 0) -> torch_.Tensor:
+    """Reverse a permutation tensor along a specified dimension. 
+Parameters
+----
+- `perm`: (LongTensor) the permutation tensor to reverse.
+- `dim`: (int) the dimension of permutation indices. Other dimensions are treated as batch dimensions.
+
+Returns
+----
+- (LongTensor) the reversed permutation tensor, such that `reversed_perm[perm] == torch.arange(perm.shape[dim])`
+
+Notes
+-----
+Equivalent to `torch.argsort(perm, dim=dim)`, but more efficient."""
+    utils3d.torch.utils.reverse_permutation
+
+@overload
+def large_multinomial(weights: torch_.Tensor, num_samples: int, replacement: bool = False) -> torch_.Tensor:
+    utils3d.torch.utils.large_multinomial
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
@@ -3368,7 +3410,7 @@ Returns
     utils3d.torch.segment_ops.segment_cumsum
 
 @overload
-def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[torch_.Tensor, ...]:
     """Group as segments by labels
 
 Parameters
@@ -3381,15 +3423,17 @@ Returns
 -------
 Assuming there are `M` difference labels:
 
-- `segment_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
-- `data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
-- `offsets`: `(Tensor)` shape `(M + 1,)`
-
-`data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
+- `grouped_labels`: `(Tensor)` shape `(M, *label_dims)` labels of of each segment
+- `grouped_data`: `(Tensor)` shape `(N,)` or `(N, *data_dims)` the rearranged data (or indices) where the same labels are grouped as a continous segment.
+- `offsets`: `(Tensor)` shape `(M + 1,)`. `grouped_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `grouped_labels[i]`
+- `inverse_indices` (Tensor, optional): shape `(N,)`. `data[inverse_indices]` recovers the original data order, 
+    i.e., `inverse_indices[i]` gives the position that `data[i]` goes to in the `grouped_data`.
+- `group_ids` (Tensor, optional): shape `(N,)`. The group id for each data point in the original order,
+    i.e., `group_ids[i]` gives the group index that `data[i]` belongs to. """
     utils3d.torch.segment_ops.group_as_segments
 
 @overload
-def segment_sort(input: torch_.Tensor, offsets: torch_.Tensor = None, descending: bool = False, dim: int = 0) -> torch_.return_types.sort:
+def segment_sort(input: torch_.Tensor, offsets: torch_.Tensor = None, descending: bool = False, dim: int = -1) -> torch_.return_types.sort:
     """Sort the data within each segment.
 
 Parameters
@@ -3398,7 +3442,7 @@ Parameters
 - `lengths`: (Tensor) shape `(M,)` the lengths of each segment, alternatively to `offsets`.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets
 - `descending`: (bool) whether to sort in descending order.
-- `dim`: (int) the segment axis to sort along. Default is 0.
+- `dim`: (int) the segment axis to sort along. Default is -1.
 
 Returns
 ----
@@ -3407,7 +3451,7 @@ Returns
     utils3d.torch.segment_ops.segment_sort
 
 @overload
-def segment_argsort(input: torch_.Tensor, offsets: torch_.Tensor, descending: bool = False, dim: int = 0) -> torch_.Tensor:
+def segment_argsort(input: torch_.Tensor, offsets: torch_.Tensor, descending: bool = False, dim: int = -1) -> torch_.Tensor:
     """Compute the argsort indices within each segment.
 
 Parameters
@@ -3415,7 +3459,7 @@ Parameters
 - `input`: (Tensor) shape `(..., N, ...)` the data to sort. The first dimension is treated as the segment dimension. Extra dimensions are treated as batch dimensions.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
 - `descending`: (bool) whether to sort in descending order.
-- `dim`: (int) the segment axis to sort along. Default is 0.
+- `dim`: (int) the segment axis to sort along. Default is -1.
 
 Returns
 ----
@@ -3423,23 +3467,27 @@ Returns
     utils3d.torch.segment_ops.segment_argsort
 
 @overload
-def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True, dim: int = 0) -> torch_.return_types.topk:
-    """Compute the top-k values and indices within each segment.
-NOTE: if the length of a segment is less than k, the returns will contain all elements in that segment but fewer than k elements.
+def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True, dim: int = -1) -> Tuple[torch_.return_types.topk, torch_.Tensor]:
+    """Select the top-k values and indices within each segment.
 
 Parameters
 ----
-- `input`: (Tensor) shape `(N, ...)` the data to compute top
+- `input`: (Tensor) shape `(..., N, ...)` the data to compute top
 - `k`: (int or Tensor) the number of top elements to retrieve from each segment. If a Tensor, it should have shape `(M,)` where `M` is the number of segments.
 - `offsets`: (Tensor) shape `(M + 1,)` the offsets of each segment.
 - `largest`: (bool) whether to return the largest or smallest elements. Otherwise, return the smallest elements.
-- `dim`: (int) the segment axis to compute along. Default is 0.
+- `dim`: (int) the segment axis to compute along. Default is -1.
 
 Returns
 ----
-- `values`: (Tensor) shape `(sum_k, ...)` the top-k values
-- `indices`: (Tensor) shape `(sum_k, ...)` the indices of the top-k values in the original input.
-where `sum_k` is the sum of all k's across segments."""
+- `topk`: (namedtuple) with fields `values` and `indices`.
+    - `values`: (Tensor) shape `(sum_k, ...)` the top-k values  where `sum_k` is the sum of all k's across segments.
+    - `indices`: (Tensor) shape `(sum_k, ...)` the indices of the top-k values in the original input.
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the top-k values for each segment.
+
+Notes
+-----
+- If the length of a segment is less than k, the returns will contain all elements in that segment but fewer than k elements."""
     utils3d.torch.segment_ops.segment_topk
 
 @overload
@@ -3475,7 +3523,8 @@ Parameters
 
 Returns
 ----
-- `sampled_indices`: (LongTensor) shape `(M * n,)` the sampled indices from each segment."""
+- `sampled_indices`: (LongTensor) shape `(tot_samples,)` the sampled indices from each segment.
+- `offsets`: (LongTensor) shape `(M + 1,)` the offsets of the sampled indices for each segment."""
     utils3d.torch.segment_ops.segment_multinomial
 
 @overload
@@ -3498,6 +3547,21 @@ Notes
 ----
 - The result may contain zero-length segments if a segment has less than `r` elements."""
     utils3d.torch.segment_ops.segment_combinations
+
+@overload
+def segment_searchsorted(sorted_sequence: torch_.Tensor, offsets: torch_.Tensor, input: torch_.Tensor, segment_ids: torch_.Tensor, side: Literal['left', 'right'] = 'left') -> torch_.Tensor:
+    """Per-segment searchsorted operation implemented with triton.
+
+Parameters
+----------
+- `sorted_sequence: Tensor` of shape (..., N), the concatenated sorted sequences of all segments.
+- `offsets: Tensor` of shape (M + 1,), segment offsets applied to the last dimension of `sorted_sequence`.
+- `input: Tensor` of shape (..., Q), the values to search for.
+- `segment_ids: Tensor` of shape (..., Q), the segment ids to search within for each value in `input`.
+
+Returns
+- `indices: Tensor` of shape (..., Q), the insertion indices for each value in `input` within its corresponding segment in `sorted_sequence`."""
+    utils3d.torch.segment_ops.segment_searchsorted
 
 @overload
 def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> torch_.Tensor:

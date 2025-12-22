@@ -435,3 +435,4 @@ def reverse_permutation(perm: ndarray, axis: int = 0) -> ndarray:
     indices = np.arange(perm.shape[axis], dtype=perm.dtype)[(None,) * axis + (slice(None),) + (None,) * (perm.ndim - axis - 1)]
     np.put_along_axis(rev_perm, perm, indices, axis=axis)
     return rev_perm
+

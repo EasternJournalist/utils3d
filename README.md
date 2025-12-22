@@ -198,46 +198,48 @@ The links below will take you to the source code of each function with detailed 
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.csr_eliminate_zeros`<br>Remove zero elements from a sparse CSR tensor. | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L233) | 
-| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L399) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L214) | 
-| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L376) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L268) | 
-| `utils3d.index_reduce`<br>Put values into the input tensor at the specified indices (like `index_put`), with reduction support. | - | [`utils3d.pt.index_reduce(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L327) | 
-| `utils3d.index_reduce_`<br>In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support. | - | [`utils3d.pt.index_reduce_(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L348) | 
-| `utils3d.lexsort`<br>Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.  | - | [`utils3d.pt.lexsort(keys, dim)`](utils3d/torch/utils.py#L290) | 
-| `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L214) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L130) | 
-| `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L243) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L160) | 
-| `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L265) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L185) | 
-| `utils3d.masked_max`<br>Similar to torch.max, but with mask | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L121) | 
-| `utils3d.masked_min`<br>Similar to torch.min, but with mask | - | [`utils3d.pt.masked_min(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L112) | 
+| `utils3d.csr_eliminate_zeros`<br>Remove zero elements from a sparse CSR tensor. | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L234) | 
+| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L399) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L215) | 
+| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L376) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L269) | 
+| `utils3d.index_reduce`<br>Put values into the input tensor at the specified indices (like `index_put`), with reduction support. | - | [`utils3d.pt.index_reduce(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L328) | 
+| `utils3d.index_reduce_`<br>In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support. | - | [`utils3d.pt.index_reduce_(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L349) | 
+| `utils3d.large_multinomial`<br> | - | [`utils3d.pt.large_multinomial(weights, num_samples, replacement)`](utils3d/torch/utils.py#L448) | 
+| `utils3d.lexsort`<br>Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.  | - | [`utils3d.pt.lexsort(keys, dim)`](utils3d/torch/utils.py#L291) | 
+| `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L214) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L131) | 
+| `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L243) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L161) | 
+| `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L265) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L186) | 
+| `utils3d.masked_max`<br>Similar to torch.max, but with mask | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L122) | 
+| `utils3d.masked_min`<br>Similar to torch.min, but with mask | - | [`utils3d.pt.masked_min(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L113) | 
 | `utils3d.max_pool_2d`<br> | [`utils3d.np.max_pool_2d(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L203) | - | 
 | `utils3d.pooling`<br>Compute the pooling of the input array.  | [`utils3d.np.pooling(x, kernel_size, stride, padding, axis, mode)`](utils3d/numpy/utils.py#L118) | - | 
-| `utils3d.reverse_permutation`<br>Compute the reverse of a permutation array.  | [`utils3d.np.reverse_permutation(perm, axis)`](utils3d/numpy/utils.py#L417) | [`utils3d.pt.reverse_permutation(perm, dim)`](utils3d/torch/utils.py#L425) | 
-| `utils3d.scatter_argmax`<br>Scatter src into input at index along dim with min reduction. Return the indices of the winners in src. | - | [`utils3d.pt.scatter_argmax(input, dim, index, src, include_self)`](utils3d/torch/utils.py#L397) | 
-| `utils3d.scatter_argmin`<br>Scatter src into input at index along dim with min reduction. Return the indices of the winners in src. | - | [`utils3d.pt.scatter_argmin(input, dim, index, src, include_self)`](utils3d/torch/utils.py#L369) | 
-| `utils3d.sliding_window`<br>Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s). | [`utils3d.np.sliding_window(x, window_size, stride, dilation, pad_size, pad_mode, pad_value, axis)`](utils3d/numpy/utils.py#L25) | [`utils3d.pt.sliding_window(x, window_size, stride, dilation, pad_size, pad_mode, pad_value, dim)`](utils3d/torch/utils.py#L33) | 
+| `utils3d.reverse_permutation`<br>Compute the reverse of a permutation array.  | [`utils3d.np.reverse_permutation(perm, axis)`](utils3d/numpy/utils.py#L417) | [`utils3d.pt.reverse_permutation(perm, dim)`](utils3d/torch/utils.py#L426) | 
+| `utils3d.scatter_argmax`<br>Scatter src into input at index along dim with min reduction. Return the indices of the winners in src. | - | [`utils3d.pt.scatter_argmax(input, dim, index, src, include_self)`](utils3d/torch/utils.py#L398) | 
+| `utils3d.scatter_argmin`<br>Scatter src into input at index along dim with min reduction. Return the indices of the winners in src. | - | [`utils3d.pt.scatter_argmin(input, dim, index, src, include_self)`](utils3d/torch/utils.py#L370) | 
+| `utils3d.sliding_window`<br>Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s). | [`utils3d.np.sliding_window(x, window_size, stride, dilation, pad_size, pad_mode, pad_value, axis)`](utils3d/numpy/utils.py#L25) | [`utils3d.pt.sliding_window(x, window_size, stride, dilation, pad_size, pad_mode, pad_value, dim)`](utils3d/torch/utils.py#L34) | 
 
 
 ### Segment Array Operations
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data)`](utils3d/numpy/segment_ops.py#L146) | [`utils3d.pt.group_as_segments(labels, data)`](utils3d/torch/segment_ops.py#L81) | 
-| `utils3d.segment_argmax`<br>Compute the argmax of each segment in the segmented data. | [`utils3d.np.segment_argmax(data, offsets, axis)`](utils3d/numpy/segment_ops.py#L175) | [`utils3d.pt.segment_argmax(data, offsets, dim)`](utils3d/torch/segment_ops.py#L110) | 
-| `utils3d.segment_argmin`<br>Compute the argmin of each segment in the segmented data. | [`utils3d.np.segment_argmin(data, offsets, axis)`](utils3d/numpy/segment_ops.py#L205) | [`utils3d.pt.segment_argmin(data, offsets, dim)`](utils3d/torch/segment_ops.py#L139) | 
-| `utils3d.segment_argsort`<br>Compute the argsort indices within each segment. | - | [`utils3d.pt.segment_argsort(input, offsets, descending, dim)`](utils3d/torch/segment_ops.py#L182) | 
-| `utils3d.segment_combinations`<br>Generate all combinations of elements within each segment. Vectorized implementation. | - | [`utils3d.pt.segment_combinations(input, offsets, r, with_replacement)`](utils3d/torch/segment_ops.py#L416) | 
-| `utils3d.segment_concat`<br>(Alias for segment_concatenate). | [`utils3d.np.segment_concat(segments, axis)`](utils3d/numpy/segment_ops.py#L99) | - | 
-| `utils3d.segment_concatenate`<br>Concatenate segmented arrays within each segment. All numbers of segments remain the same. | [`utils3d.np.segment_concatenate(segments, axis)`](utils3d/numpy/segment_ops.py#L65) | - | 
-| `utils3d.segment_cumsum`<br>Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32. | - | [`utils3d.pt.segment_cumsum(input, offsets, dim)`](utils3d/torch/segment_ops.py#L391) | 
-| `utils3d.segment_median`<br>Compute the median of each segment. | - | [`utils3d.pt.segment_median(input, offsets, dim)`](utils3d/torch/segment_ops.py#L256) | 
-| `utils3d.segment_multinomial`<br>Perform multinomial sampling within each segment. | - | [`utils3d.pt.segment_multinomial(weights, offsets, num_samples, eps, replacement)`](utils3d/torch/segment_ops.py#L317) | 
-| `utils3d.segment_roll`<br>Roll the data within each segment. | [`utils3d.np.segment_roll(data, offsets, shift, axis)`](utils3d/numpy/segment_ops.py#L21) | [`utils3d.pt.segment_roll(data, offsets, shift, dim)`](utils3d/torch/segment_ops.py#L37) | 
-| `utils3d.segment_searchsorted`<br>Per-segment searchsorted operation implemented with triton. | - | [`utils3d.pt.segment_searchsorted(sorted_sequence, offsets, input, segment_ids, side)`](utils3d/torch/segment_ops.py#L523) | 
-| `utils3d.segment_sort`<br>Sort the data within each segment. | - | [`utils3d.pt.segment_sort(input, offsets, descending, dim)`](utils3d/torch/segment_ops.py#L204) | 
-| `utils3d.segment_sum`<br>Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32. | - | [`utils3d.pt.segment_sum(input, offsets, dim)`](utils3d/torch/segment_ops.py#L367) | 
-| `utils3d.segment_take`<br>Take some segments from a segmented array | [`utils3d.np.segment_take(data, offsets, taking, axis)`](utils3d/numpy/segment_ops.py#L42) | [`utils3d.pt.segment_take(data, offsets, taking, dim)`](utils3d/torch/segment_ops.py#L58) | 
-| `utils3d.segment_topk`<br>Compute the top-k values and indices within each segment. | - | [`utils3d.pt.segment_topk(input, offsets, k, largest, dim)`](utils3d/torch/segment_ops.py#L224) | 
-| `utils3d.stack_segments`<br>Stack segments into a padded tensor. | - | [`utils3d.pt.stack_segments(input, offsets, max_length, padding_value, dim)`](utils3d/torch/segment_ops.py#L284) | 
+| `utils3d.group_as_segments`<br>Group as segments by labels | [`utils3d.np.group_as_segments(labels, data, return_inverse, return_group_ids)`](utils3d/numpy/segment_ops.py#L150) | [`utils3d.pt.group_as_segments(labels, data, return_inverse, return_group_ids)`](utils3d/torch/segment_ops.py#L167) | 
+| `utils3d.segment_argmax`<br>Compute the argmax of each segment in the segmented data. | [`utils3d.np.segment_argmax(data, offsets, axis)`](utils3d/numpy/segment_ops.py#L186) | [`utils3d.pt.segment_argmax(data, offsets, dim)`](utils3d/torch/segment_ops.py#L205) | 
+| `utils3d.segment_argmin`<br>Compute the argmin of each segment in the segmented data. | [`utils3d.np.segment_argmin(data, offsets, axis)`](utils3d/numpy/segment_ops.py#L216) | [`utils3d.pt.segment_argmin(data, offsets, dim)`](utils3d/torch/segment_ops.py#L234) | 
+| `utils3d.segment_argsort`<br>Compute the argsort indices within each segment. | - | [`utils3d.pt.segment_argsort(input, offsets, descending, dim)`](utils3d/torch/segment_ops.py#L262) | 
+| `utils3d.segment_chain`<br>Concatenate segmented arrays in sequence. The number of segments are summed. | - | [`utils3d.pt.segment_chain(segments, axis)`](utils3d/torch/segment_ops.py#L139) | 
+| `utils3d.segment_combinations`<br>Generate all combinations of elements within each segment. Vectorized implementation. | - | [`utils3d.pt.segment_combinations(input, offsets, r, with_replacement)`](utils3d/torch/segment_ops.py#L506) | 
+| `utils3d.segment_concat`<br>(Alias for segment_concatenate). | [`utils3d.np.segment_concat(segments, axis)`](utils3d/numpy/segment_ops.py#L103) | [`utils3d.pt.segment_concat(segments, axis)`](utils3d/torch/segment_ops.py#L120) | 
+| `utils3d.segment_concatenate`<br>Concatenate segmented arrays within each segment. All numbers of segments remain the same. | [`utils3d.np.segment_concatenate(segments, axis)`](utils3d/numpy/segment_ops.py#L69) | [`utils3d.pt.segment_concatenate(segments, dim)`](utils3d/torch/segment_ops.py#L86) | 
+| `utils3d.segment_cumsum`<br>Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32. | - | [`utils3d.pt.segment_cumsum(input, offsets, dim)`](utils3d/torch/segment_ops.py#L481) | 
+| `utils3d.segment_median`<br>Compute the median of each segment. | - | [`utils3d.pt.segment_median(input, offsets, dim)`](utils3d/torch/segment_ops.py#L345) | 
+| `utils3d.segment_multinomial`<br>Perform multinomial sampling within each segment. | - | [`utils3d.pt.segment_multinomial(weights, offsets, num_samples, eps, replacement)`](utils3d/torch/segment_ops.py#L406) | 
+| `utils3d.segment_roll`<br>Roll the data within each segment. | [`utils3d.np.segment_roll(data, offsets, shift, axis)`](utils3d/numpy/segment_ops.py#L23) | [`utils3d.pt.segment_roll(data, offsets, shift, dim)`](utils3d/torch/segment_ops.py#L40) | 
+| `utils3d.segment_searchsorted`<br>Per-segment searchsorted operation implemented with triton. | - | [`utils3d.pt.segment_searchsorted(sorted_sequence, offsets, input, segment_ids, side)`](utils3d/torch/segment_ops.py#L613) | 
+| `utils3d.segment_sort`<br>Sort the data within each segment. | - | [`utils3d.pt.segment_sort(input, offsets, descending, dim)`](utils3d/torch/segment_ops.py#L285) | 
+| `utils3d.segment_sum`<br>Compute the sum of each segment in the segmented data. Workaround supports for dtypes other than float32. | - | [`utils3d.pt.segment_sum(input, offsets, dim)`](utils3d/torch/segment_ops.py#L457) | 
+| `utils3d.segment_take`<br>Take some segments from a segmented array | [`utils3d.np.segment_take(data, offsets, taking, axis)`](utils3d/numpy/segment_ops.py#L44) | [`utils3d.pt.segment_take(data, offsets, taking, dim)`](utils3d/torch/segment_ops.py#L61) | 
+| `utils3d.segment_topk`<br>Select the top-k values and indices within each segment. | - | [`utils3d.pt.segment_topk(input, offsets, k, largest, dim)`](utils3d/torch/segment_ops.py#L305) | 
+| `utils3d.stack_segments`<br>Stack segments into a padded tensor. | - | [`utils3d.pt.stack_segments(input, offsets, max_length, padding_value, dim)`](utils3d/torch/segment_ops.py#L373) | 
 
 
 ### IO
