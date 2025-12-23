@@ -701,16 +701,15 @@ def colorize_depth_map(depth: ndarray, mask: ndarray = None, near: Optional[floa
     """Colorize depth map for visualization.
 
     ## Parameters
-        - `depth` (ndarray): shape (H, W), linear depth map
-        - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
+        - `depth` (ndarray): shape (..., H, W), linear depth map
+        - `mask` (ndarray, optional): shape (..., H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
         - `near` (float, optional): near plane for depth normalization. If None, use the 0.1% quantile of valid depth values. Defaults to None.
         - `far` (float, optional): far plane for depth normalization. If None, use the 99.9% quantile of valid depth values. Defaults to None.
         - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'Spectral'.
     
     ## Returns
-        - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB [0, 255]
+        - `colored` (ndarray): shape (..., H, W, 3), dtype=uint8, RGB [0, 255]
     """
-    assert depth.ndim == 2, "depth should be of shape (H, W)"
     try:
         import matplotlib
     except ImportError:
@@ -721,9 +720,9 @@ def colorize_depth_map(depth: ndarray, mask: ndarray = None, near: Optional[floa
     else:
         depth = np.where((depth > 0) & mask, depth, np.nan)
     if near is None:
-        near = np.nanquantile(depth, 0.001)
+        near = np.nanmin(depth)
     if far is None:
-        far = np.nanquantile(depth, 0.999)
+        far = np.nanmax(depth)
     
     disp = (1 / depth - 1 / far) / (1 / near - 1 / far)
     colored = np.nan_to_num(matplotlib.colormaps[cmap](1.0 - disp)[..., :3], 0)
