@@ -154,6 +154,7 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"segment_chain", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -1934,14 +1935,14 @@ def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near:
     """Colorize depth map for visualization.
 
 ## Parameters
-    - `depth` (ndarray): shape (H, W), linear depth map
-    - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
+    - `depth` (ndarray): shape (..., H, W), linear depth map
+    - `mask` (ndarray, optional): shape (..., H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
     - `near` (float, optional): near plane for depth normalization. If None, use the 0.1% quantile of valid depth values. Defaults to None.
     - `far` (float, optional): far plane for depth normalization. If None, use the 99.9% quantile of valid depth values. Defaults to None.
     - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'Spectral'.
 
 ## Returns
-    - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB [0, 255]"""
+    - `colored` (ndarray): shape (..., H, W, 3), dtype=uint8, RGB [0, 255]"""
     utils3d.numpy.maps.colorize_depth_map
 
 @overload
@@ -2415,7 +2416,7 @@ def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, k
     utils3d.torch.utils.masked_max
 
 @overload
-def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
+def lookup(key: torch_.Tensor, query: torch_.Tensor, backend: str = 'auto') -> torch_.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
 Parameters
@@ -2429,7 +2430,8 @@ Returns
 
 Notes
 ----
-`O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys."""
+- If using pytorch implementation (based on `torch.unique`), the complexity is `O((Q + K) * log(Q + K))` where `Q` is the number of queries and `K` is the number of keys.
+- If using triton implementation (based on hashmap), the average complexity `O(Q + K)`. Much faster for large `Q` and `K`."""
     utils3d.torch.utils.lookup
 
 @overload
@@ -3321,6 +3323,58 @@ Returns
 - `new_data`: (Tensor) the new segmented data.
 - `new_offsets`: (Tensor) shape `(K + 1,)` the offsets of the new segmented data. `K` is the number of taken segments."""
     utils3d.torch.segment_ops.segment_take
+
+@overload
+def segment_concatenate(segments: Sequence[Tuple[torch_.Tensor, torch_.Tensor]], dim: int = 0) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Concatenate segmented arrays within each segment. All numbers of segments remain the same.
+
+Parameters
+------
+- `segments`: (Sequence[Tuple[Tensor, Tensor]]) A sequence of segmented arrays:
+    - `data`: (Tensor) shape `(..., N_i, ...)`
+    - `offsets`: (Tensor) shape `(M + 1,)` segment offsets.
+- `axis`: (int) the segment axis.
+
+Returns
+-------
+- `data`: (Tensor) shape `(..., sum(N_i), ...)` the concatenated data
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the concatenated segmented data."""
+    utils3d.torch.segment_ops.segment_concatenate
+
+@overload
+def segment_concat(segments: Sequence[Tuple[torch_.Tensor, torch_.Tensor]], axis: int = 0) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """(Alias for segment_concatenate).
+Concatenate segmented arrays within each segment.
+
+Parameters
+------
+- `segments`: (Sequence[Tuple[Tensor, Tensor]]) A sequence of segmented arrays:
+    - `data`: (Tensor) shape `(..., N_i, ...)`
+    - `offsets`: (Tensor) shape `(M + 1,)` segment offsets.
+- `axis`: (int) the segment axis.
+
+Returns
+-------
+- `data`: (Tensor) shape `(N, *data_dims)` the concatenated data
+- `offsets`: (Tensor) shape `(M + 1,)` the offsets of the concatenated segmented data."""
+    utils3d.torch.segment_ops.segment_concat
+
+@overload
+def segment_chain(segments: Sequence[Tuple[torch_.Tensor, torch_.Tensor]], axis: int = 0) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Concatenate segmented arrays in sequence. The number of segments are summed.
+
+Parameters
+------
+- `segments`: (Sequence[Tuple[Tensor, Tensor]]) A sequence of segmente arrays:
+    - `data`: (Tensor) shape `(..., N_i, ...)`
+    - `offsets`: (Tensor) shape `(M + 1,)` segment offsets.
+- `axis`: (int) the segment axis.
+
+Returns
+-------
+- `data`: (Tensor) shape `(..., sum(N_i), ...)` the chain-concatenated data
+- `offsets`: (Tensor) shape `(sum(M_i) + 1,)` the offsets of the concatenated segmented data."""
+    utils3d.torch.segment_ops.segment_chain
 
 @overload
 def segment_argmax(data: torch_.Tensor, offsets: torch_.Tensor, dim: int = 0) -> torch_.Tensor:

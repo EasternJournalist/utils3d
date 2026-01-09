@@ -150,6 +150,7 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"segment_chain", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -629,13 +630,13 @@ def segment_argmin(*args, **kwargs):
 @suppress_traceback
 def segment_concatenate(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_concatenate, None
+        utils3d.numpy.segment_concatenate, utils3d.torch.segment_concatenate
     return _call_based_on_args('segment_concatenate', args, kwargs)
 
 @suppress_traceback
 def segment_concat(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_concat, None
+        utils3d.numpy.segment_concat, utils3d.torch.segment_concat
     return _call_based_on_args('segment_concat', args, kwargs)
 
 @suppress_traceback
@@ -1069,6 +1070,12 @@ def scale_2d(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.scale_2d
     return _call_based_on_args('scale_2d', args, kwargs)
+
+@suppress_traceback
+def segment_chain(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_chain
+    return _call_based_on_args('segment_chain', args, kwargs)
 
 @suppress_traceback
 def segment_median(*args, **kwargs):
