@@ -42,13 +42,13 @@ def _hashmap_build_kernel_32bit(
     # Probing loop
     to_be_inserted = mask
     target_slot = hash_val & slot_bit_mask
-    attempt = 0
-    while (tl.sum(to_be_inserted) > 0) and (attempt < n_elements):
+    
+    while tl.sum(to_be_inserted) > 0:
         # Try to insert the key index into the hash table
         prev = tl.atomic_cas(hashmap_ptr + target_slot, tl.where(to_be_inserted, -1, -2), store_val)
         # Update mask: keep only those that failed to insert
         to_be_inserted = to_be_inserted & (prev >= 0)
-        attempt += 1
+
         # Update target_slot for next attempt
         target_slot += tl.where(to_be_inserted, 1, 0)
         target_slot &= slot_bit_mask
