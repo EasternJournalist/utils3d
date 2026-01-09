@@ -186,9 +186,13 @@ def lazy_import_all_from(globals: Dict[str, Any], module: str) -> List[str]:
 
 
 @contextmanager
-def timeit(name: str = None):
+def timeit(name: str = None, sync: Callable = None):
+    if sync is not None:
+        sync()
     start_t = time.time()
     yield
+    if sync is not None:
+        sync()
     end_t = time.time()
     if name:
         print(f"[{name}] Elapsed time: {end_t - start_t:.4f} seconds")

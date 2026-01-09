@@ -128,7 +128,7 @@ def masked_max(input: Tensor, mask: torch.BoolTensor, dim: int = None, keepdim: 
         return torch.where(mask, input, torch.tensor(-torch.inf, dtype=input.dtype, device=input.device)).max(dim=dim, keepdim=keepdim)
     
 
-def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
+def _lookup_pytorch(key: Tensor, query: Tensor) -> torch.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
     Parameters
@@ -156,6 +156,33 @@ def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
     index.scatter_(0, inverse[:num_keys], torch.arange(num_keys, device=key.device))
     result = index.index_select(0, inverse[num_keys:]).reshape(query_batch_shape)
     return torch.where(result < num_keys, result, -1)
+
+
+def lookup(key: Tensor, query: Tensor, backend: str = 'auto') -> torch.LongTensor:
+    """Look up `query` in `key` like a dictionary. Useful for COO indexing.
+
+    Parameters
+    ----
+    - `key` (Tensor): shape `(K, *key_shape)`, the array to search in
+    - `query` (Tensor): shape `(..., *key_shape)`, the array to search for. `...` represents any number of batch dimensions.
+
+    Returns
+    ----
+    - `indices` (Tensor): shape `(...,)` shape `(...,)` indices in `key` for each `query`. If a query is not found in key, the corresponding index will be -1.
+
+    Notes
+    ----
+    - If using pytorch implementation (based on `torch.unique`), the complexity is `O((Q + K) * log(Q + K))` where `Q` is the number of queries and `K` is the number of keys.
+    - If using triton implementation (based on hashmap), the average complexity `O(Q + K)`. Much faster for large `Q` and `K`.
+    """
+    device_type = key.device.type
+    if device_type == 'cpu':
+        # Use PyTorch implementation
+        return _lookup_pytorch(key, query)
+    elif device_type == 'cuda':
+        # Use triton implementation
+        from ._triton.hashmap import hashmap_build_lookup_triton
+        return hashmap_build_lookup_triton(key, query)
 
 
 def lookup_get(key: Tensor, value: Tensor, get_key: Tensor, default_value: Union[Number, Tensor] = 0) -> Tensor:
@@ -458,3 +485,4 @@ def large_multinomial(weights: Tensor, num_samples: int, replacement: bool = Fal
         scores = weights.log() - torch.empty_like(weights).exponential_().log()
         indices = torch.topk(scores, num_samples).indices
     return indices
+

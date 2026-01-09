@@ -71,7 +71,7 @@ def _segment_searchsorted_side_right_kernel(
     tl.store(out_ptr + offs, lo, mask=mask)
 
 
-def _segment_searchsorted_1d_triton(
+def segment_searchsorted_1d_triton(
     sorted_sequence_flat: Tensor,
     input_flat: Tensor,
     seg_start_flat: Tensor,

@@ -644,7 +644,7 @@ def segment_searchsorted(
         )
     
     elif device_type == 'cuda':
-        from ._triton.searchsorted import _segment_searchsorted_1d_triton
+        from ._triton.searchsorted import segment_searchsorted_1d_triton
 
         # Flatten inputs, get seg_start and seg_end
         batch_shape = sorted_sequence.shape[:-1]
@@ -661,7 +661,7 @@ def segment_searchsorted(
 
         # Call triton 1D implementation
         max_length = torch.diff(offsets).max().item()
-        out_flat = _segment_searchsorted_1d_triton(
+        out_flat = segment_searchsorted_1d_triton(
             sorted_sequence_flat,
             input_flat,
             seg_start_flat,
