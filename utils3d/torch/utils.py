@@ -158,7 +158,7 @@ def _lookup_pytorch(key: Tensor, query: Tensor) -> torch.LongTensor:
     return torch.where(result < num_keys, result, -1)
 
 
-def lookup(key: Tensor, query: Tensor, backend: str = 'auto') -> torch.LongTensor:
+def lookup(key: Tensor, query: Tensor) -> torch.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
     Parameters

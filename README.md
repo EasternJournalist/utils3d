@@ -205,7 +205,7 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.index_reduce_`<br>In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support. | - | [`utils3d.pt.index_reduce_(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L376) | 
 | `utils3d.large_multinomial`<br> | - | [`utils3d.pt.large_multinomial(weights, num_samples, replacement)`](utils3d/torch/utils.py#L475) | 
 | `utils3d.lexsort`<br>Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.  | - | [`utils3d.pt.lexsort(keys, dim)`](utils3d/torch/utils.py#L318) | 
-| `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L214) | [`utils3d.pt.lookup(key, query, backend)`](utils3d/torch/utils.py#L161) | 
+| `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L214) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L161) | 
 | `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L243) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L188) | 
 | `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L265) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L213) | 
 | `utils3d.masked_max`<br>Similar to torch.max, but with mask | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L122) | 

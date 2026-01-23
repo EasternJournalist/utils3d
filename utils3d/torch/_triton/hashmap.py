@@ -1,10 +1,15 @@
-from typing import Tuple
+from typing import Optional, Tuple
 import torch
 from torch import Tensor
 
 import triton
 import triton.language as tl
 
+__all__ = [
+    'hashmap_build_triton',
+    'hashmap_lookup_triton',
+    'hashmap_build_lookup_triton',
+]
 
 
 @triton.jit
@@ -221,7 +226,24 @@ def _hashmap_lookup_kernel_64bit(
     tl.store(results_ptr + offs, found_idx, mask=mask)
 
 
-def hashmap_build_triton(keys: Tensor) -> Tuple[Tensor, Tensor]:
+def hashmap_build_triton(keys: Tensor, dtype: Optional[torch.dtype] = None) -> Tensor:
+    """
+    Build a hash map from the given keys using Triton.
+    
+    Args:
+        keys (Tensor): A tensor of shape `(n_keys, *key_dims)` representing the keys.
+        dtype (Optional[torch.dtype]): The desired data type for the hash map indices. 
+            If None, automatically selects between `torch.int32` and `torch.int64` based on the size of the hash map.
+
+    Returns:
+        Tensor: A 1D tensor representing the hash map.
+
+    Notes
+    -----
+        The hash map stores a combination of a hash tag and the index of each key.
+        See `hashmap_lookup_triton` for querying the hash map.
+        Use `hashmap_build_lookup_triton` for a combined build and lookup operation.
+    """
     # Convert to byte view
     keys = keys.flatten(1).contiguous().view(torch.uint8)
 
@@ -230,12 +252,8 @@ def hashmap_build_triton(keys: Tensor) -> Tuple[Tensor, Tensor]:
     hashmap_size = 1 << ((n_keys - 1).bit_length() + 1)
 
     # Select 32-bit or 64-bit hash map based on size
-    if hashmap_size < (1 << 28):
-        dtype = torch.int32
-        hashmap_build_kernel = _hashmap_build_kernel_32bit
-    else:
-        dtype = torch.int64
-        hashmap_build_kernel = _hashmap_build_kernel_64bit
+    if dtype is None:
+        dtype = torch.int32 if hashmap_size < (1 << 28) else torch.int64
 
     # Convert keys and queries to appropriate dtype. Pad if necessary.
     bytes_alignment = 4 if dtype == torch.int32 else 8
@@ -250,6 +268,7 @@ def hashmap_build_triton(keys: Tensor) -> Tuple[Tensor, Tensor]:
     BLOCK_SIZE = 64
     grid = ((n_keys + BLOCK_SIZE - 1) // BLOCK_SIZE, )
     
+    hashmap_build_kernel = _hashmap_build_kernel_32bit if dtype == torch.int32 else _hashmap_build_kernel_64bit
     hashmap_build_kernel[grid](
         keys_ptr=keys,
         hashmap_ptr=hashmap,
@@ -263,6 +282,18 @@ def hashmap_build_triton(keys: Tensor) -> Tuple[Tensor, Tensor]:
 
 
 def hashmap_lookup_triton(hashmap: Tensor, keys: Tensor, queries: Tensor) -> Tensor:
+    """
+    Lookup the indices of the given queries in the provided hash map.
+
+    Args:
+        hashmap (Tensor): A 1D tensor representing the hash map built using `hashmap_build_triton`.
+        keys (Tensor): A tensor of shape `(n_keys, *key_dims)` representing the keys used to build the hash map.
+        queries (Tensor): A tensor of shape `(n_queries, *key_dims)` representing the queries to look up.
+    
+    Returns:
+        Tensor: A 1D long tensor of shape `(n_queries,)` containing the indices of the queries in the keys.
+                If a query is not found, its index will be -1.
+    """
     if keys.dtype != queries.dtype:
         raise ValueError(f"Keys and queries must have the same dtype. Got {keys.dtype} and {queries.dtype}.")
     if keys.shape[1:] != queries.shape[1:]:
@@ -312,6 +343,16 @@ def hashmap_lookup_triton(hashmap: Tensor, keys: Tensor, queries: Tensor) -> Ten
 
 
 def hashmap_build_lookup_triton(keys: Tensor, queries: Tensor) -> Tensor:
+    """
+    Build a hash map from the given keys and lookup the indices of the given queries in a single operation.
+    Args:
+        keys (Tensor): A tensor of shape `(n_keys, *key_dims)` representing the keys.
+        queries (Tensor): A tensor of shape `(n_queries, *key_dims)` representing the queries to look up.
+    
+    Returns:
+        Tensor: A 1D long tensor of shape `(n_queries,)` containing the indices of the queries in the keys.
+                If a query is not found, its index will be -1.
+    """
     if keys.dtype != queries.dtype:
         raise ValueError(f"Keys and queries must have the same dtype. Got {keys.dtype} and {queries.dtype}.")
     if keys.shape[1:] != queries.shape[1:]:

@@ -2416,7 +2416,7 @@ def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, k
     utils3d.torch.utils.masked_max
 
 @overload
-def lookup(key: torch_.Tensor, query: torch_.Tensor, backend: str = 'auto') -> torch_.LongTensor:
+def lookup(key: torch_.Tensor, query: torch_.Tensor) -> torch_.LongTensor:
     """Look up `query` in `key` like a dictionary. Useful for COO indexing.
 
 Parameters
