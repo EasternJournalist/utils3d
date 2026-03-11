@@ -17,6 +17,8 @@ __all__ = [
     'masked_area_resize',
     'colorize_depth_map',
     'colorize_normal_map',
+    'colorize_segmentation_map',
+    'colorize_probability_map',
     'flood_fill',
     'perlin_noise',
     'perlin_noise_map',

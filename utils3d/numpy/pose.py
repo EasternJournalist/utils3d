@@ -5,11 +5,10 @@ from numbers import Number
 from ..helpers import no_warnings
 
 from .transforms import make_affine_matrix, transform_points
-from .utils import safe_inv
+from .utils import safe_inv, vector_outer
 
 
 __all__ = [
-    'vector_outer',
     'procrustes',
     'affine_procrustes',
     'solve_pose',
@@ -19,13 +18,7 @@ __all__ = [
 ]
 
 
-def vector_outer(x: ndarray, y: Optional[ndarray] = None) -> ndarray:
-    if y is None:
-        return x[..., :, None] * x[..., None, :]
-    return x[..., :, None] * y[..., None, :]
-
-
-def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[ndarray] = None, mean_x: Optional[ndarray] = None, mean_y: Optional[ndarray] = None, niter: int = 8) -> Tuple[ndarray, ndarray]:
+def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[ndarray] = None, mean_x: Optional[ndarray] = None, mean_y: Optional[ndarray] = None) -> Tuple[ndarray, ndarray]:
     """
     Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
@@ -36,7 +29,6 @@ def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Option
     - `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
     - `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
     - `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
-    - `niter`: int, number of Newton iterations for scale solving when both cov_xx and cov_yy are given.
 
     Specifically, based on provided inputs:
     

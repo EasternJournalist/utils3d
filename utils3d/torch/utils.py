@@ -27,7 +27,9 @@ __all__ = [
     'scatter_argmax',
     'scatter_argmin',
     'reverse_permutation',
-    'large_multinomial'
+    'large_multinomial',
+    'matrix_trace',
+    'vector_outer'
 ]
 
 
@@ -486,3 +488,25 @@ def large_multinomial(weights: Tensor, num_samples: int, replacement: bool = Fal
         indices = torch.topk(scores, num_samples).indices
     return indices
 
+
+def matrix_trace(input: Tensor, dim1: int = -2, dim2: int = -1) -> Tensor:
+    """Compute the trace of a batch of matrices"""
+    return torch.diagonal(input, dim1=dim1, dim2=dim2).sum(dim=-1)
+
+
+def vector_outer(x: Tensor, y: Optional[Tensor] = None) -> Tensor:
+    """
+    Compute the outer product of two arrays.
+
+    Parameters
+    ----
+    - `x` (Tensor): shape `(..., M)` first array.
+    - `y` (Tensor, optional): shape `(..., N)` second array. If None, compute the outer product of `x` with itself.
+
+    Returns
+    ----
+    - `outer` (Tensor): shape `(..., M, N)` outer product of `x` and `y`.
+    """
+    if y is None:
+        return x[..., :, None] * x[..., None, :]
+    return x[..., :, None] * y[..., None, :]

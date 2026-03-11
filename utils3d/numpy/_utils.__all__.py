@@ -9,4 +9,5 @@ __all__ = [
     'group',
     'csr_matrix_from_dense_indices',
     'reverse_permutation',
+    'vector_outer',
 ]

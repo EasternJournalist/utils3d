@@ -938,9 +938,9 @@ def rasterize_lines(
     size: Tuple[int, int],
     *,
     vertices: ndarray,
-    lines: ndarray,
     attributes: Optional[ndarray],
     attributes_domain: Literal['vertex', 'line'] = 'vertex',
+    lines: ndarray | None = None,
     view: Optional[ndarray] = None,
     projection: Optional[ndarray] = None,
     extrinsics: Optional[ndarray] = None,
@@ -959,10 +959,10 @@ def rasterize_lines(
     Parameters
     ----
     - `size` (Tuple[int, int]): (height, width) of the output image
-    - `vertices` (ndarray): (N, 3) or (T, 3, 3)
-    - `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+    - `vertices` (ndarray): (N, 3) or (L, 2, 3)
     - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
     - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
+    - `lines` (ndarray): (L, 2) int32 array of line vertex indices. If None, vertices shape must be (L, 2, 3) and will be interpreted as line segments directly.
     - `view` | `extrinsics` (ndarray): (4, 4) View matrix or extrinsics matrix. Provide either one of them.
     - `projection` | `intrinsics` (ndarray): (4, 4) Projection matrix or (3, 3) Intrinsics matrix. Provide either one of them.
     - `near` (float): near clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.

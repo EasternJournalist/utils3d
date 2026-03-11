@@ -17,6 +17,7 @@ __all__ = ["sliding_window",
 "group", 
 "csr_matrix_from_dense_indices", 
 "reverse_permutation", 
+"vector_outer", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -69,7 +70,6 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
-"vector_outer", 
 "procrustes", 
 "affine_procrustes", 
 "solve_pose", 
@@ -122,6 +122,8 @@ __all__ = ["sliding_window",
 "masked_area_resize", 
 "colorize_depth_map", 
 "colorize_normal_map", 
+"colorize_segmentation_map", 
+"colorize_probability_map", 
 "flood_fill", 
 "perlin_noise", 
 "perlin_noise_map", 
@@ -150,6 +152,7 @@ __all__ = ["sliding_window",
 "scatter_argmax", 
 "scatter_argmin", 
 "large_multinomial", 
+"matrix_trace", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -328,6 +331,20 @@ Notes
 -----
 Equivalent to `np.argsort(perm, axis=axis)`, but more efficient."""
     utils3d.numpy.utils.reverse_permutation
+
+@overload
+def vector_outer(x: numpy_.ndarray, y: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+    """Compute the outer product of two arrays.
+
+Parameters
+----
+- `x` (ndarray): shape `(..., M)` first array.
+- `y` (ndarray, optional): shape `(..., N)` second array. If None, compute the outer product of `x` with itself.
+
+Returns
+----
+- `outer` (ndarray): shape `(..., M, N)` outer product of `x` and `y`."""
+    utils3d.numpy.utils.vector_outer
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
@@ -997,11 +1014,7 @@ Better precision than using the arccos dot product directly.
     utils3d.numpy.transforms.angle_between
 
 @overload
-def vector_outer(x: numpy_.ndarray, y: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
-    utils3d.numpy.pose.vector_outer
-
-@overload
-def procrustes(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def procrustes(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
 Parameters
@@ -1011,7 +1024,6 @@ Parameters
 - `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
 - `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
 - `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
-- `niter`: int, number of Newton iterations for scale solving when both cov_xx and cov_yy are given.
 
 Specifically, based on provided inputs:
 
@@ -1946,7 +1958,7 @@ def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near:
     utils3d.numpy.maps.colorize_depth_map
 
 @overload
-def colorize_normal_map(normal: numpy_.ndarray, mask: numpy_.ndarray = None, flip_yz: bool = False) -> numpy_.ndarray:
+def colorize_normal_map(normal: numpy_.ndarray, mask: numpy_.ndarray = None, flip_yz: bool = False, normalize: bool = True) -> numpy_.ndarray:
     """Colorize normal map for visualization. Value range is [-1, 1].
 
 ## Parameters
@@ -1954,10 +1966,55 @@ def colorize_normal_map(normal: numpy_.ndarray, mask: numpy_.ndarray = None, fli
     - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
     - `flip_yz` (bool, optional): whether to flip the y and z. 
         - This is useful when converting between OpenCV and OpenGL camera coordinate systems. Defaults to False.
+    - `normalize` (bool, optional): whether to normalize the normal vectors. Defaults to True.
 
 ## Returns
     - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB in [0, 255]"""
     utils3d.numpy.maps.colorize_normal_map
+
+@overload
+def colorize_segmentation_map(segmentation: numpy_.ndarray, vdim: int = 0) -> numpy_.ndarray:
+    """Colorize segmentation map for visualization. The same value will be assigned with the same color.
+
+Parameters
+----
+- `segmentation` (ndarray): shape (..., H, W, [...]), segmentation map. The last `ndim` dimensions are treated as value channels.
+- `vdim` (int, optional): number of dimensions to treat as value channels. Defaults to 0 (scalars)
+
+Returns
+----
+- `colored` (ndarray): shape (..., H, W, 3), dtype=uint8, RGB in [0, 255]"""
+    utils3d.numpy.maps.colorize_segmentation_map
+
+@overload
+def colorize_probability_map(probability: numpy_.ndarray, cmap: str = 'viridis', alpha: float = 1.0, beta: float = 1.0):
+    """Colorize probability map for visualization.
+
+The remapping is:
+`p' = p^alpha / (p^alpha + (1 - p)^beta)`
+where larger `alpha` suppresses low-to-mid probabilities and larger `beta` suppresses high probabilities.
+
+Parameters
+-------
+- `probability` (ndarray): shape (..., H, W), probability map with values in [0, 1].
+- `cmap` (str, optional): colormap name in matplotlib. Defaults to 'viridis'.
+- `alpha` (float, optional): exponent applied to `probability` in contrast remapping. Defaults to 1.0.
+- `beta` (float, optional): exponent applied to `(1 - probability)` in contrast remapping. Defaults to 1.0.
+
+Returns
+------
+- `colored` (ndarray): shape (..., H, W, 3), dtype=uint8, RGB in [0, 255].
+
+Examples for tuning `alpha` and `beta`
+------
+
+| Parameters | Curve shape | Effect |
+|---|---|---|
+| `alpha=2.5, beta=2.5` | Steep S-shape | Separate "possible" and "impossible" around 0.5 |
+| `alpha=0.3, beta=1.0` | Fast early rise, then gradual flattening | Emphasize tiny probabilities near zero |
+| `alpha=1.0, beta=0.3` | Flat early, then sharp rise near the end | Emphasize subtle differences near certainty (close to 1) |
+| `alpha=0.5, beta=0.5` | Hourglass-like (inverse-S) | Increase contrast near both extremes globally |"""
+    utils3d.numpy.maps.colorize_probability_map
 
 @overload
 def flood_fill(*image: numpy_.ndarray, mask: numpy_.ndarray, return_index: bool = False) -> numpy_.ndarray:
@@ -2121,16 +2178,16 @@ for i, layer_output in enumerate(rasterize_triangles_peeling(
     utils3d.numpy.rasterization.rasterize_triangles_peeling
 
 @overload
-def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, lines: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, intrinsics: Optional[numpy_.ndarray] = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Tuple[numpy_.ndarray, ...]:
+def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', lines: numpy_.ndarray | None = None, view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, intrinsics: Optional[numpy_.ndarray] = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Tuple[numpy_.ndarray, ...]:
     """Rasterize lines.
 
 Parameters
 ----
 - `size` (Tuple[int, int]): (height, width) of the output image
-- `vertices` (ndarray): (N, 3) or (T, 3, 3)
-- `faces` (Optional[ndarray]): (T, 3) or None. If `None`, the vertices must be an array with shape (T, 3, 3)
+- `vertices` (ndarray): (N, 3) or (L, 2, 3)
 - `attributes` (ndarray): (N, C), (T, 3, C) for vertex domain or (T, C) for face domain
 - `attributes_domain` (Literal['vertex', 'face']): domain of the attributes
+- `lines` (ndarray): (L, 2) int32 array of line vertex indices. If None, vertices shape must be (L, 2, 3) and will be interpreted as line segments directly.
 - `view` | `extrinsics` (ndarray): (4, 4) View matrix or extrinsics matrix. Provide either one of them.
 - `projection` | `intrinsics` (ndarray): (4, 4) Projection matrix or (3, 3) Intrinsics matrix. Provide either one of them.
 - `near` (float): near clipping plane. Only used for intrinsics. Ignored if projection matrix is provided.
@@ -2619,6 +2676,25 @@ Equivalent to `torch.argsort(perm, dim=dim)`, but more efficient."""
 @overload
 def large_multinomial(weights: torch_.Tensor, num_samples: int, replacement: bool = False) -> torch_.Tensor:
     utils3d.torch.utils.large_multinomial
+
+@overload
+def matrix_trace(input: torch_.Tensor, dim1: int = -2, dim2: int = -1) -> torch_.Tensor:
+    """Compute the trace of a batch of matrices"""
+    utils3d.torch.utils.matrix_trace
+
+@overload
+def vector_outer(x: torch_.Tensor, y: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+    """Compute the outer product of two arrays.
+
+Parameters
+----
+- `x` (Tensor): shape `(..., M)` first array.
+- `y` (Tensor, optional): shape `(..., N)` second array. If None, compute the outer product of `x` with itself.
+
+Returns
+----
+- `outer` (Tensor): shape `(..., M, N)` outer product of `x` and `y`."""
+    utils3d.torch.utils.vector_outer
 
 @overload
 def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:

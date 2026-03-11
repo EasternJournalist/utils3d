@@ -16,4 +16,6 @@ __all__ = [
     'scatter_argmin',
     'reverse_permutation',
     'large_multinomial',
+    'matrix_trace',
+    'vector_outer',
 ]

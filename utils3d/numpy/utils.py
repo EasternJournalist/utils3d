@@ -18,7 +18,8 @@ __all__ = [
     'lookup_set',
     'group',
     'csr_matrix_from_dense_indices',
-    'reverse_permutation'
+    'reverse_permutation',
+    'vector_outer'
 ]
 
 
@@ -227,17 +228,23 @@ def lookup(key: ndarray, query: ndarray) -> ndarray:
     ----
     `O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys.
     """
-    num_keys, *key_shape = key.shape
-    query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
-    
-    _, index, inverse = np.unique(
-        np.concatenate([key, query.reshape(-1, *key_shape)], axis=0),
-        axis=0,
-        return_index=True,
-        return_inverse=True
-    )
-    result = index[inverse[num_keys:]].reshape(query_batch_shape)
-    return np.where(result < num_keys, result, -1)
+    if key.ndim == 1:
+        # Fast path for 1D keys, use np.searchsorted directly without unique.
+        index = np.searchsorted(key, query)
+        mask = (index < key.shape[0]) & (key[index.clip(0, key.shape[0] - 1)] == query)
+        index[~mask] = -1
+    else:
+        num_keys, *key_shape = key.shape
+        query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
+        
+        _, index, inverse = np.unique(
+            np.concatenate([key, query.reshape(-1, *key_shape)], axis=0),
+            axis=0,
+            return_index=True,
+            return_inverse=True
+        )
+        result = index[inverse[num_keys:]].reshape(query_batch_shape)
+        return np.where(result < num_keys, result, -1)
 
 
 def lookup_get(key: ndarray, value: ndarray, get_key: ndarray, default_value: Union[Number, ndarray] = 0) -> ndarray:
@@ -436,3 +443,20 @@ def reverse_permutation(perm: ndarray, axis: int = 0) -> ndarray:
     np.put_along_axis(rev_perm, perm, indices, axis=axis)
     return rev_perm
 
+
+def vector_outer(x: ndarray, y: Optional[ndarray] = None) -> ndarray:
+    """
+    Compute the outer product of two arrays.
+
+    Parameters
+    ----
+    - `x` (ndarray): shape `(..., M)` first array.
+    - `y` (ndarray, optional): shape `(..., N)` second array. If None, compute the outer product of `x` with itself.
+
+    Returns
+    ----
+    - `outer` (ndarray): shape `(..., M, N)` outer product of `x` and `y`.
+    """
+    if y is None:
+        return x[..., :, None] * x[..., None, :]
+    return x[..., :, None] * y[..., None, :]

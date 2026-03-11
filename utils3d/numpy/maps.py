@@ -28,6 +28,8 @@ __all__ = [
     'masked_area_resize',
     'colorize_depth_map',
     'colorize_normal_map',
+    'colorize_segmentation_map',
+    'colorize_probability_map',
     'flood_fill',
     'perlin_noise',
     'perlin_noise_map',
@@ -730,7 +732,7 @@ def colorize_depth_map(depth: ndarray, mask: ndarray = None, near: Optional[floa
     return colored
 
 
-def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = False) -> np.ndarray:
+def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = False, normalize: bool = True) -> np.ndarray:
     """Colorize normal map for visualization. Value range is [-1, 1].
     
     ## Parameters
@@ -738,10 +740,13 @@ def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = F
         - `mask` (ndarray, optional): shape (H, W), dtype=bool. Mask of valid depth pixels. Defaults to None.
         - `flip_yz` (bool, optional): whether to flip the y and z. 
             - This is useful when converting between OpenCV and OpenGL camera coordinate systems. Defaults to False.
+        - `normalize` (bool, optional): whether to normalize the normal vectors. Defaults to True.
 
     ## Returns
         - `colored` (ndarray): shape (H, W, 3), dtype=uint8, RGB in [0, 255]
     """
+    if normalize:
+        normal = normal / (np.linalg.norm(normal, axis=-1, keepdims=True) + np.finfo(normal.dtype).tiny)
     if mask is not None:
         normal = np.where(mask[..., None], normal, 0)
     if flip_yz:
@@ -750,6 +755,98 @@ def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = F
         normal = normal * 0.5 + 0.5
     normal = (normal.clip(0, 1) * 255).astype(np.uint8)
     return normal
+
+
+def colorize_segmentation_map(segmentation: np.ndarray, vdim: int = 0) -> np.ndarray:
+    """Colorize segmentation map for visualization. The same value will be assigned with the same color.
+
+    Parameters
+    ----
+    - `segmentation` (ndarray): shape (..., H, W, [...]), segmentation map. The last `ndim` dimensions are treated as value channels.
+    - `vdim` (int, optional): number of dimensions to treat as value channels. Defaults to 0 (scalars)
+
+    Returns
+    ----
+    - `colored` (ndarray): shape (..., H, W, 3), dtype=uint8, RGB in [0, 255]
+    """
+    if not (0 <= vdim <= segmentation.ndim):
+        raise ValueError(f"vdim should be in [0, segmentation.ndim], got vdim={vdim} and segmentation.ndim={segmentation.ndim}")
+
+    if vdim == 0:
+        map_shape = segmentation.shape
+        value_shape = ()
+    else:
+        map_shape = segmentation.shape[:-vdim]
+        value_shape = segmentation.shape[-vdim:]
+
+    flat = np.ascontiguousarray(segmentation.reshape(-1, *value_shape))
+    value_bytes = flat.view(np.uint8).reshape(flat.shape[0], -1)
+
+    # Align each value/vector to 4 bytes before viewing as uint32 words.
+    pad = (-value_bytes.shape[1]) % 4
+    if pad:
+        value_bytes = np.pad(value_bytes, ((0, 0), (0, pad)), mode='constant', constant_values=0)
+
+    words = value_bytes.view(np.uint32).reshape(flat.shape[0], -1)
+
+    # 32-bit FNV-1a style accumulation, then avalanche mix.
+    hashed = np.full(words.shape[0], np.uint32(0x811C9DC5), dtype=np.uint32)
+    for i in range(words.shape[1]):
+        hashed ^= words[:, i]
+        hashed *= np.uint32(0x01000193)
+
+    hashed ^= hashed >> np.uint32(16)
+    hashed *= np.uint32(0x7FEB352D)
+    hashed ^= hashed >> np.uint32(15)
+    hashed *= np.uint32(0x846CA68B)
+    hashed ^= hashed >> np.uint32(16)
+
+    hash_bytes = hashed.view(np.uint8).reshape(-1, 4)
+    if np.little_endian:
+        colored = hash_bytes[:, 2::-1]
+    else:
+        colored = hash_bytes[:, 1:4]
+    return np.ascontiguousarray(colored.reshape(*map_shape, 3))
+
+
+def colorize_probability_map(probability: np.ndarray, cmap: str = 'viridis', alpha: float = 1.0, beta: float = 1.0):
+    """Colorize probability map for visualization.
+
+    The remapping is:
+    `p' = p^alpha / (p^alpha + (1 - p)^beta)`
+    where larger `alpha` suppresses low-to-mid probabilities and larger `beta` suppresses high probabilities.
+
+    Parameters
+    -------
+    - `probability` (ndarray): shape (..., H, W), probability map with values in [0, 1].
+    - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'viridis'.
+    - `alpha` (float, optional): exponent applied to `probability` in contrast remapping. Defaults to 1.0.
+    - `beta` (float, optional): exponent applied to `(1 - probability)` in contrast remapping. Defaults to 1.0.
+
+    Returns
+    ------
+    - `colored` (ndarray): shape (..., H, W, 3), dtype=uint8, RGB in [0, 255].
+
+    Examples for tuning `alpha` and `beta`
+    ------
+    
+    | Parameters | Curve shape | Effect |
+    |---|---|---|
+    | `alpha=2.5, beta=2.5` | Steep S-shape | Separate "possible" and "impossible" around 0.5 |
+    | `alpha=0.3, beta=1.0` | Fast early rise, then gradual flattening | Emphasize tiny probabilities near zero |
+    | `alpha=1.0, beta=0.3` | Flat early, then sharp rise near the end | Emphasize subtle differences near certainty (close to 1) |
+    | `alpha=0.5, beta=0.5` | Hourglass-like (inverse-S) | Increase contrast near both extremes globally |
+    """
+    try:
+        import matplotlib
+    except ImportError:
+        raise ImportError("matplotlib is required for colorizing probability map")
+    a, b = probability ** alpha, (1 - probability) ** beta
+    remapped_prob = a / (a + b)
+    colored = matplotlib.colormaps[cmap](remapped_prob)[..., :3]
+    colored = np.ascontiguousarray((colored.clip(0, 1) * 255).astype(np.uint8))
+    return colored
+
 
 
 def flood_fill(*image: ndarray, mask: ndarray, return_index: bool = False) -> ndarray:

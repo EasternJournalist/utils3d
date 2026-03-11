@@ -13,6 +13,7 @@ __all__ = ["sliding_window",
 "group", 
 "csr_matrix_from_dense_indices", 
 "reverse_permutation", 
+"vector_outer", 
 "perspective_from_fov", 
 "perspective_from_window", 
 "intrinsics_from_fov", 
@@ -65,7 +66,6 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
-"vector_outer", 
 "procrustes", 
 "affine_procrustes", 
 "solve_pose", 
@@ -118,6 +118,8 @@ __all__ = ["sliding_window",
 "masked_area_resize", 
 "colorize_depth_map", 
 "colorize_normal_map", 
+"colorize_segmentation_map", 
+"colorize_probability_map", 
 "flood_fill", 
 "perlin_noise", 
 "perlin_noise_map", 
@@ -146,6 +148,7 @@ __all__ = ["sliding_window",
 "scatter_argmax", 
 "scatter_argmin", 
 "large_multinomial", 
+"matrix_trace", 
 "rotation_matrix_2d", 
 "rotate_2d", 
 "translate_2d", 
@@ -248,6 +251,12 @@ def reverse_permutation(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.reverse_permutation, utils3d.torch.reverse_permutation
     return _call_based_on_args('reverse_permutation', args, kwargs)
+
+@suppress_traceback
+def vector_outer(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.vector_outer, utils3d.torch.vector_outer
+    return _call_based_on_args('vector_outer', args, kwargs)
 
 @suppress_traceback
 def perspective_from_fov(*args, **kwargs):
@@ -562,12 +571,6 @@ def angle_between(*args, **kwargs):
     return _call_based_on_args('angle_between', args, kwargs)
 
 @suppress_traceback
-def vector_outer(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.vector_outer, None
-    return _call_based_on_args('vector_outer', args, kwargs)
-
-@suppress_traceback
 def procrustes(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.procrustes, None
@@ -880,6 +883,18 @@ def colorize_normal_map(*args, **kwargs):
     return _call_based_on_args('colorize_normal_map', args, kwargs)
 
 @suppress_traceback
+def colorize_segmentation_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.colorize_segmentation_map, None
+    return _call_based_on_args('colorize_segmentation_map', args, kwargs)
+
+@suppress_traceback
+def colorize_probability_map(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.colorize_probability_map, None
+    return _call_based_on_args('colorize_probability_map', args, kwargs)
+
+@suppress_traceback
 def flood_fill(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.flood_fill, utils3d.torch.flood_fill
@@ -1046,6 +1061,12 @@ def large_multinomial(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.large_multinomial
     return _call_based_on_args('large_multinomial', args, kwargs)
+
+@suppress_traceback
+def matrix_trace(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.matrix_trace
+    return _call_based_on_args('matrix_trace', args, kwargs)
 
 @suppress_traceback
 def rotation_matrix_2d(*args, **kwargs):
