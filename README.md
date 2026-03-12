@@ -108,8 +108,8 @@ The links below will take you to the source code of each function with detailed 
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.affine_procrustes`<br>Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`. | [`utils3d.np.affine_procrustes(cov_yx, cov_xx, cov_yy, mean_x, mean_y, lam, niter)`](utils3d/numpy/pose.py#L76) | - | 
-| `utils3d.procrustes`<br>Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`. | [`utils3d.np.procrustes(cov_yx, cov_xx, cov_yy, mean_x, mean_y)`](utils3d/numpy/pose.py#L21) | - | 
+| `utils3d.affine_procrustes`<br>Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`. | [`utils3d.np.affine_procrustes(cov_yx, cov_xx, cov_yy, mean_x, mean_y, lam, niter)`](utils3d/numpy/pose.py#L76) | [`utils3d.pt.affine_procrustes(cov_yx, cov_xx, cov_yy, mean_x, mean_y, lam, niter, eps)`](utils3d/torch/pose.py#L67) | 
+| `utils3d.procrustes`<br>Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`. | [`utils3d.np.procrustes(cov_yx, cov_xx, cov_yy, mean_x, mean_y)`](utils3d/numpy/pose.py#L21) | [`utils3d.pt.procrustes(cov_yx, cov_xx, cov_yy, mean_x, mean_y, eps)`](utils3d/torch/pose.py#L12) | 
 | `utils3d.segment_solve_pose`<br>Solve for the pose (transformation from p to q) given weighted point correspondences. | [`utils3d.np.segment_solve_pose(p, q, w, offsets, mode, lam, niter)`](utils3d/numpy/pose.py#L182) | - | 
 | `utils3d.segment_solve_poses_sequential`<br>Segment array mode for `solve_poses_sequential`. | [`utils3d.np.segment_solve_poses_sequential(trajectories, weights, offsets, accum, min_valid_size, mode, lam, niter)`](utils3d/numpy/pose.py#L383) | - | 
 | `utils3d.solve_pose`<br>Solve for the pose (transformation from p to q) given weighted point correspondences. | [`utils3d.np.solve_pose(p, q, w, mode, lam, niter)`](utils3d/numpy/pose.py#L128) | - | 

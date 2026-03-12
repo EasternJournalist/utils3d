@@ -9,7 +9,7 @@ except ImportError:
 
 module_members = {}
 
-for module_name in ['utils', 'transforms', 'segment_ops', 'mesh', 'maps', 'rasterization']:
+for module_name in ['utils', 'transforms', 'pose', 'segment_ops', 'mesh', 'maps', 'rasterization']:
     module_members[module_name] = lazy_import_all_from(globals(), '.' + module_name)
 
 __all__ = list(itertools.chain(*module_members.values()))
@@ -23,3 +23,4 @@ if TYPE_CHECKING:
     from .maps import *
     from .rasterization import *
     from .segment_ops import *
+    from .pose import *

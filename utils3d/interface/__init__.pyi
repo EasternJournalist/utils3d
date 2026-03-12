@@ -3368,6 +3368,60 @@ Better precision than using the arccos dot product directly.
     utils3d.torch.transforms.angle_between
 
 @overload
+def procrustes(cov_yx: torch_.Tensor, cov_xx: Optional[torch_.Tensor] = None, cov_yy: Optional[torch_.Tensor] = None, mean_x: Optional[torch_.Tensor] = None, mean_y: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
+
+Parameters
+----
+- `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
+- `cov_xx`: (..., 3, 3) covariance matrix of x points. If None, no scaling is solved.
+- `cov_yy`: (..., 3, 3) covariance matrix of y points. If None, no scaling is solved.
+- `mean_x`: (..., 3) mean of x points. If None, no translation is solved.
+- `mean_y`: (..., 3) mean of y points. If None, no translation is solved.
+
+Specifically, based on provided inputs:
+
+- To solve the rotation `R`, `cov_yx` must be given.
+- To solve the scale `s`, at least one of `cov_xx` and `cov_yy` must be given.
+    - (Recommended) If both `cov_xx` and `cov_yy` are given, the scale will be solved by minimizing a symmetric cost:
+        `||s R X + t - Y||_F^2 / ||Y||_F^2 + ||s R^T (Y - t)  - X||_F^2 / ||X||_F^2`
+    - If only `cov_xx` is given, the scale will be solved by minimizing forward cost
+        `||s R X  + t - Y||_F^2`
+    - If only `cov_yy` is given, the scale will be solved by minimizing inverse cost 
+        `||s R^T (Y - t)  - X||_F^2`
+- To solve the translation `t`, provide `mean_x` and `mean_y`.
+
+Returns
+----
+- `s`: (...) scale factor. None if both cov_xx and cov_yy are None. 
+- `R`: (..., 3, 3) rotation matrix.
+- `t`: (..., 3) translation vector. None if mean_x or mean_y is None."""
+    utils3d.torch.pose.procrustes
+
+@overload
+def affine_procrustes(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, niter: int = 8, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
+
+NOTE: This function may be not differentiable due to the iterative solving process. Use with `torch.no_grad()` if you don't need gradients.
+
+Parameters
+----
+- `cov_yx`: (..., 3, 3) covariance matrix between y
+- `cov_xx`: (..., 3, 3) covariance matrix of x points.
+- `cov_yy`: (..., 3, 3) covariance matrix of y
+- `mean_x`: (..., 3) mean of x points.
+- `mean_y`: (..., 3) mean of y points.
+- `lam`: rigidity regularization weight.
+- `gamma`: symmetricity regularization annealing factor.
+- `niter`: number of iterations for solving.
+
+Returns
+----
+- `A`: (..., 3, 3) affine transformation matrix.
+- `t`: (..., 3) translation vector."""
+    utils3d.torch.pose.affine_procrustes
+
+@overload
 def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int, dim: int = 0) -> torch_.Tensor:
     """Roll the data within each segment.
 

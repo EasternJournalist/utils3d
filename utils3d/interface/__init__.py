@@ -573,13 +573,13 @@ def angle_between(*args, **kwargs):
 @suppress_traceback
 def procrustes(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.procrustes, None
+        utils3d.numpy.procrustes, utils3d.torch.procrustes
     return _call_based_on_args('procrustes', args, kwargs)
 
 @suppress_traceback
 def affine_procrustes(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.affine_procrustes, None
+        utils3d.numpy.affine_procrustes, utils3d.torch.affine_procrustes
     return _call_based_on_args('affine_procrustes', args, kwargs)
 
 @suppress_traceback
