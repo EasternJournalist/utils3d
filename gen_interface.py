@@ -52,8 +52,16 @@ if __name__ == "__main__":
     import utils3d.numpy, utils3d.torch
     numpy_impl = utils3d.numpy
     torch_impl = utils3d.torch
-    numpy_funcs = {name: getattr(numpy_impl, name) for name in numpy_impl.__all__}
-    torch_funcs = {name: getattr(torch_impl, name) for name in torch_impl.__all__}
+    numpy_funcs = {name: getattr(numpy_impl, name, None) for name in numpy_impl.__all__}
+    torch_funcs = {name: getattr(torch_impl, name, None) for name in torch_impl.__all__}
+    for name, fn in numpy_funcs.items():
+        if fn is None:
+            print(f"\033[91mWarning: Function {name} is in numpy __all__ but not found in numpy module.\033[0m")
+    for name, fn in torch_funcs.items():
+        if fn is None:
+            print(f"\033[91mWarning: Function {name} is in torch __all__ but not found in torch module.\033[0m")
+    numpy_funcs = {name: fn for name, fn in numpy_funcs.items() if fn is not None}
+    torch_funcs = {name: fn for name, fn in torch_funcs.items() if fn is not None}
 
     all = {**numpy_funcs, **torch_funcs}
 

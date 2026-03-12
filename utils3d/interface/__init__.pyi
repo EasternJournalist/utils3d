@@ -70,8 +70,9 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
-"procrustes", 
-"affine_procrustes", 
+"kabasch", 
+"umeyama", 
+"affine_umeyama", 
 "solve_pose", 
 "segment_solve_pose", 
 "solve_poses_sequential", 
@@ -1014,7 +1015,11 @@ Better precision than using the arccos dot product directly.
     utils3d.numpy.transforms.angle_between
 
 @overload
-def procrustes(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def kabasch(cov: numpy_.ndarray) -> numpy_.ndarray:
+    utils3d.numpy.pose.kabasch
+
+@overload
+def umeyama(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
 Parameters
@@ -1042,10 +1047,10 @@ Returns
 - `s`: (...) scale factor. None if both cov_xx and cov_yy are None. 
 - `R`: (..., 3, 3) rotation matrix.
 - `t`: (..., 3) translation vector. None if mean_x or mean_y is None."""
-    utils3d.numpy.pose.procrustes
+    utils3d.numpy.pose.umeyama
 
 @overload
-def affine_procrustes(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def affine_umeyama(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
 Parameters
@@ -1063,7 +1068,7 @@ Returns
 ----
 - `A`: (..., 3, 3) affine transformation matrix.
 - `t`: (..., 3) translation vector."""
-    utils3d.numpy.pose.affine_procrustes
+    utils3d.numpy.pose.affine_umeyama
 
 @overload
 def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
@@ -3368,8 +3373,14 @@ Better precision than using the arccos dot product directly.
     utils3d.torch.transforms.angle_between
 
 @overload
-def procrustes(cov_yx: torch_.Tensor, cov_xx: Optional[torch_.Tensor] = None, cov_yy: Optional[torch_.Tensor] = None, mean_x: Optional[torch_.Tensor] = None, mean_y: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
-    """Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
+def kabasch(cov: torch_.Tensor, eps: float = 1e-12):
+    """Backward gradients friendly Kabasch method (compute rotation from input covarience matrix).
+    """
+    utils3d.torch.pose.kabasch
+
+@overload
+def umeyama(cov_yx: torch_.Tensor, cov_xx: Optional[torch_.Tensor] = None, cov_yy: Optional[torch_.Tensor] = None, mean_x: Optional[torch_.Tensor] = None, mean_y: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Umeyama method to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
 Parameters
 ----
@@ -3396,13 +3407,13 @@ Returns
 - `s`: (...) scale factor. None if both cov_xx and cov_yy are None. 
 - `R`: (..., 3, 3) rotation matrix.
 - `t`: (..., 3) translation vector. None if mean_x or mean_y is None."""
-    utils3d.torch.pose.procrustes
+    utils3d.torch.pose.umeyama
 
 @overload
-def affine_procrustes(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, niter: int = 8, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def affine_umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, niter: int = 8, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
-NOTE: This function may be not differentiable due to the iterative solving process. Use with `torch.no_grad()` if you don't need gradients.
+NOTE: This function may be indifferentiable due to the iterative solving process. Use with `torch.no_grad()` if you don't need gradients.
 
 Parameters
 ----
@@ -3419,7 +3430,54 @@ Returns
 ----
 - `A`: (..., 3, 3) affine transformation matrix.
 - `t`: (..., 3) translation vector."""
-    utils3d.torch.pose.affine_procrustes
+    utils3d.torch.pose.affine_umeyama
+
+@overload
+def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5, eps: float = 1e-12) -> torch_.Tensor:
+    """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+Parameters
+----
+- `p`: (..., N, 3) source points
+- `q`: (..., N, 3) target points
+- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: regularization weight for 'affine' mode.
+- `niter`: number of iterations for 'affine' mode.
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `pose`: (..., 4, 4) transformations matrix from p to q."""
+    utils3d.torch.pose.solve_pose
+
+@overload
+def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5, eps: float = 1e-12) -> torch_.Tensor:
+    """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
+
+NOTE: Affine mode is solved by iterative method and may be indifferentiable. Use with `torch.no_grad()` if you don't need gradients.
+
+Parameters
+----
+- `p`: (N, 3) source points
+- `q`: (N, 3) target points
+- `w`: (N,) weights for each point correspondence
+- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: regularization weight for 'affine' mode.
+- `niter`: number of iterations for 'affine' mode.
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `pose`: (S, 4, 4) transformations matrix from p to q."""
+    utils3d.torch.pose.segment_solve_pose
 
 @overload
 def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int, dim: int = 0) -> torch_.Tensor:

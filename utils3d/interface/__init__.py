@@ -66,8 +66,9 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
-"procrustes", 
-"affine_procrustes", 
+"kabasch", 
+"umeyama", 
+"affine_umeyama", 
 "solve_pose", 
 "segment_solve_pose", 
 "solve_poses_sequential", 
@@ -571,27 +572,33 @@ def angle_between(*args, **kwargs):
     return _call_based_on_args('angle_between', args, kwargs)
 
 @suppress_traceback
-def procrustes(*args, **kwargs):
+def kabasch(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.procrustes, utils3d.torch.procrustes
-    return _call_based_on_args('procrustes', args, kwargs)
+        utils3d.numpy.kabasch, utils3d.torch.kabasch
+    return _call_based_on_args('kabasch', args, kwargs)
 
 @suppress_traceback
-def affine_procrustes(*args, **kwargs):
+def umeyama(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.affine_procrustes, utils3d.torch.affine_procrustes
-    return _call_based_on_args('affine_procrustes', args, kwargs)
+        utils3d.numpy.umeyama, utils3d.torch.umeyama
+    return _call_based_on_args('umeyama', args, kwargs)
+
+@suppress_traceback
+def affine_umeyama(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.affine_umeyama, utils3d.torch.affine_umeyama
+    return _call_based_on_args('affine_umeyama', args, kwargs)
 
 @suppress_traceback
 def solve_pose(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.solve_pose, None
+        utils3d.numpy.solve_pose, utils3d.torch.solve_pose
     return _call_based_on_args('solve_pose', args, kwargs)
 
 @suppress_traceback
 def segment_solve_pose(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_solve_pose, None
+        utils3d.numpy.segment_solve_pose, utils3d.torch.segment_solve_pose
     return _call_based_on_args('segment_solve_pose', args, kwargs)
 
 @suppress_traceback

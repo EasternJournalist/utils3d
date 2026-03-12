@@ -9,8 +9,9 @@ from .utils import safe_inv, vector_outer
 
 
 __all__ = [
-    'procrustes',
-    'affine_procrustes',
+    'kabasch',
+    'umeyama',
+    'affine_umeyama',
     'solve_pose',
     'segment_solve_pose',
     'solve_poses_sequential',
@@ -18,7 +19,14 @@ __all__ = [
 ]
 
 
-def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[ndarray] = None, mean_x: Optional[ndarray] = None, mean_y: Optional[ndarray] = None) -> Tuple[ndarray, ndarray]:
+def kabasch(cov: ndarray) -> ndarray:
+    U, _, Vh = np.linalg.svd(cov)
+    Vh[..., 2, :] *= np.sign(np.linalg.det(U @ Vh))[..., None]
+    R = U @ Vh
+    return R
+
+
+def umeyama(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[ndarray] = None, mean_x: Optional[ndarray] = None, mean_y: Optional[ndarray] = None) -> Tuple[ndarray, ndarray, ndarray]:
     """
     Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
@@ -48,11 +56,8 @@ def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Option
     - `R`: (..., 3, 3) rotation matrix.
     - `t`: (..., 3) translation vector. None if mean_x or mean_y is None.
     """
-    dtype = mean_x.dtype
-    U, _, Vh = np.linalg.svd(cov_yx)
-    R = U @ Vh
-    Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
-    R = U @ Vh
+    dtype = cov_yx.dtype
+    R = kabasch(cov_yx)
     if cov_xx is not None and cov_yy is None:
         s = np.trace(cov_yx @ R.swapaxes(-2, -1), axis1=-2, axis2=-1) / np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     if cov_xx is None and cov_yy is not None:
@@ -73,7 +78,7 @@ def procrustes(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Option
     return s, R, t
 
 
-def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2, niter: int = 8) -> Tuple[ndarray, ndarray]:
+def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2, niter: int = 8) -> Tuple[ndarray, ndarray]:
     """
     Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
@@ -93,11 +98,8 @@ def affine_procrustes(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x:
     - `A`: (..., 3, 3) affine transformation matrix.
     - `t`: (..., 3) translation vector.
     """
-    dtype = mean_x.dtype
-    U, _, Vh = np.linalg.svd(cov_yx)
-    R = U @ Vh
-    Vh[..., 2, :] *= np.sign(np.linalg.det(R))[..., None]
-    R = U @ Vh
+    dtype = cov_yx.dtype
+    R = kabasch(cov_yx)
     tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     
@@ -167,13 +169,13 @@ def solve_pose(
         cov_qq = np.sum(vector_outer(qw, q), axis=-3) / w_sum[..., None, None]
     
     if mode == 'rigid':
-        _, R, t = procrustes(cov_qp, mean_x=p_mean, mean_y=q_mean)
+        _, R, t = umeyama(cov_qp, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(R, t)
     elif mode == 'similar':
-        s, R, t = procrustes(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
+        s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(s * R, t)
     elif mode == 'affine':
-        A, t = affine_procrustes(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -225,13 +227,13 @@ def segment_solve_pose(
         cov_qq = np.add.reduceat(vector_outer(qw, q), offsets[:-1], axis=0) / w_sum[:, None, None]
     
     if mode == 'rigid':
-        _, R, t = procrustes(cov_qp, mean_x=p_mean, mean_y=q_mean)
+        _, R, t = umeyama(cov_qp, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(R, t)
     elif mode == 'similar':
-        s, R, t = procrustes(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
+        s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(s * R, t)
     elif mode == 'affine':
-        A, t = affine_procrustes(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -343,13 +345,13 @@ def solve_poses_sequential(
         
         # Solve for pose
         if mode == 'rigid':
-            _, R, t = procrustes(cov_yx, mean_x=center_x, mean_y=center_y)
+            _, R, t = umeyama(cov_yx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
-            s, R, t = procrustes(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
+            s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
             poses[i] = make_affine_matrix(s * R, t)
         elif mode == 'affine':
-            A, t = affine_procrustes(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, safe_inv(poses[i])[..., None, :, :])
@@ -474,13 +476,13 @@ def segment_solve_poses_sequential(
         
         # Solve for pose
         if mode == 'rigid':
-            _, R, t = procrustes(cov_yx, mean_x=center_x, mean_y=center_y)
+            _, R, t = umeyama(cov_yx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
-            s, R, t = procrustes(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
+            s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
             poses[i] = make_affine_matrix(s * R, t)
         elif mode == 'affine':
-            A, t = affine_procrustes(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, np.repeat(safe_inv(poses[i]), lengths, axis=0))
