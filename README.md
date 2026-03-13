@@ -201,25 +201,25 @@ The links below will take you to the source code of each function with detailed 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.csr_eliminate_zeros`<br>Remove zero elements from a sparse CSR tensor. | - | [`utils3d.pt.csr_eliminate_zeros(input)`](utils3d/torch/utils.py#L263) | 
-| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L406) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L244) | 
-| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L383) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L298) | 
+| `utils3d.csr_matrix_from_dense_indices`<br>Convert a regular indices array to a sparse CSR adjacency matrix format | [`utils3d.np.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/numpy/utils.py#L407) | [`utils3d.pt.csr_matrix_from_dense_indices(indices, n_cols)`](utils3d/torch/utils.py#L244) | 
+| `utils3d.group`<br>Split the data into groups based on the provided labels. | [`utils3d.np.group(labels, data)`](utils3d/numpy/utils.py#L384) | [`utils3d.pt.group(labels, data)`](utils3d/torch/utils.py#L298) | 
 | `utils3d.index_reduce`<br>Put values into the input tensor at the specified indices (like `index_put`), with reduction support. | - | [`utils3d.pt.index_reduce(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L357) | 
 | `utils3d.index_reduce_`<br>In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support. | - | [`utils3d.pt.index_reduce_(input, indices, values, reduce, include_self)`](utils3d/torch/utils.py#L378) | 
 | `utils3d.large_multinomial`<br> | - | [`utils3d.pt.large_multinomial(weights, num_samples, replacement)`](utils3d/torch/utils.py#L477) | 
 | `utils3d.lexsort`<br>Perform lexicographical sort on multiple keys. Like `numpy.lexsort`.  | - | [`utils3d.pt.lexsort(keys, dim)`](utils3d/torch/utils.py#L320) | 
 | `utils3d.lookup`<br>Look up `query` in `key` like a dictionary. Useful for COO indexing. | [`utils3d.np.lookup(key, query)`](utils3d/numpy/utils.py#L215) | [`utils3d.pt.lookup(key, query)`](utils3d/torch/utils.py#L163) | 
-| `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L250) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L190) | 
-| `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L272) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L215) | 
+| `utils3d.lookup_get`<br>Dictionary-like get for arrays | [`utils3d.np.lookup_get(key, value, get_key, default_value)`](utils3d/numpy/utils.py#L251) | [`utils3d.pt.lookup_get(key, value, get_key, default_value)`](utils3d/torch/utils.py#L190) | 
+| `utils3d.lookup_set`<br>Dictionary-like set for arrays. | [`utils3d.np.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/numpy/utils.py#L273) | [`utils3d.pt.lookup_set(key, value, set_key, set_value, append, inplace)`](utils3d/torch/utils.py#L215) | 
 | `utils3d.masked_max`<br>Similar to torch.max, but with mask | - | [`utils3d.pt.masked_max(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L124) | 
 | `utils3d.masked_min`<br>Similar to torch.min, but with mask | - | [`utils3d.pt.masked_min(input, mask, dim, keepdim)`](utils3d/torch/utils.py#L115) | 
 | `utils3d.matrix_trace`<br>Compute the trace of a batch of matrices | - | [`utils3d.pt.matrix_trace(input, dim1, dim2)`](utils3d/torch/utils.py#L492) | 
 | `utils3d.max_pool_2d`<br> | [`utils3d.np.max_pool_2d(x, kernel_size, stride, padding, axis)`](utils3d/numpy/utils.py#L204) | - | 
 | `utils3d.pooling`<br>Compute the pooling of the input array.  | [`utils3d.np.pooling(x, kernel_size, stride, padding, axis, mode)`](utils3d/numpy/utils.py#L119) | - | 
-| `utils3d.reverse_permutation`<br>Compute the reverse of a permutation array.  | [`utils3d.np.reverse_permutation(perm, axis)`](utils3d/numpy/utils.py#L424) | [`utils3d.pt.reverse_permutation(perm, dim)`](utils3d/torch/utils.py#L455) | 
+| `utils3d.reverse_permutation`<br>Compute the reverse of a permutation array.  | [`utils3d.np.reverse_permutation(perm, axis)`](utils3d/numpy/utils.py#L425) | [`utils3d.pt.reverse_permutation(perm, dim)`](utils3d/torch/utils.py#L455) | 
 | `utils3d.scatter_argmax`<br>Scatter src into input at index along dim with min reduction. Return the indices of the winners in src. | - | [`utils3d.pt.scatter_argmax(input, dim, index, src, include_self)`](utils3d/torch/utils.py#L427) | 
 | `utils3d.scatter_argmin`<br>Scatter src into input at index along dim with min reduction. Return the indices of the winners in src. | - | [`utils3d.pt.scatter_argmin(input, dim, index, src, include_self)`](utils3d/torch/utils.py#L399) | 
 | `utils3d.sliding_window`<br>Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s). | [`utils3d.np.sliding_window(x, window_size, stride, dilation, pad_size, pad_mode, pad_value, axis)`](utils3d/numpy/utils.py#L26) | [`utils3d.pt.sliding_window(x, window_size, stride, dilation, pad_size, pad_mode, pad_value, dim)`](utils3d/torch/utils.py#L36) | 
-| `utils3d.vector_outer`<br>Compute the outer product of two arrays. | [`utils3d.np.vector_outer(x, y)`](utils3d/numpy/utils.py#L447) | [`utils3d.pt.vector_outer(x, y)`](utils3d/torch/utils.py#L497) | 
+| `utils3d.vector_outer`<br>Compute the outer product of two arrays. | [`utils3d.np.vector_outer(x, y)`](utils3d/numpy/utils.py#L448) | [`utils3d.pt.vector_outer(x, y)`](utils3d/torch/utils.py#L497) | 
 
 
 ### Segment Array Operations

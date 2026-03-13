@@ -230,9 +230,10 @@ def lookup(key: ndarray, query: ndarray) -> ndarray:
     """
     if key.ndim == 1:
         # Fast path for 1D keys, use np.searchsorted directly without unique.
-        index = np.searchsorted(key, query)
-        mask = (index < key.shape[0]) & (key[index.clip(0, key.shape[0] - 1)] == query)
-        index[~mask] = -1
+        result = np.searchsorted(key, query, side='left')
+        mask = (result < key.shape[0]) & (key[result.clip(0, key.shape[0] - 1)] == query)
+        result[~mask] = -1
+        return result
     else:
         num_keys, *key_shape = key.shape
         query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
