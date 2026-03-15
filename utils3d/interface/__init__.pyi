@@ -1913,7 +1913,7 @@ def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: nump
     utils3d.numpy.maps.chessboard
 
 @overload
-def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
+def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int], return_index: bool = False) -> Tuple[typing_extensions.Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray, Tuple[numpy_.ndarray, ...]]:
     """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
 - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
 - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
@@ -1933,7 +1933,7 @@ def masked_nearest_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tu
     utils3d.numpy.maps.masked_nearest_resize
 
 @overload
-def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
+def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple[int, int]) -> Tuple[typing_extensions.Unpack[Tuple[numpy_.ndarray, ...]], numpy_.ndarray]:
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters
@@ -2263,7 +2263,7 @@ def test_rasterization(ctx: Optional[utils3d.numpy.rasterization.RastContext] = 
     utils3d.numpy.rasterization.test_rasterization
 
 @overload
-def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
+def read_extrinsics_from_colmap(file: Union[str, pathlib.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
     """Read extrinsics from colmap `images.txt` file. 
 ## Parameters
     file: Path to `images.txt` file.
@@ -2274,7 +2274,7 @@ def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[
     utils3d.numpy.io.colmap.read_extrinsics_from_colmap
 
 @overload
-def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
+def read_intrinsics_from_colmap(file: Union[str, pathlib.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
     """Read intrinsics from colmap `cameras.txt` file.
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2286,7 +2286,7 @@ def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize
     utils3d.numpy.io.colmap.read_intrinsics_from_colmap
 
 @overload
-def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
+def write_extrinsics_as_colmap(file: Union[str, pathlib.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
     """Write extrinsics to colmap `images.txt` file.
 ## Parameters
     file: Path to `images.txt` file.
@@ -2298,7 +2298,7 @@ def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics
     utils3d.numpy.io.colmap.write_extrinsics_as_colmap
 
 @overload
-def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
+def write_intrinsics_as_colmap(file: Union[str, pathlib.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
     """Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2309,7 +2309,7 @@ def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics
     utils3d.numpy.io.colmap.write_intrinsics_as_colmap
 
 @overload
-def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
+def read_obj(file: Union[str, pathlib.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
     """Read wavefront .obj file.
 
 Parameters
@@ -2357,7 +2357,7 @@ Material library:
     utils3d.numpy.io.obj.read_obj
 
 @overload
-def write_obj(file: Union[str, pathlib._local.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
+def write_obj(file: Union[str, pathlib.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
     utils3d.numpy.io.obj.write_obj
 
 @overload
@@ -4333,7 +4333,7 @@ def bounding_rect_from_mask(mask: torch_.BoolTensor):
     utils3d.torch.maps.bounding_rect_from_mask
 
 @overload
-def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int], return_index: bool = False) -> Tuple[typing_extensions.Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Resize image(s) by nearest sampling with mask awareness. Suitable for sparse maps. ![masked_nearest_resize.png](doc/masked_nearest_resize.png)
 - Downsampling: Assign the nearest valid pixel within the target pixel's receptive field.
 - Upsampling: Assign the valid pixel to only the nearest pixel in the resized map.
@@ -4354,7 +4354,7 @@ def masked_nearest_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tupl
     utils3d.torch.maps.masked_nearest_resize
 
 @overload
-def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
+def masked_area_resize(*image: torch_.Tensor, mask: torch_.Tensor, size: Tuple[int, int]) -> Tuple[typing_extensions.Unpack[Tuple[torch_.Tensor, ...]], torch_.Tensor]:
     """Resize 2D map by area sampling with mask awareness.
 
 ### Parameters

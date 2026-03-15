@@ -4,6 +4,7 @@ from typing import *
 from numbers import Number, Integral
 import warnings
 import functools
+import math
 
 if TYPE_CHECKING:
     from scipy.sparse import csr_array
@@ -228,24 +229,60 @@ def lookup(key: ndarray, query: ndarray) -> ndarray:
     ----
     `O((Q + K) * log(Q + K))` complexity, where `Q` is the number of queries and `K` is the number of keys.
     """
+    assert key.dtype == query.dtype, "Key and query must have the same dtype"
+    assert key.shape[1:] == query.shape[query.ndim - key.ndim + 1:], f"Key shape {key.shape} and query shape {query.shape} are not compatible."
+
+    num_keys, *key_shape = key.shape
+    query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
+
+    key_item_nbytes = math.prod(key_shape) * key.dtype.itemsize
     if key.ndim == 1:
-        # Fast path for 1D keys, use np.searchsorted directly without unique.
-        result = np.searchsorted(key, query, side='left')
-        mask = (result < key.shape[0]) & (key[result.clip(0, key.shape[0] - 1)] == query)
+        # Fast path 1: 1D keys, can directly sort and search
+        sorted_indices = np.argsort(key)
+        key_sorted = key[sorted_indices]
+        result = np.searchsorted(key_sorted, query, side='left')
+        mask = (result < num_keys) & (key_sorted[result.clip(0, num_keys - 1)] == query)
+
+        result = result.astype(np.int64, copy=False)
+        result[mask] = sorted_indices[result[mask]]
         result[~mask] = -1
-        return result
+        return result.reshape(query_batch_shape)
+    
+    elif key_item_nbytes <= 8:
+        # Fast path 2: small keys, can view as int64 and sort/search
+        query_flat = query.reshape(-1, *key_shape)
+
+        key_bytes = np.ascontiguousarray(key).view(np.uint8).reshape(num_keys, key_item_nbytes)
+        query_bytes = np.ascontiguousarray(query_flat).view(np.uint8).reshape(query_flat.shape[0], key_item_nbytes)
+
+        if key_item_nbytes < 8:
+            pad_width = ((0, 0), (0, 8 - key_item_nbytes))
+            key_bytes = np.pad(key_bytes, pad_width, mode='constant')
+            query_bytes = np.pad(query_bytes, pad_width, mode='constant')
+
+        key_i64 = key_bytes.view(np.int64).reshape(-1)
+        query_i64 = query_bytes.view(np.int64).reshape(-1)
+
+        sorted_indices = np.argsort(key_i64)
+        key_sorted = key_i64[sorted_indices]
+        result = np.searchsorted(key_sorted, query_i64, side='left')
+        mask = (result < num_keys) & (key_sorted[result.clip(0, num_keys - 1)] == query_i64)
+
+        result = result.astype(np.int64, copy=False)
+        result[mask] = sorted_indices[result[mask]]
+        result[~mask] = -1
+        return result.reshape(query_batch_shape)
     else:
-        num_keys, *key_shape = key.shape
-        query_batch_shape = query.shape[:query.ndim - key.ndim + 1]
-        
+        query_flat = query.reshape(-1, *key_shape)
         _, index, inverse = np.unique(
-            np.concatenate([key, query.reshape(-1, *key_shape)], axis=0),
+            np.concatenate([key, query_flat], axis=0),
             axis=0,
             return_index=True,
             return_inverse=True
         )
-        result = index[inverse[num_keys:]].reshape(query_batch_shape)
-        return np.where(result < num_keys, result, -1)
+        result = index[inverse[num_keys:]]
+        result[result >= num_keys] = -1
+        return result.reshape(query_batch_shape)
 
 
 def lookup_get(key: ndarray, value: ndarray, get_key: ndarray, default_value: Union[Number, ndarray] = 0) -> ndarray:
