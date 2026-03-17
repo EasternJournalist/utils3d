@@ -757,12 +757,13 @@ def colorize_normal_map(normal: ndarray, mask: ndarray = None, flip_yz: bool = F
     return normal
 
 
-def colorize_segmentation_map(segmentation: np.ndarray, vdim: int = 0) -> np.ndarray:
+def colorize_segmentation_map(segmentation: np.ndarray, mask: Optional[np.ndarray] = None, vdim: int = 0) -> np.ndarray:
     """Colorize segmentation map for visualization. The same value will be assigned with the same color.
 
     Parameters
     ----
     - `segmentation` (ndarray): shape (..., H, W, [...]), segmentation map. The last `ndim` dimensions are treated as value channels.
+    - `mask` (ndarray, optional): shape (..., H, W), binary mask indicating valid regions. Defaults to None (all regions are valid).
     - `vdim` (int, optional): number of dimensions to treat as value channels. Defaults to 0 (scalars)
 
     Returns
@@ -806,10 +807,13 @@ def colorize_segmentation_map(segmentation: np.ndarray, vdim: int = 0) -> np.nda
         colored = hash_bytes[:, 2::-1]
     else:
         colored = hash_bytes[:, 1:4]
-    return np.ascontiguousarray(colored.reshape(*map_shape, 3))
+    colored = colored.reshape(*map_shape, 3)
+    if mask is not None:
+        colored = np.where(mask, colored, 0)
+    return np.ascontiguousarray(colored)
 
 
-def colorize_probability_map(probability: np.ndarray, cmap: str = 'viridis', alpha: float = 1.0, beta: float = 1.0):
+def colorize_probability_map(probability: np.ndarray, mask: Optional[np.ndarray] = None, cmap: str = 'viridis', alpha: float = 1.0, beta: float = 1.0):
     """Colorize probability map for visualization.
 
     The remapping is:
@@ -819,6 +823,7 @@ def colorize_probability_map(probability: np.ndarray, cmap: str = 'viridis', alp
     Parameters
     -------
     - `probability` (ndarray): shape (..., H, W), probability map with values in [0, 1].
+    - `mask` (ndarray, optional): shape (..., H, W), binary mask indicating valid regions. Defaults to None (all regions are valid).
     - `cmap` (str, optional): colormap name in matplotlib. Defaults to 'viridis'.
     - `alpha` (float, optional): exponent applied to `probability` in contrast remapping. Defaults to 1.0.
     - `beta` (float, optional): exponent applied to `(1 - probability)` in contrast remapping. Defaults to 1.0.
@@ -845,6 +850,8 @@ def colorize_probability_map(probability: np.ndarray, cmap: str = 'viridis', alp
     remapped_prob = a / (a + b)
     colored = matplotlib.colormaps[cmap](remapped_prob)[..., :3]
     colored = np.ascontiguousarray((colored.clip(0, 1) * 255).astype(np.uint8))
+    if mask is not None:
+        colored = np.where(mask[..., None], colored, 0)
     return colored
 
 
