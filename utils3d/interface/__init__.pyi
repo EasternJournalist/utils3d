@@ -158,6 +158,7 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"pose_graph_optimization", 
 "segment_chain", 
 "segment_median", 
 "segment_sum", 
@@ -3415,13 +3416,13 @@ Returns
 def affine_umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, niter: int = 8, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
-NOTE: This function may be indifferentiable due to the iterative solving process. Use with `torch.no_grad()` if you don't need gradients.
+NOTE: This function is indifferentiable due to the iterative solving process.
 
 Parameters
 ----
-- `cov_yx`: (..., 3, 3) covariance matrix between y
+- `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
 - `cov_xx`: (..., 3, 3) covariance matrix of x points.
-- `cov_yy`: (..., 3, 3) covariance matrix of y
+- `cov_yy`: (..., 3, 3) covariance matrix of y points.
 - `mean_x`: (..., 3) mean of x points.
 - `mean_y`: (..., 3) mean of y points.
 - `lam`: rigidity regularization weight.
@@ -3480,6 +3481,25 @@ Returns
 ----
 - `pose`: (S, 4, 4) transformations matrix from p to q."""
     utils3d.torch.pose.segment_solve_pose
+
+@overload
+def pose_graph_optimization(num_nodes: int, edges: torch_.Tensor, poses: torch_.Tensor, w: torch_.Tensor | None = None, niter: int = 10) -> tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Pose graph optimization to solve for global poses given relative poses (must be rigid transformations).
+
+Parameters
+----
+- `num_nodes`: number of nodes `N` in the pose graph.
+- `edges`: (E, 2) edge list of the pose graph. Each edge is represented by a pair of node indices `i -> j`.
+- `poses`: (E, 4, 4) relative poses of transformation from node `i` to node `j` for each edge. Must be rigid transformations.
+- `w`: (E,) optional weights for each edge.
+- `niter`: number of Procrustes iterations to refine global poses. If 0, only the initial solution by Laplacian SVD is returned.
+
+Returns
+----
+- `poses_global`: (N, 4, 4) global poses (world-to-camera, canonical-to-observation, global-to-node, etc.) for each node.
+
+    `poses_relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`"""
+    utils3d.torch.pose.pose_graph_optimization
 
 @overload
 def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int, dim: int = 0) -> torch_.Tensor:

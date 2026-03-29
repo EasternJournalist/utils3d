@@ -956,9 +956,9 @@ def axis_angle_to_matrix(axis_angle: Tensor, eps: float = 1e-12) -> Tensor:
     cos = torch.cos(angle)[..., None, :]
     sin = torch.sin(angle)[..., None, :]
 
-    rx, ry, rz = torch.split(axis, 3, dim=-1)
-    zeros = torch.zeros((*batch_shape, 1), dtype=dtype, device=device)
-    K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=-1).view((*batch_shape, 3, 3))
+    rx, ry, rz = axis.unbind(dim=-1)
+    zeros = torch.zeros(batch_shape, dtype=dtype, device=device)
+    K = torch.stack([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=-1).view((*batch_shape, 3, 3))
 
     ident = torch.eye(3, dtype=dtype, device=device)
     rot_mat = ident + sin * K + (1 - cos) * torch.matmul(K, K)

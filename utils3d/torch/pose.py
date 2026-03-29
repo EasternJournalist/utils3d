@@ -6,7 +6,7 @@ from .transforms import transform_points, make_affine_matrix
 from .utils import matrix_trace, vector_outer
 
 
-__all__ = ['kabasch', 'umeyama', 'affine_umeyama', 'solve_pose', 'segment_solve_pose']
+__all__ = ['kabasch', 'umeyama', 'affine_umeyama', 'solve_pose', 'segment_solve_pose', 'pose_graph_optimization']
 
 
 import torch
@@ -117,17 +117,18 @@ def umeyama(cov_yx: Tensor, cov_xx: Optional[Tensor] = None, cov_yy: Optional[Te
     return s, R, t
 
 
+@torch.no_grad()
 def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor, lam: float = 1e-2, niter: int = 8, eps: float = 1e-12) -> Tuple[Tensor, Tensor]:
     """
     Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
-    NOTE: This function may be indifferentiable due to the iterative solving process. Use with `torch.no_grad()` if you don't need gradients.
+    NOTE: This function is indifferentiable due to the iterative solving process.
 
     Parameters
     ----
-    - `cov_yx`: (..., 3, 3) covariance matrix between y
+    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
     - `cov_xx`: (..., 3, 3) covariance matrix of x points.
-    - `cov_yy`: (..., 3, 3) covariance matrix of y
+    - `cov_yy`: (..., 3, 3) covariance matrix of y points.
     - `mean_x`: (..., 3) mean of x points.
     - `mean_y`: (..., 3) mean of y points.
     - `lam`: rigidity regularization weight.
@@ -284,3 +285,100 @@ def segment_solve_pose(
         pose = make_affine_matrix(A, t)
     
     return pose
+
+
+def _pose_graph_optimization_construct_laplacian(edge: Tensor, num_nodes: int, R: Tensor, w: Tensor) -> Tensor:
+    # For each edge i->j, contributes:
+    # - `-w_ij * R_ij^T` to block (i, j)
+    # - `-w_ij * R_ij` to block (j, i),
+    # - `w_ij * I` to diagonal block (i, i) and `w_ij * I` to diagonal block (j, j).
+    w_agg = torch.zeros(num_nodes, device=R.device, dtype=R.dtype).index_add(0, edge.reshape(-1), w.repeat_interleave(2))
+    diag_elements = w_agg.repeat_interleave(3)   # (N * 3,)
+    edge_elements = (-w[:, None, None] * R.mT).reshape(-1)   # (E * 3 * 3,)
+    laplacian_data = torch.cat([diag_elements, edge_elements.reshape(-1), edge_elements.reshape(-1)], dim=0)
+
+    local3 = torch.arange(3, device=R.device)
+    local3x3 = torch.stack(torch.meshgrid(local3, local3, indexing='ij'), dim=-1)   # to get the local 3x3 block coordinates for each edge
+    diag_coords = (torch.arange(num_nodes, device=R.device)[:, None].expand(num_nodes, 3) * 3 + local3[None, :]).reshape(-1, 1).expand(-1, 2)   # (N * 3, 2)
+    edge_coords = (edge[:, None, None, :] * 3 + local3x3[None, :, :, :]).reshape(-1, 2)                       # (E * 3 * 3, 2)
+    laplacian_coords = torch.cat([diag_coords, edge_coords, edge_coords.flip(-1)], dim=0)               # (2, N * 3 + 2 * E * 3 * 3)
+
+    laplacian = torch.sparse_coo_tensor(laplacian_coords.T, laplacian_data, size=(num_nodes * 3, num_nodes * 3))
+    return laplacian
+
+
+def _pose_graph_optimization_eigen_decomposition(laplacian: Tensor) -> Tensor:
+    _, eigenvectors = torch.lobpcg(laplacian, k=3, largest=False, tol=1e-5)
+    R_global = eigenvectors.reshape(-1, 3, 3)
+    R_global = torch.cat([
+        R_global[:, :, :2],
+        torch.sign(torch.linalg.det(R_global))[:, None, None] * R_global[:, :, 2:3]
+    ], dim=-1)
+    R_global = kabasch(R_global)    # Ensure SO(3)
+
+    return R_global
+
+
+def _pose_graph_optimization_procrustes_iteration(R_global: Tensor, edges: Tensor, R_rel: Tensor, w: Tensor, niter: int = 10) -> Tensor:
+    DAMP = 0.4
+    edges_flat, edges_flat_swap = edges.reshape(-1), edges.flip(1).reshape(-1)
+
+    w_R = w[:, None, None] * R_rel
+    w_R_dual = torch.stack([w_R, w_R.mT], dim=1).reshape(-1, 3, 3) 
+    w_agg = torch.zeros(R_global.shape[0], device=R_global.device, dtype=R_global.dtype).index_add(0, edges_flat, w.repeat_interleave(2))
+    for _ in range(niter):
+        M = (DAMP * w_agg[..., None, None] * R_global).index_add(0, edges_flat_swap, w_R_dual @ R_global.index_select(0, edges_flat))
+        R_global = kabasch(M)
+    return R_global
+
+
+def pose_graph_optimization(num_nodes: int, edges: Tensor, poses: Tensor, w: Tensor | None = None, niter: int = 10) -> tuple[Tensor, Tensor, Tensor]:
+    """Pose graph optimization to solve for global poses given relative poses (must be rigid transformations).
+
+    Parameters
+    ----
+    - `num_nodes`: number of nodes `N` in the pose graph.
+    - `edges`: (E, 2) edge list of the pose graph. Each edge is represented by a pair of node indices `i -> j`.
+    - `poses`: (E, 4, 4) relative poses of transformation from node `i` to node `j` for each edge. Must be rigid transformations.
+    - `w`: (E,) optional weights for each edge.
+    - `niter`: number of Procrustes iterations to refine global poses. If 0, only the initial solution by Laplacian SVD is returned.
+
+    Returns
+    ----
+    - `poses_global`: (N, 4, 4) global poses (world-to-camera, canonical-to-observation, global-to-node, etc.) for each node.
+
+        `poses_relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`
+    """
+    if w is None:
+        w = torch.ones(edges.shape[0], device=poses.device, dtype=poses.dtype)
+
+    if poses.shape[-1] == 3:
+        # Rotation only
+        R_relative, t_relative = poses[:, :3, :3], None
+    else:
+        # Rigid transformation
+        R_relative, t_relative = poses[:, :3, :3], poses[:, :3, 3]
+
+    # Solve initial global rotations by laplacian eigen-decomposition.
+    laplacian = _pose_graph_optimization_construct_laplacian(edges, num_nodes, R_relative, w)
+    R_global = _pose_graph_optimization_eigen_decomposition(laplacian)
+    
+    # Refine global rotations by Procrustes iterations.
+    if niter > 0:
+        R_global = _pose_graph_optimization_procrustes_iteration(R_global, edges, R_relative, w, niter=niter)
+
+    # Solve global translations 
+    if t_relative is not None:
+        w_t = w[:, None] * t_relative
+        b = torch.zeros((num_nodes, 3), device=R_relative.device, dtype=R_relative.dtype).index_add(0, edges[:, 1], w_t).index_add(0, edges[:, 0], -(R_relative.mT @ w_t[:, :, None]).squeeze(-1)).reshape(-1)
+        # NOTE: currently we have to use dense solver for translations since PyTorch doesn't support sparse linear solver well.
+        t_global = torch.linalg.lstsq(laplacian.to_dense(), b).solution.reshape(num_nodes, 3)    
+    else:
+        t_global = None
+
+    if t_global is not None:
+        poses_global = make_affine_matrix(R_global, t_global)
+    else:
+        poses_global = R_global
+    return poses_global
+

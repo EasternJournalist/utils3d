@@ -5,4 +5,5 @@ __all__ = [
     'affine_umeyama',
     'solve_pose',
     'segment_solve_pose',
+    'pose_graph_optimization',
 ]
