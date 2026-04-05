@@ -34,6 +34,7 @@ __all__ = [
     'matrix_to_euler_angles',
     'matrix_to_quaternion',
     'quaternion_to_matrix',
+    'quaternion_multiply',
     'matrix_to_axis_angle',
     'axis_angle_to_matrix',
     'axis_angle_to_quaternion',

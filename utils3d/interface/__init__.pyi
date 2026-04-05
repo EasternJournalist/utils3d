@@ -819,11 +819,11 @@ def matrix_to_euler_angles(matrix: numpy_.ndarray, convention: str) -> numpy_.nd
 NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), instead of `Rx * Ry * Rz` (like pytorch3d)
 
 ## Parameters
-    matrix: Rotation matrices as tensor of shape (..., 3, 3).
+    matrix: Rotation matrices as ndarray of shape (..., 3, 3).
     convention: Convention string of three uppercase letters.
 
 ## Returns
-    Euler angles in radians as tensor of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)"""
+    Euler angles in radians as ndarray of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)"""
     utils3d.numpy.transforms.matrix_to_euler_angles
 
 @overload

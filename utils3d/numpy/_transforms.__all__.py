@@ -30,6 +30,7 @@ __all__ = [
     'unproject',
     'screen_coord_to_view_coord',
     'quaternion_to_matrix',
+    'quaternion_multiply',
     'axis_angle_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',

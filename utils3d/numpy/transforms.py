@@ -3,8 +3,10 @@ from numpy import ndarray
 from typing import *
 import itertools
 from numbers import Number
+
 from .helpers import toarray, batched
 from ..helpers import no_warnings
+from .utils import lite_dot, lite_norm
 
 
 __all__ = [
@@ -38,6 +40,7 @@ __all__ = [
     'unproject',
     'screen_coord_to_view_coord',
     'quaternion_to_matrix',
+    'quaternion_multiply',
     'axis_angle_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',
@@ -899,6 +902,30 @@ def matrix_to_quaternion(rot_mat: ndarray) -> ndarray:
     return quat
 
 
+def quaternion_multiply(q1: ndarray, q2: ndarray, eps: float = 1e-12) -> ndarray:
+    """Multiplies two quaternions (w, x, y, z)
+
+    Parameters
+    ----
+        q1 (ndarray): shape (..., 4), the first quaternion
+        q2 (ndarray): shape (..., 4), the second quaternion
+        eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
+
+    Returns
+    ----
+        ndarray: shape (..., 4), the product of the two quaternions, normalized to unit length.
+    """
+    w1, v1 = q1[..., 0:1], q1[..., 1:]
+    w2, v2 = q2[..., 0:1], q2[..., 1:]
+    
+    res_q = np.concatenate([
+        w1 * w2 - lite_dot(v1, v2)[..., None], 
+        w1 * v2 + w2 * v1 + np.cross(v1, v2, axis=-1)
+    ], axis=-1)
+    res_q = res_q / np.maximum(lite_norm(res_q, axis=-1)[..., None], eps)
+    return res_q
+
+
 def quaternion_to_axis_angle(quaternion: ndarray) -> ndarray:
     """Convert a batch of quaternions (w, x, y, z) to axis-angle representation (rotation vector)
 
@@ -1085,14 +1112,14 @@ def _angle_from_tan(
         axis: Axis label "X" or "Y or "Z" for the angle we are finding.
         other_axis: Axis label "X" or "Y or "Z" for the middle axis in the
             convention.
-        data: Rotation matrices as tensor of shape (..., 3, 3).
+        data: Rotation matrices as ndarray of shape (..., 3, 3).
         horizontal: Whether we are looking for the angle for the third axis,
             which means the relevant entries are in the same row of the
             rotation matrix. If not, they are in the same column.
         tait_bryan: Whether the first and third axes in the convention differ.
 
     ## Returns
-        Euler Angles in radians for each matrix in data as a tensor
+        Euler Angles in radians for each matrix in data as a ndarray
         of shape (...).
     """
 
@@ -1113,11 +1140,11 @@ def matrix_to_euler_angles(matrix: ndarray, convention: str) -> ndarray:
     NOTE: The composition order eg. `XYZ` means `Rz * Ry * Rx` (like blender), instead of `Rx * Ry * Rz` (like pytorch3d)
 
     ## Parameters
-        matrix: Rotation matrices as tensor of shape (..., 3, 3).
+        matrix: Rotation matrices as ndarray of shape (..., 3, 3).
         convention: Convention string of three uppercase letters.
 
     ## Returns
-        Euler angles in radians as tensor of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)
+        Euler angles in radians as ndarray of shape (..., 3), in the order of XYZ (like blender), instead of convention (like pytorch3d)
     """
     if not all(c in 'XYZ' for c in convention) or not all(c in convention for c in 'XYZ'):
         raise ValueError(f"Invalid convention {convention}.")

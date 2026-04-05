@@ -44,6 +44,7 @@ __all__ = [
     'matrix_to_euler_angles',
     'matrix_to_quaternion',
     'quaternion_to_matrix',
+    'quaternion_multiply',
     'matrix_to_axis_angle',
     'axis_angle_to_matrix',
     'axis_angle_to_quaternion',
@@ -1081,6 +1082,29 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
     return rot_mat
 
 
+def quaternion_multiply(q1: Tensor, q2: Tensor, eps: float = 1e-12) -> Tensor:
+    """Multiplies two quaternions (w, x, y, z)
+
+    Parameters
+    ----
+        q1 (Tensor): shape (..., 4), the first quaternion
+        q2 (Tensor): shape (..., 4), the second quaternion
+        eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
+
+    Returns
+    ----
+        Tensor: shape (..., 4), the product of the two quaternions, normalized to unit length.
+    """
+    w1, v1 = q1[..., 0:1], q1[..., 1:]
+    w2, v2 = q2[..., 0:1], q2[..., 1:]
+    res_q = torch.cat([
+        w1 * w2 - (v1 * v2).sum(dim=-1, keepdim=True), 
+        w1 * v2 + w2 * v1 + torch.cross(v1, v2, dim=-1)
+    ], dim=-1)
+    res_q = F.normalize(res_q, dim=-1, eps=eps)
+    return res_q
+
+
 def random_rotation_matrix(*size: int, dtype=torch.float32, device: torch.device = None) -> Tensor:
     """
     Generate random 3D rotation matrix.
@@ -1419,3 +1443,5 @@ def angle_between(v1: Tensor, v2: Tensor, eps: float = 1e-8) -> Tensor:
     cos = (v1 * v2).sum(dim=-1)
     sin = torch.minimum((v2 - v1 * cos[..., None]).norm(dim=-1), (v1 - v2 * cos[..., None]).norm(dim=-1))
     return torch.atan2(sin + eps, cos)
+
+    
