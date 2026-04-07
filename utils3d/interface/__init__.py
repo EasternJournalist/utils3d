@@ -44,6 +44,7 @@ __all__ = ["sliding_window",
 "unproject", 
 "screen_coord_to_view_coord", 
 "quaternion_to_matrix", 
+"quaternion_multiply", 
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
 "extrinsics_to_essential", 
@@ -439,6 +440,12 @@ def quaternion_to_matrix(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.quaternion_to_matrix, utils3d.torch.quaternion_to_matrix
     return _call_based_on_args('quaternion_to_matrix', args, kwargs)
+
+@suppress_traceback
+def quaternion_multiply(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.quaternion_multiply, utils3d.torch.quaternion_multiply
+    return _call_based_on_args('quaternion_multiply', args, kwargs)
 
 @suppress_traceback
 def axis_angle_to_matrix(*args, **kwargs):

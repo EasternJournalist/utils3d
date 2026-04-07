@@ -48,6 +48,7 @@ __all__ = ["sliding_window",
 "unproject", 
 "screen_coord_to_view_coord", 
 "quaternion_to_matrix", 
+"quaternion_multiply", 
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
 "extrinsics_to_essential", 
@@ -732,6 +733,21 @@ def quaternion_to_matrix(quaternion: numpy_.ndarray) -> numpy_.ndarray:
 ## Returns
     ndarray: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions"""
     utils3d.numpy.transforms.quaternion_to_matrix
+
+@overload
+def quaternion_multiply(q1: numpy_.ndarray, q2: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+    """Multiplies two quaternions (w, x, y, z)
+
+Parameters
+----
+    q1 (ndarray): shape (..., 4), the first quaternion
+    q2 (ndarray): shape (..., 4), the second quaternion
+    eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
+
+Returns
+----
+    ndarray: shape (..., 4), the product of the two quaternions, normalized to unit length and w > 0."""
+    utils3d.numpy.transforms.quaternion_multiply
 
 @overload
 def axis_angle_to_matrix(axis_angle: numpy_.ndarray) -> numpy_.ndarray:
@@ -3133,6 +3149,21 @@ def quaternion_to_matrix(quaternion: torch_.Tensor, eps: float = 1e-12) -> torch
 ## Returns
     Tensor: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions"""
     utils3d.torch.transforms.quaternion_to_matrix
+
+@overload
+def quaternion_multiply(q1: torch_.Tensor, q2: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
+    """Multiplies two quaternions (w, x, y, z)
+
+Parameters
+----
+    q1 (Tensor): shape (..., 4), the first quaternion
+    q2 (Tensor): shape (..., 4), the second quaternion
+    eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
+
+Returns
+----
+    Tensor: shape (..., 4), the product of the two quaternions, normalized to unit length."""
+    utils3d.torch.transforms.quaternion_multiply
 
 @overload
 def matrix_to_axis_angle(rot_mat: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:

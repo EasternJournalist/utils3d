@@ -45,6 +45,7 @@ __all__ = [
     'matrix_to_quaternion',
     'quaternion_to_matrix',
     'quaternion_multiply',
+    'quaternion_inverse',
     'matrix_to_axis_angle',
     'axis_angle_to_matrix',
     'axis_angle_to_quaternion',
@@ -1095,14 +1096,30 @@ def quaternion_multiply(q1: Tensor, q2: Tensor, eps: float = 1e-12) -> Tensor:
     ----
         Tensor: shape (..., 4), the product of the two quaternions, normalized to unit length.
     """
-    w1, v1 = q1[..., 0:1], q1[..., 1:]
-    w2, v2 = q2[..., 0:1], q2[..., 1:]
-    res_q = torch.cat([
-        w1 * w2 - (v1 * v2).sum(dim=-1, keepdim=True), 
-        w1 * v2 + w2 * v1 + torch.cross(v1, v2, dim=-1)
-    ], dim=-1)
-    res_q = F.normalize(res_q, dim=-1, eps=eps)
+    w1, v1 = q1[..., :1], q1[..., 1:]
+    w2, v2 = q2[..., :1], q2[..., 1:]
+    res_w = w1 * w2 - (v1 * v2).sum(dim=-1, keepdim=True)
+    w_sign = torch.where(res_w >= 0, torch.tensor(1.0, device=res_w.device, dtype=res_w.dtype), torch.tensor(-1.0, device=res_w.device, dtype=res_w.dtype))
+    res_v = w1 * v2 + w2 * v1 + torch.cross(v1, v2, dim=-1)
+    res_q = torch.cat([res_w, res_v], dim=-1)
+    res_q = w_sign * F.normalize(res_q, dim=-1, eps=eps)
     return res_q
+
+
+def quaternion_inverse(quaternion: Tensor) -> Tensor:
+    """Calculate the inverse of a batch of quaternions (w, x, y, z)
+
+    Parameters
+    ----
+        quaternion (Tensor): shape (..., 4), the quaternions to invert
+
+    Returns
+    ----
+        Tensor: shape (..., 4), no normalization applied. It depends on the input quaternion.
+    """
+    w, v = quaternion[..., 0:1], quaternion[..., 1:]
+    inv_quat = torch.cat([w, -v], dim=-1)
+    return inv_quat
 
 
 def random_rotation_matrix(*size: int, dtype=torch.float32, device: torch.device = None) -> Tensor:

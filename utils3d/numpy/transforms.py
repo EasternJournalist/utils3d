@@ -41,6 +41,7 @@ __all__ = [
     'screen_coord_to_view_coord',
     'quaternion_to_matrix',
     'quaternion_multiply',
+    'quaternion_inverse',
     'axis_angle_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',
@@ -913,17 +914,32 @@ def quaternion_multiply(q1: ndarray, q2: ndarray, eps: float = 1e-12) -> ndarray
 
     Returns
     ----
-        ndarray: shape (..., 4), the product of the two quaternions, normalized to unit length.
+        ndarray: shape (..., 4), the product of the two quaternions, normalized to unit length and w > 0.
     """
-    w1, v1 = q1[..., 0:1], q1[..., 1:]
-    w2, v2 = q2[..., 0:1], q2[..., 1:]
-    
-    res_q = np.concatenate([
-        w1 * w2 - lite_dot(v1, v2)[..., None], 
-        w1 * v2 + w2 * v1 + np.cross(v1, v2, axis=-1)
-    ], axis=-1)
-    res_q = res_q / np.maximum(lite_norm(res_q, axis=-1)[..., None], eps)
+    w1, v1 = q1[..., :1], q1[..., 1:]
+    w2, v2 = q2[..., :1], q2[..., 1:]
+    res_w = w1 * w2 - lite_dot(v1, v2)[..., None]
+    res_v = w1 * v2 + w2 * v1 + np.cross(v1, v2, axis=-1)
+    w_sign = np.where(res_w >= 0, 1.0, -1.0).astype(res_w.dtype)
+    res_q = np.concatenate([res_w, res_v], axis=-1)
+    res_q = res_q * (w_sign / np.maximum(lite_norm(res_q, axis=-1)[..., None], eps))
     return res_q
+
+
+def quaternion_inverse(quaternion: ndarray) -> ndarray:
+    """Calculate the inverse of a batch of quaternions (w, x, y, z)
+
+    Parameters
+    ----
+        quaternion (ndarray): shape (..., 4), the quaternions to invert
+
+    Returns
+    ----
+        ndarray: shape (..., 4), no normalization applied. It depends on the input quaternion.
+    """
+    w, v = quaternion[..., 0:1], quaternion[..., 1:]
+    inv_quat = np.concatenate([w, -v], axis=-1)
+    return inv_quat
 
 
 def quaternion_to_axis_angle(quaternion: ndarray) -> ndarray:
