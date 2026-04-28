@@ -615,15 +615,17 @@ def dump_ply_data_binary(
                 data_np_type = np.dtype(C_TYPE_TO_NP_TYPE[data_c_type]).newbyteorder(endian_str)
                 if prop_data.ndim == 1:
                     # scalar property
-                    prop_data_bytes_list.append(prop_data.astype(data_np_type).view(np.uint8).reshape(elem_count, -1))
-                else:
+                    prop_data_bytes_list.append(prop_data.astype(data_np_type).view(np.uint8).reshape(elem_count, data_np_type.itemsize))
+                elif prop_data.ndim == 2:
                     # fixed-size list property
                     cnt = prop_data.shape[1]
                     cnt_c_type = prop['count_type']
                     cnt_np_type = np.dtype(C_TYPE_TO_NP_TYPE[cnt_c_type]).newbyteorder(endian_str)
 
-                    prop_data_bytes_list.append(np.full(elem_count, cnt, dtype=cnt_np_type).view(np.uint8).reshape(elem_count, -1))
-                    prop_data_bytes_list.append(prop_data.astype(data_np_type).view(np.uint8).reshape(elem_count, -1))
+                    prop_data_bytes_list.append(np.full(elem_count, cnt, dtype=cnt_np_type).view(np.uint8).reshape(elem_count, cnt * cnt_np_type.itemsize))
+                    prop_data_bytes_list.append(prop_data.astype(data_np_type).view(np.uint8).reshape(elem_count, prop_data.shape[1] * data_np_type.itemsize))
+                else:
+                    raise ValueError(f'Unsupported property data shape for property "{prop_name}": {prop_data.shape}')
             if len(prop_data_bytes_list) == 1:
                 yield prop_data_bytes_list[0].data
             else:

@@ -120,3 +120,4 @@ dmypy.json
 test/results_to_check
 timetest.py
 /debug
+/ref

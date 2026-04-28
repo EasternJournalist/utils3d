@@ -36,6 +36,7 @@ __all__ = [
     'quaternion_to_matrix',
     'quaternion_multiply',
     'quaternion_inverse',
+    'quaternion_normalize',
     'matrix_to_axis_angle',
     'axis_angle_to_matrix',
     'axis_angle_to_quaternion',

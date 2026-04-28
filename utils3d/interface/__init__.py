@@ -45,6 +45,8 @@ __all__ = ["sliding_window",
 "screen_coord_to_view_coord", 
 "quaternion_to_matrix", 
 "quaternion_multiply", 
+"quaternion_inverse", 
+"quaternion_normalize", 
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
 "extrinsics_to_essential", 
@@ -446,6 +448,18 @@ def quaternion_multiply(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.quaternion_multiply, utils3d.torch.quaternion_multiply
     return _call_based_on_args('quaternion_multiply', args, kwargs)
+
+@suppress_traceback
+def quaternion_inverse(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.quaternion_inverse, utils3d.torch.quaternion_inverse
+    return _call_based_on_args('quaternion_inverse', args, kwargs)
+
+@suppress_traceback
+def quaternion_normalize(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.quaternion_normalize, utils3d.torch.quaternion_normalize
+    return _call_based_on_args('quaternion_normalize', args, kwargs)
 
 @suppress_traceback
 def axis_angle_to_matrix(*args, **kwargs):

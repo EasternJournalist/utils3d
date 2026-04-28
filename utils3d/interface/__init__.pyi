@@ -49,6 +49,8 @@ __all__ = ["sliding_window",
 "screen_coord_to_view_coord", 
 "quaternion_to_matrix", 
 "quaternion_multiply", 
+"quaternion_inverse", 
+"quaternion_normalize", 
 "axis_angle_to_matrix", 
 "matrix_to_quaternion", 
 "extrinsics_to_essential", 
@@ -735,19 +737,44 @@ def quaternion_to_matrix(quaternion: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.quaternion_to_matrix
 
 @overload
-def quaternion_multiply(q1: numpy_.ndarray, q2: numpy_.ndarray, eps: float = 1e-12) -> numpy_.ndarray:
+def quaternion_multiply(q1: numpy_.ndarray, q2: numpy_.ndarray) -> numpy_.ndarray:
     """Multiplies two quaternions (w, x, y, z)
 
 Parameters
 ----
     q1 (ndarray): shape (..., 4), the first quaternion
     q2 (ndarray): shape (..., 4), the second quaternion
-    eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
 
 Returns
 ----
-    ndarray: shape (..., 4), the product of the two quaternions, normalized to unit length and w > 0."""
+    ndarray: shape (..., 4), the product of the two quaternions"""
     utils3d.numpy.transforms.quaternion_multiply
+
+@overload
+def quaternion_inverse(quaternion: numpy_.ndarray) -> numpy_.ndarray:
+    """Calculate the inverse of a batch of quaternions (w, x, y, z)
+
+Parameters
+----
+    quaternion (ndarray): shape (..., 4), the quaternions to invert
+
+Returns
+----
+    ndarray: shape (..., 4)"""
+    utils3d.numpy.transforms.quaternion_inverse
+
+@overload
+def quaternion_normalize(quaternion: numpy_.ndarray) -> numpy_.ndarray:
+    """Normalize quaternions (w, x, y, z) to unit length and positive w component
+
+Parameters
+----
+    quaternion (ndarray): shape (..., 4), the quaternions to normalize
+
+Returns
+----
+    ndarray: shape (..., 4), the normalized quaternions with unit length and positive w component"""
+    utils3d.numpy.transforms.quaternion_normalize
 
 @overload
 def axis_angle_to_matrix(axis_angle: numpy_.ndarray) -> numpy_.ndarray:
@@ -3151,19 +3178,44 @@ def quaternion_to_matrix(quaternion: torch_.Tensor, eps: float = 1e-12) -> torch
     utils3d.torch.transforms.quaternion_to_matrix
 
 @overload
-def quaternion_multiply(q1: torch_.Tensor, q2: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
+def quaternion_multiply(q1: torch_.Tensor, q2: torch_.Tensor) -> torch_.Tensor:
     """Multiplies two quaternions (w, x, y, z)
 
 Parameters
 ----
     q1 (Tensor): shape (..., 4), the first quaternion
     q2 (Tensor): shape (..., 4), the second quaternion
-    eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
 
 Returns
 ----
-    Tensor: shape (..., 4), the product of the two quaternions, normalized to unit length."""
+    Tensor: shape (..., 4), the product of the two quaternions"""
     utils3d.torch.transforms.quaternion_multiply
+
+@overload
+def quaternion_inverse(quaternion: torch_.Tensor) -> torch_.Tensor:
+    """Calculate the inverse of a batch of quaternions (w, x, y, z)
+
+Parameters
+----
+    quaternion (Tensor): shape (..., 4), the quaternions to invert
+
+Returns
+----
+    Tensor: shape (..., 4), no normalization applied. It depends on the input quaternion."""
+    utils3d.torch.transforms.quaternion_inverse
+
+@overload
+def quaternion_normalize(quaternion: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:
+    """Normalize quaternions (w, x, y, z) to unit length and positive w component
+
+Parameters
+----
+    quaternion (Tensor): shape (..., 4), the quaternions to normalize
+
+Returns
+----
+    Tensor: shape (..., 4), the normalized quaternions with unit length and positive w component"""
+    utils3d.torch.transforms.quaternion_normalize
 
 @overload
 def matrix_to_axis_angle(rot_mat: torch_.Tensor, eps: float = 1e-12) -> torch_.Tensor:

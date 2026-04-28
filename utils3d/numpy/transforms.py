@@ -42,6 +42,7 @@ __all__ = [
     'quaternion_to_matrix',
     'quaternion_multiply',
     'quaternion_inverse',
+    'quaternion_normalize',
     'axis_angle_to_matrix',
     'matrix_to_quaternion',
     'extrinsics_to_essential',
@@ -903,27 +904,41 @@ def matrix_to_quaternion(rot_mat: ndarray) -> ndarray:
     return quat
 
 
-def quaternion_multiply(q1: ndarray, q2: ndarray, eps: float = 1e-12) -> ndarray:
+def quaternion_multiply(q1: ndarray, q2: ndarray) -> ndarray:
     """Multiplies two quaternions (w, x, y, z)
 
     Parameters
     ----
         q1 (ndarray): shape (..., 4), the first quaternion
         q2 (ndarray): shape (..., 4), the second quaternion
-        eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
 
     Returns
     ----
-        ndarray: shape (..., 4), the product of the two quaternions, normalized to unit length and w > 0.
+        ndarray: shape (..., 4), the product of the two quaternions
     """
     w1, v1 = q1[..., :1], q1[..., 1:]
     w2, v2 = q2[..., :1], q2[..., 1:]
     res_w = w1 * w2 - lite_dot(v1, v2)[..., None]
     res_v = w1 * v2 + w2 * v1 + np.cross(v1, v2, axis=-1)
-    w_sign = np.where(res_w >= 0, 1.0, -1.0).astype(res_w.dtype)
     res_q = np.concatenate([res_w, res_v], axis=-1)
-    res_q = res_q * (w_sign / np.maximum(lite_norm(res_q, axis=-1)[..., None], eps))
     return res_q
+
+
+def quaternion_normalize(quaternion: ndarray) -> ndarray:
+    """Normalize quaternions (w, x, y, z) to unit length and positive w component
+    
+    Parameters
+    ----
+        quaternion (ndarray): shape (..., 4), the quaternions to normalize
+
+    Returns
+    ----
+        ndarray: shape (..., 4), the normalized quaternions with unit length and positive w component
+    """
+    w_sign = np.where(quaternion[..., 0] >= 0, 1.0, -1.0).astype(quaternion.dtype)
+    quat = quaternion * w_sign[..., None]
+    quat = quat / np.maximum(lite_norm(quat, axis=-1)[..., None], np.finfo(quat.dtype).tiny)
+    return quat
 
 
 def quaternion_inverse(quaternion: ndarray) -> ndarray:
@@ -935,7 +950,7 @@ def quaternion_inverse(quaternion: ndarray) -> ndarray:
 
     Returns
     ----
-        ndarray: shape (..., 4), no normalization applied. It depends on the input quaternion.
+        ndarray: shape (..., 4)
     """
     w, v = quaternion[..., 0:1], quaternion[..., 1:]
     inv_quat = np.concatenate([w, -v], axis=-1)

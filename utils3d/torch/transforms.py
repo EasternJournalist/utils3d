@@ -46,6 +46,7 @@ __all__ = [
     'quaternion_to_matrix',
     'quaternion_multiply',
     'quaternion_inverse',
+    'quaternion_normalize',
     'matrix_to_axis_angle',
     'axis_angle_to_matrix',
     'axis_angle_to_quaternion',
@@ -1083,26 +1084,23 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
     return rot_mat
 
 
-def quaternion_multiply(q1: Tensor, q2: Tensor, eps: float = 1e-12) -> Tensor:
+def quaternion_multiply(q1: Tensor, q2: Tensor) -> Tensor:
     """Multiplies two quaternions (w, x, y, z)
 
     Parameters
     ----
         q1 (Tensor): shape (..., 4), the first quaternion
         q2 (Tensor): shape (..., 4), the second quaternion
-        eps (float): A small value to normalize the output quaternion while avoiding division by zero. Defaults to 1e-12.
 
     Returns
     ----
-        Tensor: shape (..., 4), the product of the two quaternions, normalized to unit length.
+        Tensor: shape (..., 4), the product of the two quaternions
     """
     w1, v1 = q1[..., :1], q1[..., 1:]
     w2, v2 = q2[..., :1], q2[..., 1:]
     res_w = w1 * w2 - (v1 * v2).sum(dim=-1, keepdim=True)
-    w_sign = torch.where(res_w >= 0, torch.tensor(1.0, device=res_w.device, dtype=res_w.dtype), torch.tensor(-1.0, device=res_w.device, dtype=res_w.dtype))
     res_v = w1 * v2 + w2 * v1 + torch.cross(v1, v2, dim=-1)
     res_q = torch.cat([res_w, res_v], dim=-1)
-    res_q = w_sign * F.normalize(res_q, dim=-1, eps=eps)
     return res_q
 
 
@@ -1120,6 +1118,22 @@ def quaternion_inverse(quaternion: Tensor) -> Tensor:
     w, v = quaternion[..., 0:1], quaternion[..., 1:]
     inv_quat = torch.cat([w, -v], dim=-1)
     return inv_quat
+
+
+def quaternion_normalize(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
+    """Normalize quaternions (w, x, y, z) to unit length and positive w component
+    
+    Parameters
+    ----
+        quaternion (Tensor): shape (..., 4), the quaternions to normalize
+
+    Returns
+    ----
+        Tensor: shape (..., 4), the normalized quaternions with unit length and positive w component
+    """
+    w_sign = torch.where(quaternion[..., 0] >= 0, torch.tensor(1.0, device=quaternion.device, dtype=quaternion.dtype), torch.tensor(-1.0, device=quaternion.device, dtype=quaternion.dtype))
+    quaternion = w_sign[..., None] * F.normalize(quaternion, dim=-1, eps=eps)
+    return quaternion
 
 
 def random_rotation_matrix(*size: int, dtype=torch.float32, device: torch.device = None) -> Tensor:
