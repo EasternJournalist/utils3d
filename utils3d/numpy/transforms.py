@@ -6,7 +6,7 @@ from numbers import Number
 
 from .helpers import toarray, batched
 from ..helpers import no_warnings
-from .utils import lite_dot, lite_norm
+from .utils import lite_dot, lite_norm, lite_sum
 
 
 __all__ = [
@@ -248,7 +248,7 @@ def view_look_at(
     x = np.cross(up, z)
     y = np.cross(z, x)
     R = np.stack([x, y, z], axis=-2)
-    R = R / np.linalg.norm(R, axis=-1, keepdims=True)
+    R = R / lite_norm(R, axis=-1)[..., None]
     t = (-R @ eye[..., None]).squeeze(-1)
     return make_affine_matrix(R, t)
 
@@ -275,9 +275,9 @@ def extrinsics_look_at(
     x = np.cross(-up, z)
     y = np.cross(z, x)
     # x = np.cross(y, z)
-    x = x / np.linalg.norm(x, axis=-1, keepdims=True)
-    y = y / np.linalg.norm(y, axis=-1, keepdims=True)
-    z = z / np.linalg.norm(z, axis=-1, keepdims=True)
+    x = x / lite_norm(x, axis=-1)[..., None]
+    y = y / lite_norm(y, axis=-1)[..., None]
+    z = z / lite_norm(z, axis=-1)[..., None]
     R = np.stack([x, y, z], axis=-2)
     t = -np.matmul(R, eye[..., None])
     return np.concatenate([
@@ -843,12 +843,12 @@ def quaternion_to_matrix(quaternion: ndarray) -> ndarray:
         ndarray: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
-    quaternion = quaternion / np.maximum(np.linalg.norm(quaternion, axis=-1, keepdims=True), np.finfo(quaternion.dtype).tiny)
+    quaternion = quaternion / np.maximum(lite_norm(quaternion, axis=-1), np.finfo(quaternion.dtype).tiny)[..., None]
     w, x, y, z = quaternion[..., 0], quaternion[..., 1], quaternion[..., 2], quaternion[..., 3]
     zeros = np.zeros_like(w)
     I = np.eye(3, dtype=quaternion.dtype)
     xyz = quaternion[..., 1:]
-    A = xyz[..., :, None] * xyz[..., None, :] - I * (xyz ** 2).sum(axis=-1)[..., None, None]
+    A = xyz[..., :, None] * xyz[..., None, :] - I * lite_sum(np.square, axis=-1)[..., None, None]
     B = np.stack([
         zeros, -z, y,
         z, zeros, -x,
@@ -900,7 +900,7 @@ def matrix_to_quaternion(rot_mat: ndarray) -> ndarray:
         )
     )
     quat = sign * wxyz
-    quat = quat / np.maximum(np.linalg.norm(quat, axis=-1, keepdims=True), np.finfo(quat.dtype).tiny)
+    quat = quat / np.maximum(lite_norm(quat, axis=-1), np.finfo(quat.dtype).tiny)[..., None]
     return quat
 
 
@@ -967,8 +967,8 @@ def quaternion_to_axis_angle(quaternion: ndarray) -> ndarray:
         ndarray: shape (..., 3), the axis-angle vectors corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
-    norm = np.linalg.norm(quaternion[..., 1:], axis=-1, keepdims=True)
-    axis = quaternion[..., 1:] / np.maximum(norm, np.finfo(quaternion.dtype).tiny)
+    norm = lite_norm(quaternion[..., 1:], axis=-1)
+    axis = quaternion[..., 1:] / np.maximum(norm, np.finfo(quaternion.dtype).tiny)[..., None]
     angle = 2 * np.atan2(norm, quaternion[..., 0:1])
     return angle * axis
 
@@ -1081,10 +1081,10 @@ def skew_symmetric(v: ndarray):
 def rotation_matrix_from_vectors(v1: ndarray, v2: ndarray):
     "Rotation matrix that rotates v1 to v2"
     I = np.eye(3, dtype=v1.dtype)
-    v1 = v1 / np.linalg.norm(v1, axis=-1)
-    v2 = v2 / np.linalg.norm(v2, axis=-1)
+    v1 = v1 / lite_norm(v1, axis=-1)[..., None]
+    v2 = v2 / lite_norm(v2, axis=-1)[..., None]
     v = np.cross(v1, v2, axis=-1)
-    c = np.sum(v1 * v2, axis=-1)
+    c = lite_dot(v1, v2, axis=-1)
     K = skew_symmetric(v)
     R = I + K + (1 / (1 + c)).astype(v1.dtype)[None, None] * (K @ K)    # Avoid numpy's default type casting for scalars
     return R
@@ -1102,7 +1102,7 @@ def axis_angle_to_matrix(axis_angle: ndarray) -> ndarray:
     batch_shape = axis_angle.shape[:-1]
     dtype = axis_angle.dtype
 
-    angle = np.linalg.norm(axis_angle, axis=-1, keepdims=True) 
+    angle = lite_norm(axis_angle, axis=-1)[..., None]
     axis = axis_angle / np.maximum(angle, np.finfo(dtype).tiny)
 
     cos = np.cos(angle)[..., None, :]
@@ -1126,7 +1126,7 @@ def axis_angle_to_quaternion(axis_angle: ndarray) -> ndarray:
     ## Returns
         ndarray: shape (..., 4) The quaternions for the given axis-angle parameters
     """
-    angle = np.linalg.norm(axis_angle, axis=-1, keepdims=True)
+    angle = lite_norm(axis_angle, axis=-1)[..., None]
     axis = axis_angle / np.maximum(angle, np.finfo(axis_angle.dtype).tiny)
     quat = np.concatenate([np.cos(angle / 2), np.sin(angle / 2) * axis], axis=-1)
     return quat
@@ -1298,14 +1298,14 @@ def slerp(v1: ndarray, v2: ndarray, t: ndarray) -> ndarray:
     ## Returns
         ndarray: `(..., N, D)` interpolated unit vector
     """
-    v1 = v1 / np.maximum(np.linalg.norm(v1, axis=-1, keepdims=True), np.finfo(v1.dtype).tiny)
-    v2 = v2 / np.maximum(np.linalg.norm(v2, axis=-1, keepdims=True), np.finfo(v2.dtype).tiny)
-    cos = np.sum(v1 * v2, axis=-1)
+    v1 = v1 / np.maximum(lite_norm(v1, axis=-1), np.finfo(v1.dtype).tiny)[..., None]
+    v2 = v2 / np.maximum(lite_norm(v2, axis=-1), np.finfo(v2.dtype).tiny)[..., None]
+    cos = lite_dot(v1, v2, axis=-1)
     v_ortho1 = v2 - v1 * cos[..., None]
     v_ortho2 = v1 - v2 * cos[..., None]
-    sin = np.minimum(np.linalg.norm(v_ortho1, axis=-1), np.linalg.norm(v_ortho2, axis=-1))
+    sin = np.minimum(lite_norm(v_ortho1, axis=-1), lite_norm(v_ortho2, axis=-1))
     theta = np.atan2(sin, cos)[..., None] * t
-    v_ortho1 = v_ortho1 / np.maximum(np.linalg.norm(v_ortho1, axis=-1, keepdims=True), np.finfo(v1.dtype).tiny)
+    v_ortho1 = v_ortho1 / np.maximum(lite_norm(v_ortho1, axis=-1), np.finfo(v1.dtype).tiny)[..., None]
     v = v1[..., None, :] * np.cos(theta)[..., None] + v_ortho1[..., None, :] * np.sin(theta)[..., None]
     return v
 
@@ -1498,10 +1498,10 @@ def angle_between(v1: ndarray, v2: ndarray):
     ## Returns
     `angle`: ndarray, shape (...): the angle between the two vectors.
     """
-    n1 = np.linalg.norm(v1, axis=-1, keepdims=True)
-    n2 = np.linalg.norm(v2, axis=-1, keepdims=True)
-    v1 = v1 / np.where(n1 == 0, 1, n1)
-    v2 = v2 / np.where(n2 == 0, 1, n2)
-    cos = (v1 * v2).sum(axis=-1)
-    sin = np.minimum(np.linalg.norm(v2 - v1 * cos[..., None], axis=-1), np.linalg.norm(v1 - v2 * cos[..., None], axis=-1))
+    n1 = lite_norm(v1, axis=-1)
+    n2 = lite_norm(v2, axis=-1)
+    v1 = v1 / np.where(n1 == 0, 1, n1)[..., None]
+    v2 = v2 / np.where(n2 == 0, 1, n2)[..., None]
+    cos = lite_dot(v1, v2)
+    sin = np.minimum(lite_norm(v2 - v1 * cos[..., None], axis=-1), lite_norm(v1 - v2 * cos[..., None], axis=-1))
     return np.atan2(sin, cos)

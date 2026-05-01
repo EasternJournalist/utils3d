@@ -353,7 +353,7 @@ def lite_sum(a: ndarray, axis: int = -1) -> ndarray:
             s += take_view(a, i, axis=axis)
         return s
     else:   # Einsum is faster than np.sum in most cases
-        return np.einsum('...i->...', np.moveaxis(a, axis, -1))
+        return np.einsum('...i->...', np.moveaxis(a, axis, -1), optimize=False)
 
 
 def lite_prod(a: ndarray, axis: int = -1) -> ndarray:
@@ -379,7 +379,7 @@ def lite_dot(a: ndarray, b: ndarray, axis: int = -1) -> ndarray:
     elif a.shape[axis] <= 3:
         return lite_sum(a * b, axis=axis)
     else:
-        return np.einsum('...i,...i->...', np.moveaxis(a, axis, -1), np.moveaxis(b, axis, -1))
+        return np.einsum('...i,...i->...', np.moveaxis(a, axis, -1), np.moveaxis(b, axis, -1), optimize=False)
 
 
 def lite_norm(a: ndarray, ord: int = 2, axis: int = -1) -> ndarray:
