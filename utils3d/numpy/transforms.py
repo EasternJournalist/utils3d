@@ -398,13 +398,13 @@ def normalize_intrinsics(
             1 / width, zeros, 0.5 / width,
             zeros, 1 / height, 0.5 / height,
             zeros, zeros, ones
-        ]).reshape(*zeros.shape, 3, 3)
+        ], axis=-1).reshape(*zeros.shape, 3, 3)
     elif pixel_convention == 'integer-corner':
         transform = np.stack([
             1 / width, zeros, zeros,
             zeros, 1 / height, zeros,
             zeros, zeros, ones
-        ]).reshape(*zeros.shape, 3, 3)
+        ], axis=-1).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 
@@ -439,13 +439,13 @@ def denormalize_intrinsics(
             width, zeros, -0.5 * ones,
             zeros, height, -0.5 * ones,
             zeros, zeros, ones
-        ], dim=-1).reshape(*zeros.shape, 3, 3)
+        ], axis=-1).reshape(*zeros.shape, 3, 3)
     elif pixel_convention == 'integer-corner':
         transform = np.stack([
             width, zeros, zeros,
             zeros, height, zeros,
             zeros, zeros, ones
-        ], dim=-1).reshape(*zeros.shape, 3, 3)
+        ], axis=-1).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 

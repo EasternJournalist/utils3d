@@ -385,13 +385,13 @@ def normalize_intrinsics(
             1 / width, zeros, 0.5 / width,
             zeros, 1 / height, 0.5 / height,
             zeros, zeros, ones
-        ]).reshape(*zeros.shape, 3, 3)
+        ], dim=-1).reshape(*zeros.shape, 3, 3)
     elif pixel_convention == 'integer-corner':
         transform = torch.stack([
             1 / width, zeros, zeros,
             zeros, 1 / height, zeros,
             zeros, zeros, ones
-        ]).reshape(*zeros.shape, 3, 3)
+        ], dim=-1).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 
