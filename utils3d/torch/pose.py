@@ -303,7 +303,7 @@ def _pose_graph_optimization_construct_laplacian(edge: Tensor, num_nodes: int, R
     edge_coords = (edge[:, None, None, :] * 3 + local3x3[None, :, :, :]).reshape(-1, 2)                       # (E * 3 * 3, 2)
     laplacian_coords = torch.cat([diag_coords, edge_coords, edge_coords.flip(-1)], dim=0)               # (2, N * 3 + 2 * E * 3 * 3)
 
-    laplacian = torch.sparse_coo_tensor(laplacian_coords.T, laplacian_data, size=(num_nodes * 3, num_nodes * 3))
+    laplacian = torch.sparse_coo_tensor(laplacian_coords.T, laplacian_data, size=(num_nodes * 3, num_nodes * 3), check_invariants=False)
     return laplacian
 
 
