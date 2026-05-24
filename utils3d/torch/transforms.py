@@ -1074,7 +1074,7 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
     zeros = torch.zeros_like(w)
     I = torch.eye(3, dtype=quaternion.dtype, device=quaternion.device)
     xyz = quaternion[..., 1:]
-    A = xyz[..., :, None] * xyz[..., None, :] - I * (xyz ** 2).sum(dim=-1)[..., None, None]
+    A = xyz[..., :, None] * xyz[..., None, :] - I * torch.square(xyz).sum(dim=-1)[..., None, None]
     B = torch.stack([
         zeros, -z, y,
         z, zeros, -x,

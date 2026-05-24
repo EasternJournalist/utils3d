@@ -848,7 +848,7 @@ def quaternion_to_matrix(quaternion: ndarray) -> ndarray:
     zeros = np.zeros_like(w)
     I = np.eye(3, dtype=quaternion.dtype)
     xyz = quaternion[..., 1:]
-    A = xyz[..., :, None] * xyz[..., None, :] - I * lite_sum(np.square, axis=-1)[..., None, None]
+    A = xyz[..., :, None] * xyz[..., None, :] - I * lite_sum(np.square(xyz), axis=-1)[..., None, None]
     B = np.stack([
         zeros, -z, y,
         z, zeros, -x,
