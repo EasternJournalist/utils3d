@@ -15,9 +15,9 @@ __all__ = [
     'segment_argmin',
     'segment_concatenate',
     'segment_concat',
+    'segment_chain',
     'group_as_segments'
 ]
-
 
 
 def segment_roll(data: ndarray, offsets: ndarray, shift: int, axis: int = 0) -> ndarray:

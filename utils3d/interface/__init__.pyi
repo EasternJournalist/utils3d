@@ -86,6 +86,7 @@ __all__ = ["sliding_window",
 "segment_argmin", 
 "segment_concatenate", 
 "segment_concat", 
+"segment_chain", 
 "group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -162,7 +163,6 @@ __all__ = ["sliding_window",
 "translate_2d", 
 "scale_2d", 
 "pose_graph_optimization", 
-"segment_chain", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -1362,6 +1362,23 @@ Returns
 - `data`: (ndarray) shape `(N, *data_dims)` the concatenated data
 - `offsets`: (ndarray) shape `(M + 1,)` the offsets of the concatenated segmented data."""
     utils3d.numpy.segment_ops.segment_concat
+
+@overload
+def segment_chain(segments: Sequence[Tuple[numpy_.ndarray, numpy_.ndarray]], axis: int = 0) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Concatenate segmented arrays in sequence. The number of segments are summed.
+
+Parameters
+------
+- `segments`: (Sequence[Tuple[ndarray, ndarray]]) A sequence of segmente arrays:
+    - `data`: (ndarray) shape `(..., N_i, ...)`
+    - `offsets`: (ndarray) shape `(M + 1,)` segment offsets.
+- `axis`: (int) the segment axis.
+
+Returns
+-------
+- `data`: (ndarray) shape `(..., sum(N_i), ...)` the chain-concatenated data
+- `offsets`: (ndarray) shape `(sum(M_i) + 1,)` the offsets of the concatenated segmented data."""
+    utils3d.numpy.segment_ops.segment_chain
 
 @overload
 def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:

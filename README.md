@@ -234,7 +234,7 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.segment_argmax`<br>Compute the argmax of each segment in the segmented data. | [`utils3d.np.segment_argmax(data, offsets, axis)`](utils3d/numpy/segment_ops.py#L186) | [`utils3d.pt.segment_argmax(data, offsets, dim)`](utils3d/torch/segment_ops.py#L205) | 
 | `utils3d.segment_argmin`<br>Compute the argmin of each segment in the segmented data. | [`utils3d.np.segment_argmin(data, offsets, axis)`](utils3d/numpy/segment_ops.py#L216) | [`utils3d.pt.segment_argmin(data, offsets, dim)`](utils3d/torch/segment_ops.py#L234) | 
 | `utils3d.segment_argsort`<br>Compute the argsort indices within each segment. | - | [`utils3d.pt.segment_argsort(input, offsets, descending, dim)`](utils3d/torch/segment_ops.py#L262) | 
-| `utils3d.segment_chain`<br>Concatenate segmented arrays in sequence. The number of segments are summed. | - | [`utils3d.pt.segment_chain(segments, axis)`](utils3d/torch/segment_ops.py#L139) | 
+| `utils3d.segment_chain`<br>Concatenate segmented arrays in sequence. The number of segments are summed. | [`utils3d.np.segment_chain(segments, axis)`](utils3d/numpy/segment_ops.py#L122) | [`utils3d.pt.segment_chain(segments, axis)`](utils3d/torch/segment_ops.py#L139) | 
 | `utils3d.segment_combinations`<br>Generate all combinations of elements within each segment. Vectorized implementation. | - | [`utils3d.pt.segment_combinations(input, offsets, r, with_replacement)`](utils3d/torch/segment_ops.py#L506) | 
 | `utils3d.segment_concat`<br>(Alias for segment_concatenate). | [`utils3d.np.segment_concat(segments, axis)`](utils3d/numpy/segment_ops.py#L103) | [`utils3d.pt.segment_concat(segments, axis)`](utils3d/torch/segment_ops.py#L120) | 
 | `utils3d.segment_concatenate`<br>Concatenate segmented arrays within each segment. All numbers of segments remain the same. | [`utils3d.np.segment_concatenate(segments, axis)`](utils3d/numpy/segment_ops.py#L69) | [`utils3d.pt.segment_concatenate(segments, dim)`](utils3d/torch/segment_ops.py#L86) | 
@@ -262,4 +262,3 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.write_intrinsics_as_colmap`<br>Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion) | [`utils3d.np.write_intrinsics_as_colmap(file, intrinsics, width, height, normalized)`](utils3d/numpy/io/colmap.py#L43) | - | 
 | `utils3d.write_obj`<br> | [`utils3d.np.write_obj(file, obj, encoding)`](utils3d/numpy/io/obj.py#L306) | - | 
 | `utils3d.write_ply`<br>Write a PLY file. Supports arbitrary properties, polygonal meshes. | [`utils3d.np.write_ply(file, data, format_)`](utils3d/numpy/io/ply.py#L666) | - | 
-

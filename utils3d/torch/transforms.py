@@ -1069,7 +1069,7 @@ def quaternion_to_matrix(quaternion: Tensor, eps: float = 1e-12) -> Tensor:
         Tensor: shape (..., 3, 3), the rotation matrices corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
-    quaternion = F.normalize(quaternion, dim=-1, eps=eps)
+    quaternion = quaternion_normalize(quaternion, eps=eps)
     w, x, y, z = quaternion.unbind(dim=-1)
     zeros = torch.zeros_like(w)
     I = torch.eye(3, dtype=quaternion.dtype, device=quaternion.device)

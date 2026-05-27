@@ -82,6 +82,7 @@ __all__ = ["sliding_window",
 "segment_argmin", 
 "segment_concatenate", 
 "segment_concat", 
+"segment_chain", 
 "group_as_segments", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
@@ -158,7 +159,6 @@ __all__ = ["sliding_window",
 "translate_2d", 
 "scale_2d", 
 "pose_graph_optimization", 
-"segment_chain", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -672,6 +672,12 @@ def segment_concat(*args, **kwargs):
     return _call_based_on_args('segment_concat', args, kwargs)
 
 @suppress_traceback
+def segment_chain(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.segment_chain, utils3d.torch.segment_chain
+    return _call_based_on_args('segment_chain', args, kwargs)
+
+@suppress_traceback
 def group_as_segments(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.group_as_segments, utils3d.torch.group_as_segments
@@ -1126,12 +1132,6 @@ def pose_graph_optimization(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.pose_graph_optimization
     return _call_based_on_args('pose_graph_optimization', args, kwargs)
-
-@suppress_traceback
-def segment_chain(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.segment_chain
-    return _call_based_on_args('segment_chain', args, kwargs)
 
 @suppress_traceback
 def segment_median(*args, **kwargs):
