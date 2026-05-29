@@ -508,7 +508,8 @@ def segment_solve_poses_sequential(
     mu_broadcast = torch.repeat_interleave(mu, lengths, dim=0)
     sigma = torch.segment_reduce(accum_wxx + accum_w[:, None, None] * vector_outer(mu_broadcast - mean_wx), 'sum', offsets=offsets, axis=0) / tot_w.clamp_min(eps)[:, None, None]
     nnz = torch.segment_reduce(accum_nnz, 'sum', offsets=offsets, axis=0)
-    valid = torch.segment_reduce((weights > 0).to(dtype), 'sum', offsets=offsets, axis=1) >= min_valid_size
+    # `torch.segment_reduce` requires axis == offsets.ndim - 1, so reduce along dim 0 by transposing.
+    valid = torch.segment_reduce((weights > 0).to(dtype).transpose(0, 1).contiguous(), 'sum', offsets=offsets, axis=0).transpose(0, 1) >= min_valid_size
     err = torch.sqrt(matrix_trace(accum_wxx, dim1=-2, dim2=-1) / accum_nnz.clamp_min(eps))
 
     return poses, valid, (mu, sigma, tot_w, nnz), mean_wx, err, (accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz)
