@@ -62,7 +62,7 @@ def sliding_window(
             - `int` -> same padding before and after for all axes;
             - `(int, int)` -> same padding before and after for each axis;
             - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
-    - `pad_mode` (str): Padding mode to use. Refer to `numpy.pad` for more details.
+    - `pad_mode` (str): Padding mode to use. Refer to `torch.nn.functional.pad` for more details.
     - `pad_value` (Union[int, float]): Value to use for constant padding. Only used
         when `pad_mode` is 'constant'.
     - `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
