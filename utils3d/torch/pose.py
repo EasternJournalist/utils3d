@@ -66,6 +66,21 @@ def kabasch(cov: Tensor, eps: float = 1e-12):
     return Kabsch.apply(cov, eps)
 
 
+def safe_inv(A: Tensor) -> Tensor:
+    """Batched matrix inverse that returns NaN for singular inputs instead of raising.
+
+    `torch.linalg.inv` raises `LinAlgError` whenever any batch element is singular, which forces
+    callers to either pre-validate inputs or wrap in try/except. NumPy inherited this behavior
+    and PyTorch followed; for our pipelines we'd rather let NaN propagate (consistent with the
+    rest of floating-point arithmetic), so degenerate elements simply mark themselves as invalid
+    downstream without taking out the whole batch. Uses `torch.linalg.inv_ex` under the hood.
+    """
+    inv, info = torch.linalg.inv_ex(A)
+    if info.any():
+        inv = torch.where((info > 0)[..., None, None], torch.full_like(inv, float('nan')), inv)
+    return inv
+
+
 def umeyama(cov_yx: Tensor, cov_xx: Optional[Tensor] = None, cov_yy: Optional[Tensor] = None, mean_x: Optional[Tensor] = None, mean_y: Optional[Tensor] = None, eps: float = 1e-12) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Umeyama method to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
@@ -152,8 +167,8 @@ def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tenso
     I = torch.eye(cov_yx.shape[-1], dtype=dtype, device=cov_yx.device)
     
     def _step(A, B, R, cov_yx, cov_xy, cov_xx, cov_yy, lam, gamma):
-        A = (cov_yx + lam * R + gamma * B.swapaxes(-2, -1)) @ torch.linalg.inv(cov_xx + lam * I + gamma * (B @ B.swapaxes(-2, -1)))
-        B = (cov_xy + lam * R.swapaxes(-2, -1) + gamma * A.swapaxes(-2, -1)) @ torch.linalg.inv(cov_yy + lam * I + gamma * (A @ A.swapaxes(-2, -1)))
+        A = (cov_yx + lam * R + gamma * B.swapaxes(-2, -1)) @ safe_inv(cov_xx + lam * I + gamma * (B @ B.swapaxes(-2, -1)))
+        B = (cov_xy + lam * R.swapaxes(-2, -1) + gamma * A.swapaxes(-2, -1)) @ safe_inv(cov_yy + lam * I + gamma * (A @ A.swapaxes(-2, -1)))
         err = torch.square(A @ B - I).mean(axis=(-2, -1))
         return A, B, err
     
@@ -162,6 +177,8 @@ def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tenso
         gamma_i = 1.2 ** i - 1
         non_converged_indices = tuple(not_converged.T)
         A[non_converged_indices], B[non_converged_indices], err = _step(*(x[non_converged_indices] for x in (A, B, R, cov_yx, cov_xy, cov_xx, cov_yy)), lam, gamma_i)
+        # NaN err (from degenerate inputs that produced NaN via safe_inv) compares False with
+        # `>= 1e-6`, so those segments naturally drop out of `not_converged`.
         not_converged = not_converged[err >= 1e-6]
         if len(not_converged) == 0:
             break
@@ -371,7 +388,7 @@ def solve_poses_sequential(
             A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter, eps=eps)
             poses[i] = make_affine_matrix(A, t)
 
-        xi = transform_points(yi, torch.linalg.inv(poses[i])[..., None, :, :])
+        xi = transform_points(yi, safe_inv(poses[i])[..., None, :, :])
 
         # Update accum
         old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.clone(), accum_sqrtw.clone()
@@ -485,7 +502,7 @@ def segment_solve_poses_sequential(
             A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter, eps=eps)
             poses[i] = make_affine_matrix(A, t)
 
-        xi = transform_points(yi, torch.repeat_interleave(torch.linalg.inv(poses[i]), lengths, dim=0))
+        xi = transform_points(yi, torch.repeat_interleave(safe_inv(poses[i]), lengths, dim=0))
 
         # Update accum
         old_mean_sqrtwx, old_accum_sqrtw = mean_sqrtwx.clone(), accum_sqrtw.clone()
