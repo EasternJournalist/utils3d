@@ -73,7 +73,7 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
-"kabasch", 
+"kabsch", 
 "umeyama", 
 "affine_umeyama", 
 "solve_pose", 
@@ -1060,8 +1060,8 @@ Better precision than using the arccos dot product directly.
     utils3d.numpy.transforms.angle_between
 
 @overload
-def kabasch(cov: numpy_.ndarray) -> numpy_.ndarray:
-    utils3d.numpy.pose.kabasch
+def kabsch(cov: numpy_.ndarray) -> numpy_.ndarray:
+    utils3d.numpy.pose.kabsch
 
 @overload
 def umeyama(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
@@ -3514,10 +3514,10 @@ Better precision than using the arccos dot product directly.
     utils3d.torch.transforms.angle_between
 
 @overload
-def kabasch(cov: torch_.Tensor, eps: float = 1e-12):
-    """Backward gradients friendly Kabasch method (compute rotation from input covarience matrix).
+def kabsch(cov: torch_.Tensor, eps: float = 1e-12):
+    """Backward gradients friendly Kabsch method (compute rotation from input covarience matrix).
     """
-    utils3d.torch.pose.kabasch
+    utils3d.torch.pose.kabsch
 
 @overload
 def umeyama(cov_yx: torch_.Tensor, cov_xx: Optional[torch_.Tensor] = None, cov_yy: Optional[torch_.Tensor] = None, mean_x: Optional[torch_.Tensor] = None, mean_y: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:

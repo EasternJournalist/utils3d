@@ -69,7 +69,7 @@ __all__ = ["sliding_window",
 "piecewise_interpolate_se3_matrix", 
 "transform_points", 
 "angle_between", 
-"kabasch", 
+"kabsch", 
 "umeyama", 
 "affine_umeyama", 
 "solve_pose", 
@@ -595,10 +595,10 @@ def angle_between(*args, **kwargs):
     return _call_based_on_args('angle_between', args, kwargs)
 
 @suppress_traceback
-def kabasch(*args, **kwargs):
+def kabsch(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.kabasch, utils3d.torch.kabasch
-    return _call_based_on_args('kabasch', args, kwargs)
+        utils3d.numpy.kabsch, utils3d.torch.kabsch
+    return _call_based_on_args('kabsch', args, kwargs)
 
 @suppress_traceback
 def umeyama(*args, **kwargs):

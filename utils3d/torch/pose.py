@@ -6,7 +6,7 @@ from .transforms import transform_points, make_affine_matrix
 from .utils import matrix_trace, vector_outer
 
 
-__all__ = ['kabasch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_optimization']
+__all__ = ['kabsch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_optimization']
 
 
 import torch
@@ -50,7 +50,7 @@ class Kabsch(torch.autograd.Function):
         return grad_cov, None
 
 
-def _kabasch_classic(cov: Tensor, eps: float = 1e-12):
+def _kabsch_classic(cov: Tensor, eps: float = 1e-12):
     """Reference implementation. Would encounter NaN gradients when singular values are too close.
     """
     U, _, Vh = torch.linalg.svd(cov)
@@ -60,8 +60,8 @@ def _kabasch_classic(cov: Tensor, eps: float = 1e-12):
     return R
 
 
-def kabasch(cov: Tensor, eps: float = 1e-12):
-    """Backward gradients friendly Kabasch method (compute rotation from input covarience matrix).
+def kabsch(cov: Tensor, eps: float = 1e-12):
+    """Backward gradients friendly Kabsch method (compute rotation from input covarience matrix).
     """
     return Kabsch.apply(cov, eps)
 
@@ -111,7 +111,7 @@ def umeyama(cov_yx: Tensor, cov_xx: Optional[Tensor] = None, cov_yy: Optional[Te
     - `R`: (..., 3, 3) rotation matrix.
     - `t`: (..., 3) translation vector. None if mean_x or mean_y is None.
     """
-    R = kabasch(cov_yx)
+    R = kabsch(cov_yx)
     if cov_xx is not None and cov_yy is None:
         s = matrix_trace(cov_yx @ R.swapaxes(-2, -1), dim1=-2, dim2=-1) / matrix_trace(cov_xx, dim1=-2, dim2=-1).clamp_min(eps)
     if cov_xx is None and cov_yy is not None:
@@ -190,7 +190,7 @@ def _affine_umeyama_iterative(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, me
     quadratic penalty + alternating least squares. Kept for correctness verification of `affine_umeyama`.
     """
     dtype = mean_x.dtype
-    R = kabasch(cov_yx)
+    R = kabsch(cov_yx)
     tr_xx = matrix_trace(cov_xx, dim1=-2, dim2=-1).clamp_min(eps)
     tr_yy = matrix_trace(cov_yy, dim1=-2, dim2=-1).clamp_min(eps)
 
@@ -718,7 +718,7 @@ def _pose_graph_optimization_eigen_decomposition(laplacian: Tensor) -> Tensor:
         R_global[:, :, :2],
         torch.sign(torch.linalg.det(R_global))[:, None, None] * R_global[:, :, 2:3]
     ], dim=-1)
-    R_global = kabasch(R_global)    # Ensure SO(3)
+    R_global = kabsch(R_global)    # Ensure SO(3)
 
     return R_global
 
@@ -732,7 +732,7 @@ def _pose_graph_optimization_procrustes_iteration(R_global: Tensor, edges: Tenso
     w_agg = torch.zeros(R_global.shape[0], device=R_global.device, dtype=R_global.dtype).index_add(0, edges_flat, w.repeat_interleave(2))
     for _ in range(niter):
         M = (DAMP * w_agg[..., None, None] * R_global).index_add(0, edges_flat_swap, w_R_dual @ R_global.index_select(0, edges_flat))
-        R_global = kabasch(M)
+        R_global = kabsch(M)
     return R_global
 
 

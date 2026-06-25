@@ -9,7 +9,7 @@ from .utils import safe_inv, vector_outer
 
 
 __all__ = [
-    'kabasch',
+    'kabsch',
     'umeyama',
     'affine_umeyama',
     'solve_pose',
@@ -20,7 +20,7 @@ __all__ = [
 ]
 
 
-def kabasch(cov: ndarray) -> ndarray:
+def kabsch(cov: ndarray) -> ndarray:
     U, _, Vh = np.linalg.svd(cov)
     Vh[..., 2, :] *= np.sign(np.linalg.det(U @ Vh))[..., None]
     R = U @ Vh
@@ -58,7 +58,7 @@ def umeyama(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[
     - `t`: (..., 3) translation vector. None if mean_x or mean_y is None.
     """
     dtype = cov_yx.dtype
-    R = kabasch(cov_yx)
+    R = kabsch(cov_yx)
     if cov_xx is not None and cov_yy is None:
         s = np.trace(cov_yx @ R.swapaxes(-2, -1), axis1=-2, axis2=-1) / np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
     if cov_xx is None and cov_yy is not None:

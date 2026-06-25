@@ -1,6 +1,6 @@
 # Auto-generated for lazy_import_all_from
 __all__ = [
-    'kabasch',
+    'kabsch',
     'umeyama',
     'affine_umeyama',
     'solve_pose',
