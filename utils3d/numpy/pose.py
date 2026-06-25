@@ -13,6 +13,7 @@ __all__ = [
     'umeyama',
     'affine_umeyama',
     'solve_pose',
+    'solve_pose_ransac',
     'segment_solve_pose',
     'solve_poses_sequential',
     'segment_solve_poses_sequential',
@@ -78,20 +79,38 @@ def umeyama(cov_yx: ndarray, cov_xx: Optional[ndarray] = None, cov_yy: Optional[
     return s, R, t
 
 
-def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2, niter: int = 8) -> Tuple[ndarray, ndarray]:
+def _sym_sqrt_and_inv_sqrt(mat: ndarray, eps: float) -> Tuple[ndarray, ndarray]:
+    """Symmetric square root and inverse square root of a batch of SPD matrices, from a single eigendecomposition."""
+    L, V = np.linalg.eigh(mat)
+    sqrt_L = np.sqrt(np.maximum(L, eps))
+    mat_sqrt = (V * sqrt_L[..., None, :]) @ V.swapaxes(-2, -1)
+    mat_inv_sqrt = (V * (1.0 / sqrt_L)[..., None, :]) @ V.swapaxes(-2, -1)
+    return mat_sqrt, mat_inv_sqrt
+
+
+def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2) -> Tuple[ndarray, ndarray]:
     """
     Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
+    The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
+    satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
+    an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+    (so `(A^{-1})` is automatically the consistent inverse):
+
+        `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
+
+    No iteration and no penalty annealing.
+
     Parameters
     ----
-    - `cov_yx`: (..., 3, 3) covariance matrix between y
+    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
     - `cov_xx`: (..., 3, 3) covariance matrix of x points.
-    - `cov_yy`: (..., 3, 3) covariance matrix of y
+    - `cov_yy`: (..., 3, 3) covariance matrix of y points.
     - `mean_x`: (..., 3) mean of x points.
     - `mean_y`: (..., 3) mean of y points.
-    - `lam`: rigidity regularization weight.
-    - `gamma`: symmetricity regularization annealing factor.
-    - `niter`: number of iterations for solving.
+    - `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
+        toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt
+        for degenerate (e.g. near-planar) inputs.
 
     Returns
     ----
@@ -99,32 +118,27 @@ def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: nd
     - `t`: (..., 3) translation vector.
     """
     dtype = cov_yx.dtype
-    R = kabasch(cov_yx)
-    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
-    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), np.finfo(dtype).tiny)
-    
-    cov_yx, cov_xy = cov_yx / tr_xx[..., None, None], cov_yx.swapaxes(-2, -1) / tr_yy[..., None, None]
-    cov_xx, cov_yy = cov_xx / tr_xx[..., None, None], cov_yy / tr_yy[..., None, None]
-    
-    A, B = np.zeros_like(R), np.zeros_like(R)
-    I = np.eye(cov_yx.shape[-1], dtype=dtype)
-    
-    def _step(A, B, R, cov_yx, cov_xy, cov_xx, cov_yy, lam, gamma):
-        A = (cov_yx + lam * R + gamma * B.swapaxes(-2, -1)) @ safe_inv(cov_xx + lam * I + gamma * (B @ B.swapaxes(-2, -1)))
-        B = (cov_xy + lam * R.swapaxes(-2, -1) + gamma * A.swapaxes(-2, -1)) @ safe_inv(cov_yy + lam * I + gamma * (A @ A.swapaxes(-2, -1)))
-        err = np.square(A @ B - I).mean(axis=(-2, -1))
-        return A, B, err
-    
-    not_converged = np.argwhere(np.ones(R.shape[:-2], dtype=bool))
-    for i in range(niter):
-        gamma_i = 1.2 ** i - 1
-        non_converged_indices = tuple(not_converged.T)
-        A[non_converged_indices], B[non_converged_indices], err = _step(*(x[non_converged_indices] for x in (A, B, R, cov_yx, cov_xy, cov_xx, cov_yy)), lam, gamma_i)
-        not_converged = not_converged[err >= 1e-6]
-        if len(not_converged) == 0:
-            break
+    eps = np.finfo(dtype).tiny
+    n = cov_xx.shape[-1]
+    I = np.eye(n, dtype=dtype)
+    tr_xx = np.maximum(np.trace(cov_xx, axis1=-2, axis2=-1), eps)
+    tr_yy = np.maximum(np.trace(cov_yy, axis1=-2, axis2=-1), eps)
+
+    # Mild rigidity / numerical ridge: shrink the whitening toward isotropic.
+    reg_xx = cov_xx + lam * (tr_xx / n)[..., None, None] * I
+    reg_yy = cov_yy + lam * (tr_yy / n)[..., None, None] * I
+
+    _, cov_xx_inv_sqrt = _sym_sqrt_and_inv_sqrt(reg_xx, eps)
+    cov_yy_sqrt, cov_yy_inv_sqrt = _sym_sqrt_and_inv_sqrt(reg_yy, eps)
+
+    M = cov_yy_inv_sqrt @ cov_yx @ cov_xx_inv_sqrt
+    U, _, Vh = np.linalg.svd(M)
+    Q = U @ Vh
+
+    A = cov_yy_sqrt @ Q @ cov_xx_inv_sqrt
     t = mean_y - transform_points(mean_x, A)
     return A, t
+
 
 
 def solve_pose(
@@ -133,8 +147,7 @@ def solve_pose(
     w: Optional[np.ndarray] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    lam: float = 1e-2, 
-    niter: int = 5
+    lam: float = 1e-2
 ) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
     
@@ -148,7 +161,6 @@ def solve_pose(
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
     
     Returns
     ----
@@ -175,10 +187,95 @@ def solve_pose(
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(s * R, t)
     elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam)
         pose = make_affine_matrix(A, t)
     
     return pose
+
+
+def solve_pose_ransac(
+    p: np.ndarray, 
+    q: np.ndarray, 
+    w: Optional[np.ndarray] = None, 
+    *,
+    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    threshold: float = 0.05,
+    num_samples: int = 32,
+    sample_size: Optional[int] = None,
+    lam: float = 1e-2, 
+    rng: Optional[np.random.Generator] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
+
+    Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
+    number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
+    procedure is vectorized over both the hypotheses and the leading batch dimensions.
+
+    Parameters
+    ----
+    - `p`: (..., N, 3) source points
+    - `q`: (..., N, 3) target points
+    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+        - For 'rigid', only rotation and translation are allowed.
+        - For 'similar', uniform scaling, rotation and translation are allowed.
+        - For 'affine', full affine transformation is allowed. Using least squares.
+    - `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
+        when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
+    - `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
+        linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
+        outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+    - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
+    - `lam`: regularization weight for 'affine' mode.
+    - `rng`: optional random generator for reproducible sampling.
+
+    Returns
+    ----
+    - `pose`: (..., 4, 4) transformations matrix from p to q.
+    - `inliers`: (..., N) boolean mask of inliers w.r.t. the returned pose.
+    """
+    if sample_size is None:
+        sample_size = 4 if mode == 'affine' else 3
+    if rng is None:
+        rng = np.random.default_rng()
+    batch_shape = p.shape[:-2]
+    N = p.shape[-2]
+    B = int(np.prod(batch_shape)) if len(batch_shape) > 0 else 1
+
+    p_flat = p.reshape(B, N, 3)
+    q_flat = q.reshape(B, N, 3)
+    if w is None:
+        w_flat = np.ones((B, N), dtype=p.dtype)
+    else:
+        w_flat = w.reshape(B, N)
+
+    # Draw `num_samples` minimal subsets without replacement per batch element.
+    scores = rng.random((B, num_samples, N))
+    idx = np.argpartition(scores, sample_size - 1, axis=-1)[..., :sample_size].astype(np.int32)  # (B, num_samples, sample_size)
+    batch_idx = np.arange(B, dtype=np.int32)[:, None, None]
+    p_s = p_flat[batch_idx, idx]  # (B, num_samples, sample_size, 3)
+    q_s = q_flat[batch_idx, idx]
+    w_s = w_flat[batch_idx, idx]
+
+    # Solve a candidate pose for every hypothesis.
+    pose_h = solve_pose(p_s, q_s, w_s, mode=mode, lam=lam)  # (B, num_samples, 4, 4)
+
+    # Score hypotheses by the weighted number of inliers over all correspondences.
+    p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])  # (B, num_samples, N, 3)
+    residual = np.linalg.norm(p_t - q_flat[:, None, :, :], axis=-1)  # (B, num_samples, N)
+    inliers = np.sqrt(w_flat[:, None, :]) * residual < threshold  # (B, num_samples, N)
+    inlier_score = np.sum(inliers * w_flat[:, None, :], axis=-1)  # (B, num_samples)
+
+    best = np.argmax(inlier_score, axis=-1).astype(np.int32)  # (B,)
+    best_inliers = inliers[np.arange(B, dtype=np.int32), best]  # (B, N)
+
+    # Refit on all inliers of the best hypothesis.
+    refit_w = w_flat * best_inliers.astype(w_flat.dtype)
+    pose = solve_pose(p_flat, q_flat, refit_w, mode=mode, lam=lam)  # (B, 4, 4)
+
+    pose = pose.reshape(*batch_shape, 4, 4)
+    best_inliers = best_inliers.reshape(*batch_shape, N)
+    return pose, best_inliers
 
 
 def segment_solve_pose(
@@ -188,8 +285,7 @@ def segment_solve_pose(
     *,
     offsets: np.ndarray, 
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    lam: float = 1e-2, 
-    niter: int = 5
+    lam: float = 1e-2
 ) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
     
@@ -204,7 +300,6 @@ def segment_solve_pose(
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
     
     Returns
     ----
@@ -233,7 +328,7 @@ def segment_solve_pose(
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(s * R, t)
     elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter)
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam)
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -246,8 +341,7 @@ def solve_poses_sequential(
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 3,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    lam: float = 1e-2,
-    niter: int = 8
+    lam: float = 1e-2
 ) -> Tuple[ndarray, Tuple[ndarray, ...], Tuple[ndarray, ndarray, ndarray, ndarray]]:
     """
     Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
@@ -263,7 +357,6 @@ def solve_poses_sequential(
         - For 'similar', uniform scaling, rotation and translation are allowed. 
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: rigidity regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
 
     Returns
     ----
@@ -348,10 +441,10 @@ def solve_poses_sequential(
             _, R, t = umeyama(cov_yx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
-            s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
+            s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(s * R, t)
         elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam)
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, safe_inv(poses[i])[..., None, :, :])
@@ -390,8 +483,7 @@ def segment_solve_poses_sequential(
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 3,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    lam: float = 1e-2,
-    niter: int = 8
+    lam: float = 1e-2
 ) -> Tuple[ndarray, Tuple[ndarray, ...], Tuple[ndarray, ndarray, ndarray, ndarray]]:
     """
     Segment array mode for `solve_poses_sequential`.
@@ -408,7 +500,6 @@ def segment_solve_poses_sequential(
         - For 'similar', uniform scaling, rotation and translation are allowed. 
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: rigidity regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
 
     Returns
     ----
@@ -479,10 +570,10 @@ def segment_solve_poses_sequential(
             _, R, t = umeyama(cov_yx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
-            s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, niter=niter)
+            s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(s * R, t)
         elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter)
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam)
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, np.repeat(safe_inv(poses[i]), lengths, axis=0))

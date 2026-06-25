@@ -77,6 +77,7 @@ __all__ = ["sliding_window",
 "umeyama", 
 "affine_umeyama", 
 "solve_pose", 
+"solve_pose_ransac", 
 "segment_solve_pose", 
 "solve_poses_sequential", 
 "segment_solve_poses_sequential", 
@@ -1094,19 +1095,28 @@ Returns
     utils3d.numpy.pose.umeyama
 
 @overload
-def affine_umeyama(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def affine_umeyama(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
+
+The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
+satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
+an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+(so `(A^{-1})` is automatically the consistent inverse):
+
+    `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
+
+No iteration and no penalty annealing.
 
 Parameters
 ----
-- `cov_yx`: (..., 3, 3) covariance matrix between y
+- `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
 - `cov_xx`: (..., 3, 3) covariance matrix of x points.
-- `cov_yy`: (..., 3, 3) covariance matrix of y
+- `cov_yy`: (..., 3, 3) covariance matrix of y points.
 - `mean_x`: (..., 3) mean of x points.
 - `mean_y`: (..., 3) mean of y points.
-- `lam`: rigidity regularization weight.
-- `gamma`: symmetricity regularization annealing factor.
-- `niter`: number of iterations for solving.
+- `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
+    toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt
+    for degenerate (e.g. near-planar) inputs.
 
 Returns
 ----
@@ -1115,7 +1125,7 @@ Returns
     utils3d.numpy.pose.affine_umeyama
 
 @overload
-def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Parameters
@@ -1128,7 +1138,6 @@ Parameters
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
 - `lam`: regularization weight for 'affine' mode.
-- `niter`: number of iterations for 'affine' mode.
 
 Returns
 ----
@@ -1136,7 +1145,39 @@ Returns
     utils3d.numpy.pose.solve_pose
 
 @overload
-def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5) -> numpy_.ndarray:
+def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: float = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, rng: Optional[numpy_.random._generator.Generator] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+    """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
+
+Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
+number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
+procedure is vectorized over both the hypotheses and the leading batch dimensions.
+
+Parameters
+----
+- `p`: (..., N, 3) source points
+- `q`: (..., N, 3) target points
+- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
+    when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
+- `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
+    linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
+    outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+- `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
+- `lam`: regularization weight for 'affine' mode.
+- `rng`: optional random generator for reproducible sampling.
+
+Returns
+----
+- `pose`: (..., 4, 4) transformations matrix from p to q.
+- `inliers`: (..., N) boolean mask of inliers w.r.t. the returned pose."""
+    utils3d.numpy.pose.solve_pose_ransac
+
+@overload
+def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Parameters
@@ -1150,7 +1191,6 @@ Parameters
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
 - `lam`: regularization weight for 'affine' mode.
-- `niter`: number of iterations for 'affine' mode.
 
 Returns
 ----
@@ -1158,7 +1198,7 @@ Returns
     utils3d.numpy.pose.segment_solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
@@ -1172,7 +1212,6 @@ Parameters
     - For 'similar', uniform scaling, rotation and translation are allowed. 
     - For 'affine', full affine transformation is allowed. Using least squares.
 - `lam`: rigidity regularization weight for 'affine' mode.
-- `niter`: number of iterations for 'affine' mode.
 
 Returns
 ----
@@ -1216,7 +1255,7 @@ valid = np.concatenate(valid, axis=0)   # (T_all,), poses' validity over all fra
     utils3d.numpy.pose.solve_poses_sequential
 
 @overload
-def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: numpy_.ndarray = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 8) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: numpy_.ndarray = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Segment array mode for `solve_poses_sequential`.
 
 Parameters
@@ -1231,7 +1270,6 @@ Parameters
     - For 'similar', uniform scaling, rotation and translation are allowed. 
     - For 'affine', full affine transformation is allowed. Using least squares.
 - `lam`: rigidity regularization weight for 'affine' mode.
-- `niter`: number of iterations for 'affine' mode.
 
 Returns
 ----
@@ -3513,10 +3551,17 @@ Returns
     utils3d.torch.pose.umeyama
 
 @overload
-def affine_umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, niter: int = 8, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def affine_umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
-NOTE: This function is indifferentiable due to the iterative solving process.
+The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
+satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
+an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+(so `(A^{-1})` is automatically the consistent inverse):
+
+    `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
+
+No iteration, no penalty annealing, and the result is differentiable.
 
 Parameters
 ----
@@ -3525,9 +3570,9 @@ Parameters
 - `cov_yy`: (..., 3, 3) covariance matrix of y points.
 - `mean_x`: (..., 3) mean of x points.
 - `mean_y`: (..., 3) mean of y points.
-- `lam`: rigidity regularization weight.
-- `gamma`: symmetricity regularization annealing factor.
-- `niter`: number of iterations for solving.
+- `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
+    toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt.
+- `eps`: small value to clamp eigenvalues / prevent division by zero.
 
 Returns
 ----
@@ -3536,7 +3581,7 @@ Returns
     utils3d.torch.pose.affine_umeyama
 
 @overload
-def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5, eps: float = 1e-12) -> torch_.Tensor:
+def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Parameters
@@ -3549,7 +3594,6 @@ Parameters
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
 - `lam`: regularization weight for 'affine' mode.
-- `niter`: number of iterations for 'affine' mode.
 - `eps`: small value to prevent division by zero.
 
 Returns
@@ -3558,10 +3602,41 @@ Returns
     utils3d.torch.pose.solve_pose
 
 @overload
-def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, niter: int = 5, eps: float = 1e-12) -> torch_.Tensor:
-    """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
+def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: float = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, eps: float = 1e-12, generator: Optional[torch_._C.Generator] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-NOTE: Affine mode is solved by iterative method and may be indifferentiable. Use with `torch.no_grad()` if you don't need gradients.
+Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
+number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
+procedure is vectorized over both the hypotheses and the leading batch dimensions.
+
+Parameters
+----
+- `p`: (..., N, 3) source points
+- `q`: (..., N, 3) target points
+- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
+    when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
+- `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
+    linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
+    outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+- `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
+- `lam`: regularization weight for 'affine' mode.
+- `eps`: small value to prevent division by zero.
+- `generator`: optional random generator for reproducible sampling.
+
+Returns
+----
+- `pose`: (..., 4, 4) transformations matrix from p to q.
+- `inliers`: (..., N) boolean mask of inliers w.r.t. the returned pose."""
+    utils3d.torch.pose.solve_pose_ransac
+
+@overload
+def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
+    """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
 
 Parameters
 ----
@@ -3574,13 +3649,64 @@ Parameters
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
 - `lam`: regularization weight for 'affine' mode.
-- `niter`: number of iterations for 'affine' mode.
 - `eps`: small value to prevent division by zero.
 
 Returns
 ----
 - `pose`: (S, 4, 4) transformations matrix from p to q."""
     utils3d.torch.pose.segment_solve_pose
+
+@overload
+def solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+    """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
+
+Parameters
+----
+- `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
+- `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+- `accum`: accumulated statistics from previous calls. If None, start fresh.
+- `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation is allowed. Using least squares.
+- `lam`: rigidity regularization weight for 'affine' mode.
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `poses`: (T, ..., 4, 4) transformations from canonical to each frame.
+- `valid`: (T, ...) boolean mask indicating valid segments
+- `stats`: canonical statistics of each group `(mu, cov, tot_w, nnz)`.
+- `canonical_points`: (..., N, 3) canonical points.
+- `err`: (..., N) per-point RMS error over all time.
+- `accum`: per-point accumulated statistics. Pass it to the next call for incremental solving."""
+    utils3d.torch.pose.solve_poses_sequential
+
+@overload
+def segment_solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, offsets: torch_.Tensor = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+    """Segment array mode for `solve_poses_sequential`.
+
+Parameters
+----
+- `trajectories`: (T, N, 3) posed points.
+- `weights`: (T, N) quardratic error term weights for each point at each frame
+- `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+- `accum`: accumulated statistics from previous calls. If None, start fresh.
+- `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
+- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `lam`: rigidity regularization weight for 'affine' mode.
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `poses`: (T, S, 4, 4) transformations from canonical to each frame.
+- `valid`: (T, S) boolean mask indicating valid segments.
+- `stats`: canonical statistics `(mu, cov, tot_w, nnz)`.
+- `canonical_points`: (N, 3) canonical points.
+- `err`: (N,) per-point RMS error over all time.
+- `accum`: per-point accumulated statistics for incremental solving."""
+    utils3d.torch.pose.segment_solve_poses_sequential
 
 @overload
 def pose_graph_optimization(num_nodes: int, edges: torch_.Tensor, poses: torch_.Tensor, w: torch_.Tensor | None = None, niter: int = 10) -> tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:

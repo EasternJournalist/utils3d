@@ -6,7 +6,7 @@ from .transforms import transform_points, make_affine_matrix
 from .utils import matrix_trace, vector_outer
 
 
-__all__ = ['kabasch', 'umeyama', 'affine_umeyama', 'solve_pose', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_optimization']
+__all__ = ['kabasch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_optimization']
 
 
 import torch
@@ -117,28 +117,62 @@ def umeyama(cov_yx: Tensor, cov_xx: Optional[Tensor] = None, cov_yy: Optional[Te
     return s, R, t
 
 
-@torch.no_grad()
-def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor, lam: float = 1e-2, niter: int = 8, eps: float = 1e-12) -> Tuple[Tensor, Tensor]:
+class _SymSqrtInvSqrt(torch.autograd.Function):
+    """Customized backward for the symmetric square root and inverse square root of SPD matrices.
+
+    The naive path (differentiating through `torch.linalg.eigh`) produces unstable gradients when
+    eigenvalues are close, because the eigenvector backward contains bare `1 / (L_i - L_j)` terms.
+    For a symmetric matrix function `h(A) = V h(L) V^T` the gradient only needs the divided
+    differences `(h(L_i) - h(L_j)) / (L_i - L_j)`, which for sqrt / inverse-sqrt have closed forms
+    with no `L_i - L_j` in the denominator (see the Loewner matrices below). They are bounded by the
+    `eps` floor, so they stay finite even for coincident eigenvalues (the diagonal `i == j` case is
+    the same formula).
     """
-    Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
+    @staticmethod
+    def forward(ctx: torch.autograd.function.FunctionCtx, mat: Tensor, eps: float = 1e-12):
+        L, V = torch.linalg.eigh(mat)
+        sqrt_L = L.clamp_min(eps).sqrt()
+        inv_sqrt_L = 1.0 / sqrt_L
+        mat_sqrt = (V * sqrt_L[..., None, :]) @ V.mT
+        mat_inv_sqrt = (V * inv_sqrt_L[..., None, :]) @ V.mT
+        ctx.save_for_backward(V, sqrt_L)
+        return mat_sqrt, mat_inv_sqrt
 
-    NOTE: This function is indifferentiable due to the iterative solving process.
+    @staticmethod
+    def backward(ctx: torch.autograd.function.FunctionCtx, grad_sqrt: Tensor, grad_inv_sqrt: Tensor):
+        V, sqrt_L = ctx.saved_tensors
 
-    Parameters
-    ----
-    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
-    - `cov_xx`: (..., 3, 3) covariance matrix of x points.
-    - `cov_yy`: (..., 3, 3) covariance matrix of y points.
-    - `mean_x`: (..., 3) mean of x points.
-    - `mean_y`: (..., 3) mean of y points.
-    - `lam`: rigidity regularization weight.
-    - `gamma`: symmetricity regularization annealing factor.
-    - `niter`: number of iterations for solving.
+        # Loewner (divided-difference) matrices, expressed purely via the clamped sqrt eigenvalues.
+        # f(L) = sqrt(L)     -> Lf_ij = 1 / (s_i + s_j)
+        # g(L) = 1 / sqrt(L) -> Lg_ij = -1 / (s_i s_j (s_i + s_j))
+        si = sqrt_L[..., :, None]
+        sj = sqrt_L[..., None, :]
+        s_sum = si + sj
+        loewner_f = 1.0 / s_sum
+        loewner_g = -1.0 / (si * sj * s_sum)
 
-    Returns
-    ----
-    - `A`: (..., 3, 3) affine transformation matrix.
-    - `t`: (..., 3) translation vector.
+        inner = torch.zeros(V.shape, dtype=V.dtype, device=V.device)
+        if grad_sqrt is not None:
+            grad_sqrt = 0.5 * (grad_sqrt + grad_sqrt.mT)
+            inner = inner + loewner_f * (V.mT @ grad_sqrt @ V)
+        if grad_inv_sqrt is not None:
+            grad_inv_sqrt = 0.5 * (grad_inv_sqrt + grad_inv_sqrt.mT)
+            inner = inner + loewner_g * (V.mT @ grad_inv_sqrt @ V)
+
+        grad_mat = V @ inner @ V.mT
+        return grad_mat, None
+
+
+def _sym_sqrt_and_inv_sqrt(mat: Tensor, eps: float = 1e-12) -> Tuple[Tensor, Tensor]:
+    """Symmetric square root and inverse square root of a batch of SPD matrices, from a single
+    eigendecomposition, with gradient-stable custom backward (see `_SymSqrtInvSqrt`)."""
+    return _SymSqrtInvSqrt.apply(mat, eps)
+
+
+@torch.no_grad()
+def _affine_umeyama_iterative(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor, lam: float = 1e-2, niter: int = 8, eps: float = 1e-12) -> Tuple[Tensor, Tensor]:
+    """Reference implementation. Solves the inverse-consistency constraint `A B = I` by an annealed
+    quadratic penalty + alternating least squares. Kept for correctness verification of `affine_umeyama`.
     """
     dtype = mean_x.dtype
     R = kabasch(cov_yx)
@@ -169,6 +203,56 @@ def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tenso
     return A, t
 
 
+def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor, lam: float = 1e-2, eps: float = 1e-12) -> Tuple[Tensor, Tensor]:
+    """
+    Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
+
+    The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
+    satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
+    an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+    (so `(A^{-1})` is automatically the consistent inverse):
+
+        `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
+
+    No iteration, no penalty annealing, and the result is differentiable.
+
+    Parameters
+    ----
+    - `cov_yx`: (..., 3, 3) covariance matrix between y and x points.
+    - `cov_xx`: (..., 3, 3) covariance matrix of x points.
+    - `cov_yy`: (..., 3, 3) covariance matrix of y points.
+    - `mean_x`: (..., 3) mean of x points.
+    - `mean_y`: (..., 3) mean of y points.
+    - `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
+        toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt.
+    - `eps`: small value to clamp eigenvalues / prevent division by zero.
+
+    Returns
+    ----
+    - `A`: (..., 3, 3) affine transformation matrix.
+    - `t`: (..., 3) translation vector.
+    """
+    n = cov_xx.shape[-1]
+    I = torch.eye(n, dtype=cov_xx.dtype, device=cov_xx.device)
+    tr_xx = matrix_trace(cov_xx, dim1=-2, dim2=-1).clamp_min(eps)
+    tr_yy = matrix_trace(cov_yy, dim1=-2, dim2=-1).clamp_min(eps)
+
+    # Mild rigidity / numerical ridge: shrink the whitening toward isotropic.
+    reg_xx = cov_xx + lam * (tr_xx / n)[..., None, None] * I
+    reg_yy = cov_yy + lam * (tr_yy / n)[..., None, None] * I
+
+    _, cov_xx_inv_sqrt = _sym_sqrt_and_inv_sqrt(reg_xx, eps)
+    cov_yy_sqrt, cov_yy_inv_sqrt = _sym_sqrt_and_inv_sqrt(reg_yy, eps)
+
+    M = cov_yy_inv_sqrt @ cov_yx @ cov_xx_inv_sqrt
+    U, _, Vh = torch.linalg.svd(M)
+    Q = U @ Vh
+
+    A = cov_yy_sqrt @ Q @ cov_xx_inv_sqrt
+    t = mean_y - transform_points(mean_x, A)
+    return A, t
+
+
 def solve_pose(
     p: Tensor, 
     q: Tensor, 
@@ -176,7 +260,6 @@ def solve_pose(
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2, 
-    niter: int = 5,
     eps: float = 1e-12
 ) -> Tensor:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
@@ -191,7 +274,6 @@ def solve_pose(
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -219,10 +301,95 @@ def solve_pose(
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean, eps=eps)
         pose = make_affine_matrix(s * R, t)
     elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter, eps=eps)
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps)
         pose = make_affine_matrix(A, t)
     
     return pose
+
+
+def solve_pose_ransac(
+    p: Tensor, 
+    q: Tensor, 
+    w: Optional[Tensor] = None, 
+    *,
+    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    threshold: float = 0.05,
+    num_samples: int = 32,
+    sample_size: Optional[int] = None,
+    lam: float = 1e-2, 
+    eps: float = 1e-12,
+    generator: Optional[torch.Generator] = None,
+) -> Tuple[Tensor, Tensor]:
+    """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
+
+    Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
+    number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
+    procedure is vectorized over both the hypotheses and the leading batch dimensions.
+
+    Parameters
+    ----
+    - `p`: (..., N, 3) source points
+    - `q`: (..., N, 3) target points
+    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+        - For 'rigid', only rotation and translation are allowed.
+        - For 'similar', uniform scaling, rotation and translation are allowed.
+        - For 'affine', full affine transformation is allowed. Using least squares.
+    - `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
+        when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
+    - `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
+        linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
+        outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+    - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
+    - `lam`: regularization weight for 'affine' mode.
+    - `eps`: small value to prevent division by zero.
+    - `generator`: optional random generator for reproducible sampling.
+
+    Returns
+    ----
+    - `pose`: (..., 4, 4) transformations matrix from p to q.
+    - `inliers`: (..., N) boolean mask of inliers w.r.t. the returned pose.
+    """
+    if sample_size is None:
+        sample_size = 4 if mode == 'affine' else 3
+    batch_shape = p.shape[:-2]
+    N = p.shape[-2]
+    B = int(torch.tensor(batch_shape).prod().item()) if len(batch_shape) > 0 else 1
+
+    p_flat = p.reshape(B, N, 3)
+    q_flat = q.reshape(B, N, 3)
+    if w is None:
+        w_flat = torch.ones((B, N), dtype=p.dtype, device=p.device)
+    else:
+        w_flat = w.reshape(B, N)
+
+    # Draw `num_samples` minimal subsets without replacement per batch element.
+    scores = torch.rand((B, num_samples, N), dtype=p.dtype, device=p.device, generator=generator)
+    idx = scores.topk(sample_size, dim=-1).indices.to(torch.int32)  # (B, num_samples, sample_size)
+    batch_idx = torch.arange(B, dtype=torch.int32, device=p.device)[:, None, None]
+    p_s = p_flat[batch_idx, idx]  # (B, num_samples, sample_size, 3)
+    q_s = q_flat[batch_idx, idx]
+    w_s = w_flat[batch_idx, idx]
+
+    # Solve a candidate pose for every hypothesis.
+    pose_h = solve_pose(p_s, q_s, w_s, mode=mode, lam=lam, eps=eps)  # (B, num_samples, 4, 4)
+
+    # Score hypotheses by the weighted number of inliers over all correspondences.
+    p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])  # (B, num_samples, N, 3)
+    residual = torch.linalg.norm(p_t - q_flat[:, None, :, :], dim=-1)  # (B, num_samples, N)
+    inliers = w_flat[:, None, :].sqrt() * residual < threshold  # (B, num_samples, N)
+    inlier_score = torch.sum(inliers * w_flat[:, None, :], dim=-1)  # (B, num_samples)
+
+    best = torch.argmax(inlier_score, dim=-1).to(torch.int32)  # (B,)
+    best_inliers = inliers[torch.arange(B, dtype=torch.int32, device=p.device), best]  # (B, N)
+
+    # Refit on all inliers of the best hypothesis.
+    refit_w = w_flat * best_inliers.to(w_flat.dtype)
+    pose = solve_pose(p_flat, q_flat, refit_w, mode=mode, lam=lam, eps=eps)  # (B, 4, 4)
+
+    pose = pose.reshape(*batch_shape, 4, 4)
+    best_inliers = best_inliers.reshape(*batch_shape, N)
+    return pose, best_inliers
 
 
 def segment_solve_pose(
@@ -233,12 +400,9 @@ def segment_solve_pose(
     offsets: Tensor, 
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2, 
-    niter: int = 5,
     eps: float = 1e-12
 ) -> Tensor:
     """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
-
-    NOTE: Affine mode is solved by iterative method and may be indifferentiable. Use with `torch.no_grad()` if you don't need gradients.
     
     Parameters
     ----
@@ -251,7 +415,6 @@ def segment_solve_pose(
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -281,7 +444,7 @@ def segment_solve_pose(
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean, eps=eps)
         pose = make_affine_matrix(s * R, t)
     elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, niter=niter, eps=eps)
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps)
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -295,7 +458,6 @@ def solve_poses_sequential(
     min_valid_size: int = 3,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2,
-    niter: int = 8,
     eps: float = 1e-12,
 ) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor, Tensor, Tensor], Tensor, Tensor, Tuple[Tensor, ...]]:
     """
@@ -312,7 +474,6 @@ def solve_poses_sequential(
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
     - `lam`: rigidity regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -368,7 +529,7 @@ def solve_poses_sequential(
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, eps=eps)
             poses[i] = make_affine_matrix(s * R, t)
         elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter, eps=eps)
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps)
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, torch.linalg.inv(poses[i])[..., None, :, :])
@@ -408,7 +569,6 @@ def segment_solve_poses_sequential(
     min_valid_size: int = 3,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2,
-    niter: int = 8,
     eps: float = 1e-12,
 ) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor, Tensor, Tensor], Tensor, Tensor, Tuple[Tensor, ...]]:
     """
@@ -423,7 +583,6 @@ def segment_solve_poses_sequential(
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - `lam`: rigidity regularization weight for 'affine' mode.
-    - `niter`: number of iterations for 'affine' mode.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -482,7 +641,7 @@ def segment_solve_poses_sequential(
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, eps=eps)
             poses[i] = make_affine_matrix(s * R, t)
         elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, niter=niter, eps=eps)
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps)
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, torch.repeat_interleave(torch.linalg.inv(poses[i]), lengths, dim=0))

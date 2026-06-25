@@ -73,6 +73,7 @@ __all__ = ["sliding_window",
 "umeyama", 
 "affine_umeyama", 
 "solve_pose", 
+"solve_pose_ransac", 
 "segment_solve_pose", 
 "solve_poses_sequential", 
 "segment_solve_poses_sequential", 
@@ -618,6 +619,12 @@ def solve_pose(*args, **kwargs):
     return _call_based_on_args('solve_pose', args, kwargs)
 
 @suppress_traceback
+def solve_pose_ransac(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.solve_pose_ransac, utils3d.torch.solve_pose_ransac
+    return _call_based_on_args('solve_pose_ransac', args, kwargs)
+
+@suppress_traceback
 def segment_solve_pose(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.segment_solve_pose, utils3d.torch.segment_solve_pose
@@ -626,13 +633,13 @@ def segment_solve_pose(*args, **kwargs):
 @suppress_traceback
 def solve_poses_sequential(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.solve_poses_sequential, None
+        utils3d.numpy.solve_poses_sequential, utils3d.torch.solve_poses_sequential
     return _call_based_on_args('solve_poses_sequential', args, kwargs)
 
 @suppress_traceback
 def segment_solve_poses_sequential(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.segment_solve_poses_sequential, None
+        utils3d.numpy.segment_solve_poses_sequential, utils3d.torch.segment_solve_poses_sequential
     return _call_based_on_args('segment_solve_poses_sequential', args, kwargs)
 
 @suppress_traceback
