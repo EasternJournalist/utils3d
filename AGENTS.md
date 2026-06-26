@@ -24,6 +24,12 @@ purpose and the full function inventory see [README.md](README.md).
   it in the other unless there's a clear reason (e.g. nvdiffrast-only).
   Keep function name, parameter names, and parameter order identical across
   backends so the auto-dispatcher works.
+- **Avoid overhead in every operation, whether or not it's a bottleneck.**
+  Never spin up a heavyweight construct to do trivial work. E.g. compute a
+  scalar product of a shape with `math.prod(shape)` — do **not** build a
+  `torch.tensor(shape).prod().item()` or `np.prod(shape)` (tensor/array alloc
+  + device sync for a few ints). Prefer plain Python / cheap intrinsics for
+  small scalar bookkeeping.
 
 ## How a public function gets wired up
 

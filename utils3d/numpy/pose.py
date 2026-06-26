@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from numpy import ndarray
 from typing import *
@@ -145,17 +147,22 @@ def solve_pose(
     p: np.ndarray, 
     q: np.ndarray, 
     w: Optional[np.ndarray] = None, 
+    sigma: Optional[np.ndarray] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2
 ) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
-    
+
+    Minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2`.
+
     Parameters
     ----
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+    - `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
+    - `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
+        relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
@@ -168,6 +175,9 @@ def solve_pose(
     """
     if w is None:
         w = np.ones(p.shape[:-1], dtype=p.dtype)
+    if sigma is not None:
+        sigma = np.asarray(sigma, dtype=p.dtype)
+        w = w / np.maximum(np.square(sigma), np.finfo(p.dtype).tiny)
     w_sum = np.maximum(np.sum(w, axis=-1), np.finfo(p.dtype).tiny)
     p_mean = np.sum(w[..., None] * p, axis=-2) / w_sum[..., None]
     q_mean = np.sum(w[..., None] * q, axis=-2) / w_sum[..., None]
@@ -197,9 +207,10 @@ def solve_pose_ransac(
     p: np.ndarray, 
     q: np.ndarray, 
     w: Optional[np.ndarray] = None, 
+    sigma: Optional[np.ndarray] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    threshold: float = 0.05,
+    threshold: Union[float, np.ndarray] = 0.05,
     num_samples: int = 32,
     sample_size: Optional[int] = None,
     lam: float = 1e-2, 
@@ -207,24 +218,30 @@ def solve_pose_ransac(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-    Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
-    number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
-    procedure is vectorized over both the hypotheses and the leading batch dimensions.
+    Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
+    one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+
+    The solve minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` (as in `solve_pose`), while the
+    inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. `w`, `sigma`, and
+    `threshold` act independently.
 
     Parameters
     ----
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+    - `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
+        proportional to `w`), weights the solve and the consensus score; does not relax the
+        threshold. If None, uniform weights are used.
+    - `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
+        (same meaning as in `solve_pose`). If None, treated as 1.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
-    - `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
-        when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
-    - `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
-        linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
-        outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+    - `threshold`: inlier distance threshold (scalar or per-point array, broadcastable to (..., N)). A
+        correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
+        pass `relative_threshold * ||p_i||`.
+    - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
     - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
     - `lam`: regularization weight for 'affine' mode.
     - `rng`: optional random generator for reproducible sampling.
@@ -240,7 +257,7 @@ def solve_pose_ransac(
         rng = np.random.default_rng()
     batch_shape = p.shape[:-2]
     N = p.shape[-2]
-    B = int(np.prod(batch_shape)) if len(batch_shape) > 0 else 1
+    B = math.prod(batch_shape)
 
     p_flat = p.reshape(B, N, 3)
     q_flat = q.reshape(B, N, 3)
@@ -249,29 +266,51 @@ def solve_pose_ransac(
     else:
         w_flat = w.reshape(B, N)
 
-    # Draw `num_samples` minimal subsets without replacement per batch element.
-    scores = rng.random((B, num_samples, N))
-    idx = np.argpartition(scores, sample_size - 1, axis=-1)[..., :sample_size].astype(np.int32)  # (B, num_samples, sample_size)
-    batch_idx = np.arange(B, dtype=np.int32)[:, None, None]
-    p_s = p_flat[batch_idx, idx]  # (B, num_samples, sample_size, 3)
-    q_s = q_flat[batch_idx, idx]
-    w_s = w_flat[batch_idx, idx]
+    # Optional per-point noise scale, passed through to every solve (identical meaning to solve_pose).
+    if sigma is not None:
+        sigma = np.asarray(sigma, dtype=p.dtype)
+        sigma_flat = np.broadcast_to(sigma, p.shape[:-1]).reshape(B, N)  # (B, N)
+    else:
+        sigma_flat = None
+
+    # Inlier threshold: a purely geometric gate (scalar or per-point), never folded into the solve.
+    tiny = np.finfo(p.dtype).tiny
+    threshold = np.maximum(np.asarray(threshold, dtype=p.dtype), tiny)
+    threshold_b = np.broadcast_to(threshold, p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
+
+    # Draw `num_samples` minimal subsets without replacement per batch element, sampling each point
+    # with probability proportional to its confidence `w`, so high-confidence correspondences are
+    # more likely to seed a hypothesis. `np.random.choice` can't draw a batch of independent subsets
+    # in one vectorized call, so we use the Gumbel-top-k trick (Efraimidis-Spirakis): perturbing each
+    # `log(w_i)` by i.i.d. Gumbel noise and taking the top-`sample_size` keys yields exactly weighted
+    # sampling without replacement. Weights are floored to `tiny` so a draw is always possible even
+    # when fewer than `sample_size` points have nonzero weight. Uniform `w` -> uniform sampling.
+    u = np.maximum(rng.random((B, num_samples, N)).astype(p.dtype), tiny)
+    keys = np.log(np.maximum(w_flat[:, None, :], tiny)) - np.log(-np.log(u))  # log(w_i) + Gumbel noise
+    idx = np.argpartition(keys, -sample_size, axis=-1)[..., -sample_size:].astype(np.int32)  # (B, num_samples, sample_size)
+    p_s = np.take_along_axis(p_flat[:, None, :, :], idx[..., None], axis=2)  # (B, num_samples, sample_size, 3)
+    q_s = np.take_along_axis(q_flat[:, None, :, :], idx[..., None], axis=2)
+    w_s = np.take_along_axis(w_flat[:, None, :], idx, axis=2)
+    sigma_s = np.take_along_axis(sigma_flat[:, None, :], idx, axis=2) if sigma_flat is not None else None
 
     # Solve a candidate pose for every hypothesis.
-    pose_h = solve_pose(p_s, q_s, w_s, mode=mode, lam=lam)  # (B, num_samples, 4, 4)
+    pose_h = solve_pose(p_s, q_s, w_s, sigma_s, mode=mode, lam=lam)  # (B, num_samples, 4, 4)
 
-    # Score hypotheses by the weighted number of inliers over all correspondences.
-    p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])  # (B, num_samples, N, 3)
-    residual = np.linalg.norm(p_t - q_flat[:, None, :, :], axis=-1)  # (B, num_samples, N)
-    inliers = np.sqrt(w_flat[:, None, :]) * residual < threshold  # (B, num_samples, N)
-    inlier_score = np.sum(inliers * w_flat[:, None, :], axis=-1)  # (B, num_samples)
+    # Score hypotheses by a robust, truncated soft-inlier cost. The threshold normalizes the raw
+    # residual (purely geometric); the confidence `w` weights each point's contribution but does
+    # NOT relax its threshold. Each correspondence contributes `w_i * min(1, residual_i / threshold_i)`.
+    p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])     # (B, num_samples, N, 3)
+    residual = np.linalg.norm(p_t - q_flat[:, None, :, :], axis=-1)             # (B, num_samples, N)
+    normalized_residual = residual / threshold_b                               # (B, num_samples, N)
+    inliers = normalized_residual < 1.0  # (B, num_samples, N)
+    inlier_cost = (w_flat[:, None, :] * np.minimum(normalized_residual, 1.0)).mean(axis=-1)  # (B, num_samples)
 
-    best = np.argmax(inlier_score, axis=-1).astype(np.int32)  # (B,)
-    best_inliers = inliers[np.arange(B, dtype=np.int32), best]  # (B, N)
+    best = np.argmin(inlier_cost, axis=-1)  # (B,)
+    best_inliers = np.take_along_axis(inliers, best[:, None, None], axis=1)[:, 0]  # (B, N)
 
-    # Refit on all inliers of the best hypothesis.
+    # Refit on all inliers of the best hypothesis (same w / sigma weighting as the hypotheses).
     refit_w = w_flat * best_inliers.astype(w_flat.dtype)
-    pose = solve_pose(p_flat, q_flat, refit_w, mode=mode, lam=lam)  # (B, 4, 4)
+    pose = solve_pose(p_flat, q_flat, refit_w, sigma_flat, mode=mode, lam=lam)  # (B, 4, 4)
 
     pose = pose.reshape(*batch_shape, 4, 4)
     best_inliers = best_inliers.reshape(*batch_shape, N)
@@ -282,18 +321,22 @@ def segment_solve_pose(
     p: np.ndarray, 
     q: np.ndarray, 
     w: Optional[np.ndarray] = None, 
+    sigma: Optional[np.ndarray] = None, 
     *,
     offsets: np.ndarray, 
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2
 ) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+    Minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` within each segment (see `solve_pose`).
     
     Parameters
     ----
     - `p`: (N, 3) source points
     - `q`: (N, 3) target points
     - `w`: (N,) weights for each point correspondence
+    - `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
     - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
@@ -307,6 +350,9 @@ def segment_solve_pose(
     """
     if w is None:
         w = np.ones(p.shape[:-1], dtype=p.dtype)
+    if sigma is not None:
+        sigma = np.asarray(sigma, dtype=p.dtype)
+        w = w / np.maximum(np.square(sigma), np.finfo(p.dtype).tiny)
 
     lengths = np.diff(offsets)
     w_sum = np.maximum(np.add.reduceat(w, offsets[:-1], axis=0), np.finfo(p.dtype).tiny)
@@ -337,6 +383,7 @@ def segment_solve_pose(
 def solve_poses_sequential(
     trajectories: ndarray,
     weights: Optional[ndarray] = None,
+    noise_scales: Optional[ndarray] = None,
     *,
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 3,
@@ -350,6 +397,8 @@ def solve_poses_sequential(
     ----
     - `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
     - `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+    - `noise_scales`: (T, ..., N) optional per-point noise scale per frame. The effective weight is
+        `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -388,7 +437,7 @@ def solve_poses_sequential(
     poses, valid = [], []
     for new_trajectories_chunk in data_stream:
         # new_trajectories_chunk: (T_chunk, N, 3)
-        poses_chunk, valid_chunk, stats, canonical_points, err, accum = solve_poses(
+        poses_chunk, valid_chunk, stats, canonical_points, err, accum = solve_poses_sequential(
             new_trajectories_chunk,
             accum=accum,
         )
@@ -405,6 +454,9 @@ def solve_poses_sequential(
 
     if weights is None:
         weights = np.ones((num_frames, *batch_shape, num_points), dtype=dtype)
+    if noise_scales is not None:
+        noise_scales = np.asarray(noise_scales, dtype=dtype)
+        weights = weights / np.maximum(np.square(noise_scales), np.finfo(dtype).tiny)
 
     poses = np.zeros((num_frames, *batch_shape, 4, 4), dtype=dtype)
         
@@ -479,6 +531,7 @@ def segment_solve_poses_sequential(
     trajectories: ndarray,
     weights: Optional[ndarray] = None,
     offsets: ndarray = None,
+    noise_scales: Optional[ndarray] = None,
     *,
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 3,
@@ -493,6 +546,8 @@ def segment_solve_poses_sequential(
     - `trajectories`: (T, N, 3) posed points.
     - `weights`: (T, N) quardratic error term weights for each point at each frame
     - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+    - `noise_scales`: (T, N) optional per-point noise scale per frame. The effective weight is
+        `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -530,6 +585,9 @@ def segment_solve_poses_sequential(
 
     if weights is None:
         weights = np.ones((num_frames, num_points), dtype=dtype)
+    if noise_scales is not None:
+        noise_scales = np.asarray(noise_scales, dtype=dtype)
+        weights = weights / np.maximum(np.square(noise_scales), np.finfo(dtype).tiny)
 
     num_segments = len(offsets) - 1
     lengths = np.diff(offsets)

@@ -1125,14 +1125,18 @@ Returns
     utils3d.numpy.pose.affine_umeyama
 
 @overload
-def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+Minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2`.
 
 Parameters
 ----
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
+- `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
+    relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
@@ -1145,27 +1149,33 @@ Returns
     utils3d.numpy.pose.solve_pose
 
 @overload
-def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: float = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, rng: Optional[numpy_.random._generator.Generator] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, numpy_.ndarray] = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, rng: Optional[numpy_.random._generator.Generator] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
-number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
-procedure is vectorized over both the hypotheses and the leading batch dimensions.
+Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
+one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+
+The solve minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` (as in `solve_pose`), while the
+inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. `w`, `sigma`, and
+`threshold` act independently.
 
 Parameters
 ----
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
+    proportional to `w`), weights the solve and the consensus score; does not relax the
+    threshold. If None, uniform weights are used.
+- `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
+    (same meaning as in `solve_pose`). If None, treated as 1.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
-- `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
-    when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
-- `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
-    linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
-    outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+- `threshold`: inlier distance threshold (scalar or per-point array, broadcastable to (..., N)). A
+    correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
+    pass `relative_threshold * ||p_i||`.
+- `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
 - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
 - `lam`: regularization weight for 'affine' mode.
 - `rng`: optional random generator for reproducible sampling.
@@ -1177,14 +1187,17 @@ Returns
     utils3d.numpy.pose.solve_pose_ransac
 
 @overload
-def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
+def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+Minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` within each segment (see `solve_pose`).
 
 Parameters
 ----
 - `p`: (N, 3) source points
 - `q`: (N, 3) target points
 - `w`: (N,) weights for each point correspondence
+- `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
 - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
@@ -1198,13 +1211,15 @@ Returns
     utils3d.numpy.pose.segment_solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, noise_scales: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
 ----
 - `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
 - `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+- `noise_scales`: (T, ..., N) optional per-point noise scale per frame. The effective weight is
+    `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -1243,7 +1258,7 @@ accum = None
 poses, valid = [], []
 for new_trajectories_chunk in data_stream:
     # new_trajectories_chunk: (T_chunk, N, 3)
-    poses_chunk, valid_chunk, stats, canonical_points, err, accum = solve_poses(
+    poses_chunk, valid_chunk, stats, canonical_points, err, accum = solve_poses_sequential(
         new_trajectories_chunk,
         accum=accum,
     )
@@ -1255,7 +1270,7 @@ valid = np.concatenate(valid, axis=0)   # (T_all,), poses' validity over all fra
     utils3d.numpy.pose.solve_poses_sequential
 
 @overload
-def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: numpy_.ndarray = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: numpy_.ndarray = None, noise_scales: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Segment array mode for `solve_poses_sequential`.
 
 Parameters
@@ -1263,6 +1278,8 @@ Parameters
 - `trajectories`: (T, N, 3) posed points.
 - `weights`: (T, N) quardratic error term weights for each point at each frame
 - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+- `noise_scales`: (T, N) optional per-point noise scale per frame. The effective weight is
+    `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -2555,7 +2572,7 @@ This function is a wrapper of `torch.nn.functional.unfold` with additional suppo
         - `int` -> same padding before and after for all axes;
         - `(int, int)` -> same padding before and after for each axis;
         - `((int,), (int,) ...)` -> specify padding for each axis, same before and after.
-- `pad_mode` (str): Padding mode to use. Refer to `numpy.pad` for more details.
+- `pad_mode` (str): Padding mode to use. Refer to `torch.nn.functional.pad` for more details.
 - `pad_value` (Union[int, float]): Value to use for constant padding. Only used
     when `pad_mode` is 'constant'.
 - `axis` (Optional[Tuple[int,...]]): Axes to apply the sliding window. If None, all axes are used.
@@ -3581,14 +3598,18 @@ Returns
     utils3d.torch.pose.affine_umeyama
 
 @overload
-def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
+def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
+
+Minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2`.
 
 Parameters
 ----
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
+- `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
+    relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
@@ -3602,27 +3623,34 @@ Returns
     utils3d.torch.pose.solve_pose
 
 @overload
-def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: float = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, eps: float = 1e-12, generator: Optional[torch_._C.Generator] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, torch_.Tensor] = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, eps: float = 1e-12, generator: Optional[torch_._C.Generator] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
-number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
-procedure is vectorized over both the hypotheses and the leading batch dimensions.
+Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
+one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+
+The solve minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2` (as in `solve_pose`), while the
+inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. 
+
+The best hypothesis is selected by minimizing `sum_i w_i * min(1, ||pose @ p_i - q_i|| / threshold_i)` (a truncated soft-inlier cost).
 
 Parameters
 ----
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+- `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
+    proportional to `w`), weights the solve and the consensus score; does not relax the
+    threshold. If None, uniform weights are used.
+- `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
+    (same meaning as in `solve_pose`). If None, treated as 1.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
-- `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
-    when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
-- `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
-    linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
-    outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+- `threshold`: inlier distance threshold (scalar or per-point tensor, broadcastable to (..., N)). A
+    correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
+    pass `relative_threshold * ||p_i||`.
+- `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
 - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
 - `lam`: regularization weight for 'affine' mode.
 - `eps`: small value to prevent division by zero.
@@ -3635,14 +3663,17 @@ Returns
     utils3d.torch.pose.solve_pose_ransac
 
 @overload
-def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
+def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
     """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
+
+Minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` within each segment (see `solve_pose`).
 
 Parameters
 ----
 - `p`: (N, 3) source points
 - `q`: (N, 3) target points
 - `w`: (N,) weights for each point correspondence
+- `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
 - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
@@ -3657,13 +3688,15 @@ Returns
     utils3d.torch.pose.segment_solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, noise_scales: Optional[torch_.Tensor] = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
 ----
 - `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
 - `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+- `noise_scales`: (T, ..., N) optional per-point noise scale per frame. The effective weight is
+    `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -3684,7 +3717,7 @@ Returns
     utils3d.torch.pose.solve_poses_sequential
 
 @overload
-def segment_solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, offsets: torch_.Tensor = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def segment_solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, offsets: torch_.Tensor = None, noise_scales: Optional[torch_.Tensor] = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Segment array mode for `solve_poses_sequential`.
 
 Parameters
@@ -3692,6 +3725,8 @@ Parameters
 - `trajectories`: (T, N, 3) posed points.
 - `weights`: (T, N) quardratic error term weights for each point at each frame
 - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+- `noise_scales`: (T, N) optional per-point noise scale per frame. The effective weight is
+    `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.

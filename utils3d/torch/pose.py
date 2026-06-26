@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch import Tensor
 from typing import *
@@ -274,18 +276,23 @@ def solve_pose(
     p: Tensor, 
     q: Tensor, 
     w: Optional[Tensor] = None, 
+    sigma: Optional[Tensor] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
     lam: float = 1e-2, 
     eps: float = 1e-12
 ) -> Tensor:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
-    
+
+    Minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2`.
+
     Parameters
     ----
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+    - `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
+    - `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
+        relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
@@ -299,6 +306,9 @@ def solve_pose(
     """
     if w is None:
         w = torch.ones(p.shape[:-1], dtype=p.dtype, device=p.device)
+    if sigma is not None:
+        sigma = torch.as_tensor(sigma, dtype=p.dtype, device=p.device)
+        w = w / sigma.square().clamp_min(eps)
     w_sum = torch.sum(w, dim=-1).clamp_min(eps)
     p_mean = torch.sum(p * w[..., None], dim=-2) / w_sum[..., None]
     q_mean = torch.sum(q * w[..., None], dim=-2) / w_sum[..., None]
@@ -328,9 +338,10 @@ def solve_pose_ransac(
     p: Tensor, 
     q: Tensor, 
     w: Optional[Tensor] = None, 
+    sigma: Optional[Tensor] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    threshold: float = 0.05,
+    threshold: Union[float, Tensor] = 0.05,
     num_samples: int = 32,
     sample_size: Optional[int] = None,
     lam: float = 1e-2, 
@@ -339,24 +350,31 @@ def solve_pose_ransac(
 ) -> Tuple[Tensor, Tensor]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-    Hypotheses are sampled from minimal subsets of correspondences, scored by the (weighted)
-    number of inliers, and the best hypothesis is finally refit on all of its inliers. The whole
-    procedure is vectorized over both the hypotheses and the leading batch dimensions.
+    Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
+    one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+
+    The solve minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2` (as in `solve_pose`), while the
+    inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. 
+
+    The best hypothesis is selected by minimizing `sum_i w_i * min(1, ||pose @ p_i - q_i|| / threshold_i)` (a truncated soft-inlier cost).
 
     Parameters
     ----
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: optional (..., N) weights for each point correspondence. If None, uniform weights are used.
+    - `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
+        proportional to `w`), weights the solve and the consensus score; does not relax the
+        threshold. If None, uniform weights are used.
+    - `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
+        (same meaning as in `solve_pose`). If None, treated as 1.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
-    - `threshold`: inlier distance threshold in the target space. A correspondence is an inlier
-        when `w_i * ||pose @ p_i - q_i||^2 < threshold^2`, i.e. `sqrt(w_i) * ||pose @ p_i - q_i|| < threshold`.
-    - `num_samples`: number of RANSAC hypotheses to draw per batch element. Compute/memory scale
-        linearly with this. The default 32 reaches >99% success at 20% outliers and >99.9% at 10%
-        outliers (for minimal sample sizes 3-4); raise it for higher outlier ratios.
+    - `threshold`: inlier distance threshold (scalar or per-point tensor, broadcastable to (..., N)). A
+        correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
+        pass `relative_threshold * ||p_i||`.
+    - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
     - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
     - `lam`: regularization weight for 'affine' mode.
     - `eps`: small value to prevent division by zero.
@@ -371,7 +389,7 @@ def solve_pose_ransac(
         sample_size = 4 if mode == 'affine' else 3
     batch_shape = p.shape[:-2]
     N = p.shape[-2]
-    B = int(torch.tensor(batch_shape).prod().item()) if len(batch_shape) > 0 else 1
+    B = math.prod(batch_shape)
 
     p_flat = p.reshape(B, N, 3)
     q_flat = q.reshape(B, N, 3)
@@ -380,29 +398,46 @@ def solve_pose_ransac(
     else:
         w_flat = w.reshape(B, N)
 
-    # Draw `num_samples` minimal subsets without replacement per batch element.
-    scores = torch.rand((B, num_samples, N), dtype=p.dtype, device=p.device, generator=generator)
-    idx = scores.topk(sample_size, dim=-1).indices.to(torch.int32)  # (B, num_samples, sample_size)
-    batch_idx = torch.arange(B, dtype=torch.int32, device=p.device)[:, None, None]
-    p_s = p_flat[batch_idx, idx]  # (B, num_samples, sample_size, 3)
-    q_s = q_flat[batch_idx, idx]
-    w_s = w_flat[batch_idx, idx]
+    # Optional per-point noise scale, passed through to every solve (identical meaning to solve_pose).
+    if sigma is not None:
+        sigma = torch.as_tensor(sigma, dtype=p.dtype, device=p.device)
+        sigma_flat = sigma.expand(p.shape[:-1]).reshape(B, N)  # (B, N)
+    else:
+        sigma_flat = None
+
+    # Inlier threshold: a purely geometric gate (scalar or per-point), never folded into the solve.
+    threshold = torch.as_tensor(threshold, dtype=p.dtype, device=p.device).clamp_min(eps)
+    threshold_b = threshold.expand(p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
+
+    # Draw `num_samples` minimal subsets without replacement per batch element, sampling each point
+    # with probability proportional to its confidence `w`, so high-confidence correspondences are
+    # more likely to seed a hypothesis. Weights are floored to `eps` so a draw is always possible
+    # even when fewer than `sample_size` points have nonzero weight. Uniform `w` -> uniform sampling.
+    probs = w_flat.clamp_min(eps)[:, None, :].expand(B, num_samples, N).reshape(B * num_samples, N)
+    idx = torch.multinomial(probs, sample_size, replacement=False, generator=generator).reshape(B, num_samples, sample_size)  # (B, num_samples, sample_size)
+    p_s = torch.take_along_dim(p_flat[:, None, :, :], idx[..., None], dim=2)  # (B, num_samples, sample_size, 3)
+    q_s = torch.take_along_dim(q_flat[:, None, :, :], idx[..., None], dim=2)
+    w_s = torch.take_along_dim(w_flat[:, None, :], idx, dim=2)
+    sigma_s = torch.take_along_dim(sigma_flat[:, None, :], idx, dim=2) if sigma_flat is not None else None
 
     # Solve a candidate pose for every hypothesis.
-    pose_h = solve_pose(p_s, q_s, w_s, mode=mode, lam=lam, eps=eps)  # (B, num_samples, 4, 4)
+    pose_h = solve_pose(p_s, q_s, w_s, sigma_s, mode=mode, lam=lam, eps=eps)  # (B, num_samples, 4, 4)
 
-    # Score hypotheses by the weighted number of inliers over all correspondences.
-    p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])  # (B, num_samples, N, 3)
-    residual = torch.linalg.norm(p_t - q_flat[:, None, :, :], dim=-1)  # (B, num_samples, N)
-    inliers = w_flat[:, None, :].sqrt() * residual < threshold  # (B, num_samples, N)
-    inlier_score = torch.sum(inliers * w_flat[:, None, :], dim=-1)  # (B, num_samples)
+    # Score hypotheses by a robust, truncated soft-inlier cost. The threshold normalizes the raw
+    # residual (purely geometric); the confidence `w` weights each point's contribution but does
+    # NOT relax its threshold. Each correspondence contributes `w_i * min(1, residual_i / threshold_i)`.
+    p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])     # (B, num_samples, N, 3)
+    residual = torch.linalg.norm(p_t - q_flat[:, None, :, :], dim=-1)           # (B, num_samples, N)
+    normalized_residual = residual / threshold_b                                # (B, num_samples, N)
+    inliers = normalized_residual < 1.0  # (B, num_samples, N)
+    inlier_cost = (w_flat[:, None, :] * normalized_residual.clamp_max(1.0)).mean(dim=-1)  # (B, num_samples)
 
-    best = torch.argmax(inlier_score, dim=-1).to(torch.int32)  # (B,)
-    best_inliers = inliers[torch.arange(B, dtype=torch.int32, device=p.device), best]  # (B, N)
+    best = torch.argmin(inlier_cost, dim=-1)  # (B,)
+    best_inliers = torch.take_along_dim(inliers, best[:, None, None], dim=1)[:, 0]  # (B, N)
 
-    # Refit on all inliers of the best hypothesis.
+    # Refit on all inliers of the best hypothesis (same w / sigma weighting as the hypotheses).
     refit_w = w_flat * best_inliers.to(w_flat.dtype)
-    pose = solve_pose(p_flat, q_flat, refit_w, mode=mode, lam=lam, eps=eps)  # (B, 4, 4)
+    pose = solve_pose(p_flat, q_flat, refit_w, sigma_flat, mode=mode, lam=lam, eps=eps)  # (B, 4, 4)
 
     pose = pose.reshape(*batch_shape, 4, 4)
     best_inliers = best_inliers.reshape(*batch_shape, N)
@@ -413,6 +448,7 @@ def segment_solve_pose(
     p: Tensor, 
     q: Tensor, 
     w: Optional[Tensor] = None, 
+    sigma: Optional[Tensor] = None, 
     *,
     offsets: Tensor, 
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
@@ -420,12 +456,15 @@ def segment_solve_pose(
     eps: float = 1e-12
 ) -> Tensor:
     """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
+
+    Minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` within each segment (see `solve_pose`).
     
     Parameters
     ----
     - `p`: (N, 3) source points
     - `q`: (N, 3) target points
     - `w`: (N,) weights for each point correspondence
+    - `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
     - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
@@ -440,6 +479,9 @@ def segment_solve_pose(
     """
     if w is None:
         w = torch.ones(p.shape[:-1], device=p.device, dtype=p.dtype)
+    if sigma is not None:
+        sigma = torch.as_tensor(sigma, dtype=p.dtype, device=p.device)
+        w = w / sigma.square().clamp_min(eps)
 
     lengths = torch.diff(offsets)
     w_sum = torch.segment_reduce(w, 'sum', offsets=offsets, axis=0).clamp_min(eps)
@@ -470,6 +512,7 @@ def segment_solve_pose(
 def solve_poses_sequential(
     trajectories: Tensor,
     weights: Optional[Tensor] = None,
+    noise_scales: Optional[Tensor] = None,
     *,
     accum: Optional[Tuple[Tensor, ...]] = None,
     min_valid_size: int = 3,
@@ -484,6 +527,8 @@ def solve_poses_sequential(
     ----
     - `trajectories`: (T, ..., N, 3) posed points. T is number of frames. `...` is optional batch dimensions. N is number of points per group.
     - `weights`: (T, ..., N) quardratic error term weights for each point at each frame
+    - `noise_scales`: (T, ..., N) optional per-point noise scale per frame. The effective weight is
+        `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -510,6 +555,9 @@ def solve_poses_sequential(
 
     if weights is None:
         weights = torch.ones((num_frames, *batch_shape, num_points), dtype=dtype, device=device)
+    if noise_scales is not None:
+        noise_scales = torch.as_tensor(noise_scales, dtype=dtype, device=device)
+        weights = weights / noise_scales.square().clamp_min(eps)
 
     poses = torch.zeros((num_frames, *batch_shape, 4, 4), dtype=dtype, device=device)
 
@@ -581,6 +629,7 @@ def segment_solve_poses_sequential(
     trajectories: Tensor,
     weights: Optional[Tensor] = None,
     offsets: Tensor = None,
+    noise_scales: Optional[Tensor] = None,
     *,
     accum: Optional[Tuple[Tensor, ...]] = None,
     min_valid_size: int = 3,
@@ -596,6 +645,8 @@ def segment_solve_poses_sequential(
     - `trajectories`: (T, N, 3) posed points.
     - `weights`: (T, N) quardratic error term weights for each point at each frame
     - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
+    - `noise_scales`: (T, N) optional per-point noise scale per frame. The effective weight is
+        `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
@@ -618,6 +669,9 @@ def segment_solve_poses_sequential(
 
     if weights is None:
         weights = torch.ones((num_frames, num_points), dtype=dtype, device=device)
+    if noise_scales is not None:
+        noise_scales = torch.as_tensor(noise_scales, dtype=dtype, device=device)
+        weights = weights / noise_scales.square().clamp_min(eps)
 
     num_segments = offsets.shape[0] - 1
     lengths = torch.diff(offsets)
