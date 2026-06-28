@@ -8,7 +8,7 @@ from .transforms import transform_points, make_affine_matrix
 from .utils import matrix_trace, vector_outer
 
 
-__all__ = ['kabsch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_optimization']
+__all__ = ['kabsch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_edge_moments', 'segment_pose_graph_edge_moments', 'pose_graph_optimization', 'pose_graph_optimization_gnc']
 
 
 import torch
@@ -326,7 +326,7 @@ def solve_pose(
         pose = make_affine_matrix(R, t)
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean, eps=eps)
-        pose = make_affine_matrix(s * R, t)
+        pose = make_affine_matrix(s[..., None, None] * R, t)
     elif mode == 'affine':
         A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps)
         pose = make_affine_matrix(A, t)
@@ -501,7 +501,7 @@ def segment_solve_pose(
         pose = make_affine_matrix(R, t)
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean, eps=eps)
-        pose = make_affine_matrix(s * R, t)
+        pose = make_affine_matrix(s[..., None, None] * R, t)
     elif mode == 'affine':
         A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps)
         pose = make_affine_matrix(A, t)
@@ -592,7 +592,7 @@ def solve_poses_sequential(
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, eps=eps)
-            poses[i] = make_affine_matrix(s * R, t)
+            poses[i] = make_affine_matrix(s[..., None, None] * R, t)
         elif mode == 'affine':
             A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps)
             poses[i] = make_affine_matrix(A, t)
@@ -710,7 +710,7 @@ def segment_solve_poses_sequential(
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, eps=eps)
-            poses[i] = make_affine_matrix(s * R, t)
+            poses[i] = make_affine_matrix(s[..., None, None] * R, t)
         elif mode == 'affine':
             A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps)
             poses[i] = make_affine_matrix(A, t)
@@ -745,14 +745,21 @@ def segment_solve_poses_sequential(
     return poses, valid, (mu, sigma, tot_w, nnz), mean_wx, err, (accum_sqrtw, accum_sqrtwx, accum_sqrtwxx, accum_w, accum_wx, accum_wxx, accum_nnz)
 
 
-def _pose_graph_optimization_construct_laplacian(edge: Tensor, num_nodes: int, R: Tensor, w: Tensor) -> Tensor:
-    # For each edge i->j, contributes:
-    # - `-w_ij * R_ij^T` to block (i, j)
-    # - `-w_ij * R_ij` to block (j, i),
-    # - `w_ij * I` to diagonal block (i, i) and `w_ij * I` to diagonal block (j, j).
-    w_agg = torch.zeros(num_nodes, device=R.device, dtype=R.dtype).index_add(0, edge.reshape(-1), w.repeat_interleave(2))
+def _pose_graph_optimization_construct_laplacian(edge: Tensor, num_nodes: int, R: Tensor, w: Tensor, s: Optional[Tensor] = None) -> Tensor:
+    # Connection Laplacian for the per-edge block `M_ij = s_ij R_ij` (`s_ij = 1` in the orthonormal /
+    # rigid case, `s = None`). For each edge i->j it contributes:
+    # - `-w_ij * M_ij^T` to block (i, j)
+    # - `-w_ij * M_ij` to block (j, i),
+    # - `w_ij * s_ij^2 * I` to diagonal block (i, i) [i is the source: `M_ij^T M_ij = s_ij^2 I`],
+    # - `w_ij * I` to diagonal block (j, j) [j is the target].
+    if s is None:
+        w_src, w_dst = w, w
+        edge_elements = (-w[:, None, None] * R.mT).reshape(-1)   # -w_ij R_ij^T, (E * 3 * 3,)
+    else:
+        w_src, w_dst = w * s.square(), w
+        edge_elements = (-(w * s)[:, None, None] * R.mT).reshape(-1)   # -w_ij s_ij R_ij^T
+    w_agg = torch.zeros(num_nodes, device=R.device, dtype=R.dtype).index_add(0, edge[:, 0], w_src).index_add(0, edge[:, 1], w_dst)
     diag_elements = w_agg.repeat_interleave(3)   # (N * 3,)
-    edge_elements = (-w[:, None, None] * R.mT).reshape(-1)   # (E * 3 * 3,)
     laplacian_data = torch.cat([diag_elements, edge_elements.reshape(-1), edge_elements.reshape(-1)], dim=0)
 
     local3 = torch.arange(3, device=R.device)
@@ -765,9 +772,69 @@ def _pose_graph_optimization_construct_laplacian(edge: Tensor, num_nodes: int, R
     return laplacian
 
 
+def _pose_graph_optimization_scale_sync(edges: Tensor, num_nodes: int, s_relative: Tensor, w: Tensor, eps: float = 1e-12) -> Tensor:
+    """Global per-node scales `s_i` from per-edge relative scales `s_ij ≈ s_j / s_i`.
+
+    In log-space `log s_ij = log s_j - log s_i` is linear, so the scales follow from a weighted scalar
+    graph-Laplacian least squares `min sum_ij w_ij (l_j - l_i - log s_ij)^2` (`l_i = log s_i`). The
+    overall scale is a free gauge (the all-ones null space); the min-norm `lstsq` solution fixes it to
+    `sum_i l_i = 0`, i.e. the geometric mean of the node scales is 1.
+    """
+    log_s = torch.log(s_relative.clamp_min(eps))
+    src, dst = edges[:, 0], edges[:, 1]
+    # Dense scalar Laplacian L = D - A (N x N; N is small, like the translation solve below).
+    laplacian = torch.zeros((num_nodes, num_nodes), device=s_relative.device, dtype=s_relative.dtype)
+    laplacian.index_put_((src, dst), -w, accumulate=True)
+    laplacian.index_put_((dst, src), -w, accumulate=True)
+    laplacian.index_put_((src, src), w, accumulate=True)
+    laplacian.index_put_((dst, dst), w, accumulate=True)
+    wl = w * log_s
+    b = torch.zeros(num_nodes, device=s_relative.device, dtype=s_relative.dtype).index_add(0, dst, wl).index_add(0, src, -wl)
+    log_s_global = torch.linalg.lstsq(laplacian, b).solution
+    return torch.exp(log_s_global)
+
+
+
+def _robust_smallest_eigenvectors(L: Tensor, k: int = 3) -> Tensor:
+    """The `k` eigenvectors of the smallest eigenvalues of a symmetric PSD matrix, robust to solver
+    non-convergence.
+
+    `torch.linalg.eigh`'s divide-and-conquer driver (LAPACK `syevd` / cuSOLVER `syevd`) can fail to
+    converge (error 97) on ill-conditioned matrices with many (near-)repeated eigenvalues — exactly the
+    Laplacians produced by weakly-connected / degenerate pose graphs. We escalate through:
+      1. `eigh` with a growing diagonal jitter (relative to the matrix magnitude). The shift leaves the
+         eigenvectors essentially unchanged but breaks the exact degeneracy that trips the driver.
+      2. The same on CPU (LAPACK is often more forgiving than cuSOLVER here).
+      3. `svd`, which uses a different algorithm and yields the same eigenpairs for a symmetric PSD
+         matrix (singular values = eigenvalues, descending), as a last resort.
+    Returns the `k` eigenvectors in ascending-eigenvalue order, on `L`'s original device.
+    """
+    n = L.shape[-1]
+    scale = torch.diagonal(L, dim1=-2, dim2=-1).abs().max().clamp_min(1.0)
+    for device in (L.device, torch.device('cpu')):
+        Ld = L.to(device)
+        eye = torch.eye(n, device=device, dtype=L.dtype)
+        for jitter in (0.0, 1e-9, 1e-7, 1e-5, 1e-3):
+            try:
+                _, eigenvectors = torch.linalg.eigh(Ld + (jitter * scale) * eye)
+                return eigenvectors[:, :k].to(L.device)
+            except torch._C._LinAlgError:
+                continue
+    # SVD fallback (different, more robust algorithm). For symmetric PSD L, U columns are eigenvectors
+    # and singular values are the eigenvalues in *descending* order, so the smallest-eigenvalue vectors
+    # are the last k columns; flip to return them in ascending order.
+    U, _, _ = torch.linalg.svd(L.to('cpu'))
+    return U[:, -k:].flip(-1).to(L.device)
+
+
 def _pose_graph_optimization_eigen_decomposition(laplacian: Tensor) -> Tensor:
-    _, eigenvectors = torch.lobpcg(laplacian, k=3, largest=False, tol=1e-5)
-    R_global = eigenvectors.reshape(-1, 3, 3)
+    # Dense `eigh` rather than `torch.lobpcg`: the connection Laplacian is only 3N x 3N (a few hundred
+    # dims for typical graphs) and we need its 3 smallest eigenvectors. lobpcg's iteration count to a
+    # fixed `tol` blows up when the spectral gap is tiny (weakly-connected / ill-conditioned graphs),
+    # giving unbounded, unpredictable runtime (seconds). Dense `eigh` is exact, deterministic and
+    # bounded (O((3N)^3)), and matches the dense solver already used for the translation step below.
+    eigenvectors = _robust_smallest_eigenvectors(laplacian.to_dense(), k=3)
+    R_global = eigenvectors[:, :3].reshape(-1, 3, 3)   # 3 eigenvectors of smallest eigenvalues (eigh returns ascending)
     R_global = torch.cat([
         R_global[:, :, :2],
         torch.sign(torch.linalg.det(R_global))[:, None, None] * R_global[:, :, 2:3]
@@ -790,53 +857,344 @@ def _pose_graph_optimization_procrustes_iteration(R_global: Tensor, edges: Tenso
     return R_global
 
 
-def pose_graph_optimization(num_nodes: int, edges: Tensor, poses: Tensor, w: Tensor | None = None, niter: int = 10) -> tuple[Tensor, Tensor, Tensor]:
-    """Pose graph optimization to solve for global poses given relative poses (must be rigid transformations).
+def pose_graph_edge_moments(
+    x: Tensor,
+    y: Tensor,
+    w: Optional[Tensor] = None,
+    eps: float = 1e-12,
+) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """Reduce per-edge point correspondences to centered second-moment statistics for pose graph optimization.
+
+    Each edge `i -> j` carries a fixed-size set of `M` 3D point correspondences: `x` points expressed in
+    node `i`'s local frame and `y` points in node `j`'s local frame (the same world point observed in
+    both nodes). For variable-length correspondences per edge use `segment_pose_graph_edge_moments`.
+
+    The full per-edge point cost `sum_k w_k ||T_ij x_k - y_k||^2` is a quadratic in the global poses
+    that depends on the points only through these statistics, so passing them is exactly equivalent to
+    passing the raw points. They are *centered* (computed about each edge's weighted centroid) to avoid
+    the catastrophic cancellation that would corrupt a polar decomposition when the centroid is far from
+    the origin — the same reason `umeyama` takes separate covariance + mean rather than a raw
+    (homogeneous) second-moment matrix.
+
+    Parameters
+    ----
+    - `x`: (..., M, 3) source points (node `i` frame) per edge.
+    - `y`: (..., M, 3) destination points (node `j` frame), aligned with `x`.
+    - `w`: optional (..., M) per-correspondence weight. If None, uniform.
+    - `eps`: small value to prevent division by zero.
+
+    Returns
+    ----
+    - `cov_yx`: (..., 3, 3) centered cross-covariance `sum_k w_k (y_k - mean_y)(x_k - mean_x)^T / w_e`
+    - `cov_xx`: (..., 3, 3) centered covariance of `src` (`x`) — the point spread that constrains rotation,
+        and (with `cov_yy`) the scale information reserved for a future similar (`s, R, t`) extension.
+    - `cov_yy`: (..., 3, 3) centered covariance of `dst` (`y`).
+    - `mean_x`: (..., 3) weighted centroid of `src`.
+    - `mean_y`: (..., 3) weighted centroid of `dst`.
+    - `w`: (...,) total correspondence weight per edge (the per-edge sum of the input `w`; translation
+        information).
+    """
+    if w is None:
+        w = torch.ones(x.shape[:-1], device=x.device, dtype=x.dtype)
+    weight = torch.sum(w, dim=-1)
+    w_e = weight.clamp_min(eps)
+    mean_x = torch.sum(w[..., None] * x, dim=-2) / w_e[..., None]
+    mean_y = torch.sum(w[..., None] * y, dim=-2) / w_e[..., None]
+    x_c = x - mean_x[..., None, :]
+    y_c = y - mean_y[..., None, :]
+    cov_yx = torch.sum(w[..., None, None] * vector_outer(y_c, x_c), dim=-3) / w_e[..., None, None]
+    cov_xx = torch.sum(w[..., None, None] * vector_outer(x_c, x_c), dim=-3) / w_e[..., None, None]
+    cov_yy = torch.sum(w[..., None, None] * vector_outer(y_c, y_c), dim=-3) / w_e[..., None, None]
+    return cov_yx, cov_xx, cov_yy, mean_x, mean_y, weight
+
+
+def segment_pose_graph_edge_moments(
+    x: Tensor,
+    y: Tensor,
+    w: Optional[Tensor] = None,
+    *,
+    offsets: Tensor,
+    eps: float = 1e-12,
+) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """Segment array mode for `pose_graph_edge_moments`.
+
+    Each edge `i -> j` carries a set of 3D point correspondences: `x` points expressed in node `i`'s
+    local frame and `y` points in node `j`'s local frame (the same world point observed in both
+    nodes). The number of correspondences may differ across edges; they are concatenated and delimited
+    by `offsets` (segment layout, as in `segment_solve_pose`).
+
+    Parameters
+    ----
+    - `x`: (M, 3) source points (node `i` frame) of all edges, concatenated.
+    - `y`: (M, 3) destination points (node `j` frame), concatenated, aligned with `x`.
+    - `w`: optional (M,) per-correspondence weight. If None, uniform.
+    - `offsets`: (E + 1,) segment offsets delimiting each edge's correspondences.
+    - `eps`: small value to prevent division by zero.
+
+    Returns
+    ----
+    - `cov_yx`: (E, 3, 3) centered cross-covariance `sum_k w_k (y_k - mean_y)(x_k - mean_x)^T / w_e`
+    - `cov_xx`: (E, 3, 3) centered covariance of `src` (`x`) — the point spread that constrains rotation,
+        and (with `cov_yy`) the scale information reserved for a future similar (`s, R, t`) extension.
+    - `cov_yy`: (E, 3, 3) centered covariance of `dst` (`y`).
+    - `mean_x`: (E, 3) weighted centroid of `src`.
+    - `mean_y`: (E, 3) weighted centroid of `dst`.
+    - `w`: (E,) total correspondence weight per edge (the per-edge sum of the input `w`; translation
+        information).
+    """
+    if w is None:
+        w = torch.ones(x.shape[0], device=x.device, dtype=x.dtype)
+    lengths = torch.diff(offsets)
+    weight = torch.segment_reduce(w, 'sum', offsets=offsets, axis=0)
+    w_e = weight.clamp_min(eps)
+    mean_x = torch.segment_reduce(w[:, None] * x, 'sum', offsets=offsets, axis=0) / w_e[:, None]
+    mean_y = torch.segment_reduce(w[:, None] * y, 'sum', offsets=offsets, axis=0) / w_e[:, None]
+    x_c = x - torch.repeat_interleave(mean_x, lengths, dim=0)
+    y_c = y - torch.repeat_interleave(mean_y, lengths, dim=0)
+    cov_yx = torch.segment_reduce(w[:, None, None] * vector_outer(y_c, x_c), 'sum', offsets=offsets, axis=0) / w_e[:, None, None]
+    cov_xx = torch.segment_reduce(w[:, None, None] * vector_outer(x_c, x_c), 'sum', offsets=offsets, axis=0) / w_e[:, None, None]
+    cov_yy = torch.segment_reduce(w[:, None, None] * vector_outer(y_c, y_c), 'sum', offsets=offsets, axis=0) / w_e[:, None, None]
+    return cov_yx, cov_xx, cov_yy, mean_x, mean_y, weight
+
+
+def pose_graph_optimization(
+    num_nodes: int,
+    edges: Tensor,
+    cov_yx: Tensor,
+    cov_xx: Tensor,
+    cov_yy: Tensor,
+    mean_x: Tensor,
+    mean_y: Tensor,
+    w: Tensor,
+    edge_weights: Optional[Tensor] = None,
+    *,
+    mode: Literal['rigid', 'similar'] = 'rigid',
+    niter: int = 10,
+    eps: float = 1e-12,
+) -> Tensor:
+    """Pose graph optimization for global poses from per-edge centered point statistics.
+
+    Build the per-edge statistics with `pose_graph_edge_moments` from point correspondences (or
+    construct them yourself). Rotation and translation are weighted by their own information derived
+    from the point geometry — rotation by the point spread (`tr(cov_xx) + tr(cov_yy)`), translation by
+    the total correspondence weight (`w`) — so the rotation/translation trade-off is fixed by the
+    data rather than by a hand-tuned scalar.
+
+    With `mode='similar'` each node additionally carries its own scale relative to the world
+    (`x_node_i = s_i R_i p + t_i`). The per-edge relative scale `s_ij = sqrt(tr(cov_yy) / tr(cov_xx))`
+    satisfies `s_ij = s_j / s_i`, so the global node scales are recovered by a separate weighted
+    least squares in log-scale (see `_pose_graph_optimization_scale_sync`); the overall scale is a
+    free gauge, fixed so the geometric mean of the node scales is 1. Rotation is scale-invariant and
+    solved identically to the rigid case; translation uses the scaled relative block `s_ij R_ij`.
 
     Parameters
     ----
     - `num_nodes`: number of nodes `N` in the pose graph.
-    - `edges`: (E, 2) edge list of the pose graph. Each edge is represented by a pair of node indices `i -> j`.
-    - `poses`: (E, 4, 4) relative poses of transformation from node `i` to node `j` for each edge. Must be rigid transformations.
-    - `w`: (E,) optional weights for each edge.
-    - `niter`: number of Procrustes iterations to refine global poses. If 0, only the initial solution by Laplacian SVD is returned.
+    - `edges`: (E, 2) edge list. Each edge is a pair of node indices `i -> j`.
+    - `cov_yx`: (E, 3, 3) centered cross-covariance per edge (see `pose_graph_edge_moments`); its polar
+        factor is the relative rotation `R_ij` (node `i` -> node `j`).
+    - `cov_xx`: (E, 3, 3) centered covariance of the source (node `i`) points per edge.
+    - `cov_yy`: (E, 3, 3) centered covariance of the destination (node `j`) points per edge.
+    - `mean_x`: (E, 3) source (node `i`) centroid per edge.
+    - `mean_y`: (E, 3) destination (node `j`) centroid per edge.
+    - `w`: (E,) total correspondence weight per edge (translation information).
+    - `edge_weights`: optional (E,) extra per-edge confidence prior, multiplied into both information
+        weights. If None, uniform.
+    - `mode`: `'rigid'` for `(R, t)` poses (default), or `'similar'` to additionally solve a per-node
+        scale `s` (poses become `s R | t`).
+    - `niter`: number of Procrustes iterations to refine global rotations. If 0, only the Laplacian
+        eigen-decomposition initialization is used.
+    - `eps`: small value to prevent division by zero.
 
     Returns
     ----
-    - `poses_global`: (N, 4, 4) global poses (world-to-camera, canonical-to-observation, global-to-node, etc.) for each node.
+    - `poses_global`: (N, 4, 4) global poses (world-to-node) for each node. The linear part is `R_i`
+        (rigid) or `s_i R_i` (similar).
 
-        `poses_relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`
+        `relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`, where `relative[i->j]` has rotation
+        `polar(cov_yx)`, scale `sqrt(tr(cov_yy) / tr(cov_xx))` (similar mode) and translation
+        `mean_y - s_ij R_ij @ mean_x`.
     """
-    if w is None:
-        w = torch.ones(edges.shape[0], device=poses.device, dtype=poses.dtype)
+    if edge_weights is None:
+        edge_weights = torch.ones(edges.shape[0], device=cov_yx.device, dtype=cov_yx.dtype)
+    # Rotation information is the total point spread (un-normalized scatter); translation information is
+    # the total correspondence weight.
+    tr_xx = matrix_trace(cov_xx, dim1=-2, dim2=-1)
+    tr_yy = matrix_trace(cov_yy, dim1=-2, dim2=-1)
+    scatter = w * (tr_xx + tr_yy)
+    w_rotation = edge_weights * scatter
+    w_translation = edge_weights * w
 
-    if poses.shape[-1] == 3:
-        # Rotation only
-        R_relative, t_relative = poses[:, :3, :3], None
-    else:
-        # Rigid transformation
-        R_relative, t_relative = poses[:, :3, :3], poses[:, :3, 3]
+    R_relative = kabsch(cov_yx)
 
-    # Solve initial global rotations by laplacian eigen-decomposition.
-    laplacian = _pose_graph_optimization_construct_laplacian(edges, num_nodes, R_relative, w)
-    R_global = _pose_graph_optimization_eigen_decomposition(laplacian)
-    
-    # Refine global rotations by Procrustes iterations.
+    # Global rotations: Laplacian eigen-decomposition initialization + Procrustes refinement, weighted
+    # by per-edge rotation information. Scale-invariant, so identical for rigid and similar modes.
+    laplacian_rot = _pose_graph_optimization_construct_laplacian(edges, num_nodes, R_relative, w_rotation)
+    R_global = _pose_graph_optimization_eigen_decomposition(laplacian_rot)
     if niter > 0:
-        R_global = _pose_graph_optimization_procrustes_iteration(R_global, edges, R_relative, w, niter=niter)
+        R_global = _pose_graph_optimization_procrustes_iteration(R_global, edges, R_relative, w_rotation, niter=niter)
 
-    # Solve global translations 
-    if t_relative is not None:
-        w_t = w[:, None] * t_relative
-        b = torch.zeros((num_nodes, 3), device=R_relative.device, dtype=R_relative.dtype).index_add(0, edges[:, 1], w_t).index_add(0, edges[:, 0], -(R_relative.mT @ w_t[:, :, None]).squeeze(-1)).reshape(-1)
-        # NOTE: currently we have to use dense solver for translations since PyTorch doesn't support sparse linear solver well.
-        t_global = torch.linalg.lstsq(laplacian.to_dense(), b).solution.reshape(num_nodes, 3)    
+    # Global per-node scales (similar mode only): log-scale graph least squares from relative scales.
+    if mode == 'similar':
+        s_relative = torch.sqrt((tr_yy / tr_xx.clamp_min(eps)).clamp_min(eps))
+        s_global = _pose_graph_optimization_scale_sync(edges, num_nodes, s_relative, w_translation, eps=eps)
     else:
-        t_global = None
+        s_relative = None
 
-    if t_global is not None:
-        poses_global = make_affine_matrix(R_global, t_global)
+    # Global translations: connection-Laplacian least squares, weighted by per-edge translation
+    # information (a separate Laplacian from the rotation one). In similar mode the relative block is
+    # the scaled rotation `s_ij R_ij`.
+    sR_mean_x = (R_relative @ mean_x[..., None]).squeeze(-1)
+    if mode == 'similar':
+        sR_mean_x = s_relative[:, None] * sR_mean_x
+    t_relative = mean_y - sR_mean_x
+    laplacian_trans = _pose_graph_optimization_construct_laplacian(edges, num_nodes, R_relative, w_translation, s=s_relative)
+    w_t = w_translation[:, None] * t_relative
+    src_term = (R_relative.mT @ w_t[:, :, None]).squeeze(-1)
+    if mode == 'similar':
+        src_term = s_relative[:, None] * src_term
+    b = torch.zeros((num_nodes, 3), device=cov_yx.device, dtype=cov_yx.dtype).index_add(0, edges[:, 1], w_t).index_add(0, edges[:, 0], -src_term).reshape(-1)
+    # NOTE: currently we have to use dense solver for translations since PyTorch doesn't support sparse linear solver well.
+    t_global = torch.linalg.lstsq(laplacian_trans.to_dense(), b).solution.reshape(num_nodes, 3)
+
+    linear = R_global if mode == 'rigid' else s_global[:, None, None] * R_global
+    return make_affine_matrix(linear, t_global)
+
+
+def _pose_graph_optimization_moment_residual(
+    poses_global: Tensor, edges: Tensor, cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor,
+    mode: Literal['rigid', 'similar'] = 'rigid',
+) -> Tensor:
+    """Per-edge mean squared point residual — the exact point-level cost, normalized by edge weight.
+
+    For edge `i -> j` the predicted relative map is `M = A_j A_i^{-1}` (linear part `A_i = R_i` for
+    rigid, `s_i R_i` for similar), with translation `t_pred = t_j - M t_i`, which maps node-`i` points
+    onto node `j`. The full per-edge point cost `sum_k w_k ||M src_k + t_pred - dst_k||^2`, divided by
+    the edge weight `w_e`, reduces in closed form (centered, no cancellation) to
+
+        C_e / w_e = ||M mean_x + t_pred - mean_y||^2 + tr(M^T M cov_xx) + tr(cov_yy) - 2 <M, cov_yx>,
+
+    i.e. the weighted-mean squared point error (`tr(M^T M cov_xx) = tr(cov_xx)` when `M` is a rotation),
+    so `threshold` is a plain point distance, independent of point count / weight magnitude.
+    """
+    A_global, t_global = poses_global[:, :3, :3], poses_global[:, :3, 3]
+    A_i = A_global.index_select(0, edges[:, 0])
+    A_j = A_global.index_select(0, edges[:, 1])
+    t_i = t_global.index_select(0, edges[:, 0])
+    t_j = t_global.index_select(0, edges[:, 1])
+    if mode == 'rigid':
+        M_pred = A_j @ A_i.mT
+        quad = matrix_trace(cov_xx, dim1=-2, dim2=-1)   # tr(M^T M cov_xx) = tr(cov_xx) for a rotation
     else:
-        poses_global = R_global
-    return poses_global
+        M_pred = A_j @ safe_inv(A_i)
+        quad = ((M_pred.mT @ M_pred) * cov_xx).sum(dim=(-2, -1))   # tr(M^T M cov_xx), cov_xx symmetric
+    t_pred = t_j - (M_pred @ t_i[..., None]).squeeze(-1)
+    a = (M_pred @ mean_x[..., None]).squeeze(-1) + t_pred - mean_y
+    # cov_yx is the (weight-normalized) centered cross-covariance, so <M_pred, cov_yx> is the rotation term.
+    cross = (M_pred * cov_yx).sum(dim=(-2, -1))
+    res2 = a.square().sum(dim=-1) + quad + matrix_trace(cov_yy, dim1=-2, dim2=-1) - 2.0 * cross
+    return res2.clamp_min(0.0)
+
+
+def pose_graph_optimization_gnc(
+    num_nodes: int,
+    edges: Tensor,
+    cov_yx: Tensor,
+    cov_xx: Tensor,
+    cov_yy: Tensor,
+    mean_x: Tensor,
+    mean_y: Tensor,
+    w: Tensor,
+    edge_weights: Optional[Tensor] = None,
+    *,
+    mode: Literal['rigid', 'similar'] = 'rigid',
+    threshold: float = 0.05,
+    niter: int = 10,
+    gnc_iters: int = 20,
+    gnc_factor: float = 1.4,
+    eps: float = 1e-12,
+) -> Tuple[Tensor, Tensor]:
+    """Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection.
+
+    Wraps `pose_graph_optimization` in an outer loop that re-weights each edge by a Truncated Least
+    Squares (TLS) surrogate, gradually annealed from a near-convex problem to the true (non-convex)
+    truncated cost via the control parameter `mu` (Yang et al., "Graduated Non-Convexity for Robust
+    Spatial Perception", RA-L 2020). Bad edges (wrong loop closures / outlier constraints) converge
+    to weight 0 and are effectively removed.
+
+    The outlier test uses the *exact* per-edge mean squared point residual (see
+    `_pose_graph_optimization_moment_residual`), so `threshold` is a plain point distance in the units of
+    your correspondences — no rotation/translation scale to juggle. Each GNC iteration solves the
+    weighted graph, evaluates the residual, then updates each edge's weight in closed form:
+
+        `w_ij = 1`                                          if `r_ij^2 <= mu/(mu+1) * c^2`
+        `w_ij = sqrt(mu(mu+1) c^2 / r_ij^2) - mu`           if in the ambiguous band
+        `w_ij = 0`                                          if `r_ij^2 >= (mu+1)/mu * c^2`
+
+    where `c = threshold`. `mu` starts small (near-convex) and is multiplied by `gnc_factor` each
+    iteration to recover the truncated cost.
+
+    Parameters
+    ----
+    - `num_nodes`: number of nodes `N` in the pose graph.
+    - `edges`: (E, 2) edge list. Each edge is a pair of node indices `i -> j`.
+    - `cov_yx`: (E, 3, 3) centered cross-covariance per edge (see `pose_graph_edge_moments`).
+    - `cov_xx`: (E, 3, 3) centered covariance of the source (node `i`) points per edge.
+    - `cov_yy`: (E, 3, 3) centered covariance of the destination (node `j`) points per edge.
+    - `mean_x`: (E, 3) source (node `i`) centroid per edge.
+    - `mean_y`: (E, 3) destination (node `j`) centroid per edge.
+    - `w`: (E,) total correspondence weight per edge (translation information).
+    - `edge_weights`: optional (E,) per-edge confidence prior, multiplied with the GNC weight. If None, uniform.
+    - `mode`: `'rigid'` for `(R, t)` poses (default), or `'similar'` to additionally solve a per-node scale
+        (see `pose_graph_optimization`). The residual threshold stays a plain point distance either way.
+    - `threshold`: inlier point distance `c`. An edge is treated as an inlier when its RMS point
+        residual is roughly below `threshold`; set it to your expected correspondence noise.
+    - `niter`: inner Procrustes iterations per `pose_graph_optimization` solve.
+    - `gnc_iters`: maximum number of outer GNC iterations.
+    - `gnc_factor`: `mu` growth factor per outer iteration (`> 1` for GNC-TLS).
+    - `eps`: small value to prevent division by zero.
+
+    Returns
+    ----
+    - `poses_global`: (N, 4, 4) global poses for each node.
+
+        `relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`
+    - `weights`: (E,) GNC inlier weights in `[0, 1]` (independent of the input `edge_weights`). 1 marks a
+        confident inlier, 0 an edge rejected as an outlier; intermediate values are still in the
+        ambiguous band. Threshold this to classify edges.
+    """
+    if edge_weights is None:
+        edge_weights = torch.ones(edges.shape[0], device=cov_yx.device, dtype=cov_yx.dtype)
+
+    barc2 = threshold ** 2
+
+    # Non-robust initialization, used both as the starting estimate and to initialize mu.
+    poses_global = pose_graph_optimization(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights=edge_weights, mode=mode, niter=niter, eps=eps)
+    res2 = _pose_graph_optimization_moment_residual(poses_global, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, mode=mode)
+
+    # GNC-TLS mu initialization. If every residual is already within the inlier band there is no
+    # outlier to reject and the surrogate is degenerate, so return the plain estimate directly.
+    max_res2 = res2.max()
+    denom = 2.0 * max_res2 - barc2
+    if denom <= 0:
+        return poses_global, torch.ones_like(edge_weights)
+
+    mu = (barc2 / denom).clamp_min(eps)
+    w_gnc = torch.ones_like(edge_weights)
+    for _ in range(gnc_iters):
+        th_lo = mu / (mu + 1.0) * barc2
+        th_hi = (mu + 1.0) / mu * barc2
+        w_mid = (torch.sqrt(mu * (mu + 1.0) * barc2 / res2.clamp_min(eps)) - mu).clamp(0.0, 1.0)
+        w_gnc_new = torch.where(res2 <= th_lo, torch.ones_like(edge_weights), torch.where(res2 >= th_hi, torch.zeros_like(edge_weights), w_mid))
+
+        if torch.max(torch.abs(w_gnc_new - w_gnc)) < 1e-6:
+            w_gnc = w_gnc_new
+            break
+        w_gnc = w_gnc_new
+
+        poses_global = pose_graph_optimization(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights=edge_weights * w_gnc, mode=mode, niter=niter, eps=eps)
+        res2 = _pose_graph_optimization_moment_residual(poses_global, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, mode=mode)
+        mu = mu * gnc_factor
+
+    return poses_global, w_gnc
 

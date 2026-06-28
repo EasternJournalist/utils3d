@@ -163,7 +163,10 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"pose_graph_edge_moments", 
+"segment_pose_graph_edge_moments", 
 "pose_graph_optimization", 
+"pose_graph_optimization_gnc", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -3744,23 +3747,165 @@ Returns
     utils3d.torch.pose.segment_solve_poses_sequential
 
 @overload
-def pose_graph_optimization(num_nodes: int, edges: torch_.Tensor, poses: torch_.Tensor, w: torch_.Tensor | None = None, niter: int = 10) -> tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
-    """Pose graph optimization to solve for global poses given relative poses (must be rigid transformations).
+def pose_graph_edge_moments(x: torch_.Tensor, y: torch_.Tensor, w: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Reduce per-edge point correspondences to centered second-moment statistics for pose graph optimization.
+
+Each edge `i -> j` carries a fixed-size set of `M` 3D point correspondences: `x` points expressed in
+node `i`'s local frame and `y` points in node `j`'s local frame (the same world point observed in
+both nodes). For variable-length correspondences per edge use `segment_pose_graph_edge_moments`.
+
+The full per-edge point cost `sum_k w_k ||T_ij x_k - y_k||^2` is a quadratic in the global poses
+that depends on the points only through these statistics, so passing them is exactly equivalent to
+passing the raw points. They are *centered* (computed about each edge's weighted centroid) to avoid
+the catastrophic cancellation that would corrupt a polar decomposition when the centroid is far from
+the origin — the same reason `umeyama` takes separate covariance + mean rather than a raw
+(homogeneous) second-moment matrix.
+
+Parameters
+----
+- `x`: (..., M, 3) source points (node `i` frame) per edge.
+- `y`: (..., M, 3) destination points (node `j` frame), aligned with `x`.
+- `w`: optional (..., M) per-correspondence weight. If None, uniform.
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `cov_yx`: (..., 3, 3) centered cross-covariance `sum_k w_k (y_k - mean_y)(x_k - mean_x)^T / w_e`
+- `cov_xx`: (..., 3, 3) centered covariance of `src` (`x`) — the point spread that constrains rotation,
+    and (with `cov_yy`) the scale information reserved for a future similar (`s, R, t`) extension.
+- `cov_yy`: (..., 3, 3) centered covariance of `dst` (`y`).
+- `mean_x`: (..., 3) weighted centroid of `src`.
+- `mean_y`: (..., 3) weighted centroid of `dst`.
+- `w`: (...,) total correspondence weight per edge (the per-edge sum of the input `w`; translation
+    information)."""
+    utils3d.torch.pose.pose_graph_edge_moments
+
+@overload
+def segment_pose_graph_edge_moments(x: torch_.Tensor, y: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+    """Segment array mode for `pose_graph_edge_moments`.
+
+Each edge `i -> j` carries a set of 3D point correspondences: `x` points expressed in node `i`'s
+local frame and `y` points in node `j`'s local frame (the same world point observed in both
+nodes). The number of correspondences may differ across edges; they are concatenated and delimited
+by `offsets` (segment layout, as in `segment_solve_pose`).
+
+Parameters
+----
+- `x`: (M, 3) source points (node `i` frame) of all edges, concatenated.
+- `y`: (M, 3) destination points (node `j` frame), concatenated, aligned with `x`.
+- `w`: optional (M,) per-correspondence weight. If None, uniform.
+- `offsets`: (E + 1,) segment offsets delimiting each edge's correspondences.
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `cov_yx`: (E, 3, 3) centered cross-covariance `sum_k w_k (y_k - mean_y)(x_k - mean_x)^T / w_e`
+- `cov_xx`: (E, 3, 3) centered covariance of `src` (`x`) — the point spread that constrains rotation,
+    and (with `cov_yy`) the scale information reserved for a future similar (`s, R, t`) extension.
+- `cov_yy`: (E, 3, 3) centered covariance of `dst` (`y`).
+- `mean_x`: (E, 3) weighted centroid of `src`.
+- `mean_y`: (E, 3) weighted centroid of `dst`.
+- `w`: (E,) total correspondence weight per edge (the per-edge sum of the input `w`; translation
+    information)."""
+    utils3d.torch.pose.segment_pose_graph_edge_moments
+
+@overload
+def pose_graph_optimization(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar'] = 'rigid', niter: int = 10, eps: float = 1e-12) -> torch_.Tensor:
+    """Pose graph optimization for global poses from per-edge centered point statistics.
+
+Build the per-edge statistics with `pose_graph_edge_moments` from point correspondences (or
+construct them yourself). Rotation and translation are weighted by their own information derived
+from the point geometry — rotation by the point spread (`tr(cov_xx) + tr(cov_yy)`), translation by
+the total correspondence weight (`w`) — so the rotation/translation trade-off is fixed by the
+data rather than by a hand-tuned scalar.
+
+With `mode='similar'` each node additionally carries its own scale relative to the world
+(`x_node_i = s_i R_i p + t_i`). The per-edge relative scale `s_ij = sqrt(tr(cov_yy) / tr(cov_xx))`
+satisfies `s_ij = s_j / s_i`, so the global node scales are recovered by a separate weighted
+least squares in log-scale (see `_pose_graph_optimization_scale_sync`); the overall scale is a
+free gauge, fixed so the geometric mean of the node scales is 1. Rotation is scale-invariant and
+solved identically to the rigid case; translation uses the scaled relative block `s_ij R_ij`.
 
 Parameters
 ----
 - `num_nodes`: number of nodes `N` in the pose graph.
-- `edges`: (E, 2) edge list of the pose graph. Each edge is represented by a pair of node indices `i -> j`.
-- `poses`: (E, 4, 4) relative poses of transformation from node `i` to node `j` for each edge. Must be rigid transformations.
-- `w`: (E,) optional weights for each edge.
-- `niter`: number of Procrustes iterations to refine global poses. If 0, only the initial solution by Laplacian SVD is returned.
+- `edges`: (E, 2) edge list. Each edge is a pair of node indices `i -> j`.
+- `cov_yx`: (E, 3, 3) centered cross-covariance per edge (see `pose_graph_edge_moments`); its polar
+    factor is the relative rotation `R_ij` (node `i` -> node `j`).
+- `cov_xx`: (E, 3, 3) centered covariance of the source (node `i`) points per edge.
+- `cov_yy`: (E, 3, 3) centered covariance of the destination (node `j`) points per edge.
+- `mean_x`: (E, 3) source (node `i`) centroid per edge.
+- `mean_y`: (E, 3) destination (node `j`) centroid per edge.
+- `w`: (E,) total correspondence weight per edge (translation information).
+- `edge_weights`: optional (E,) extra per-edge confidence prior, multiplied into both information
+    weights. If None, uniform.
+- `mode`: `'rigid'` for `(R, t)` poses (default), or `'similar'` to additionally solve a per-node
+    scale `s` (poses become `s R | t`).
+- `niter`: number of Procrustes iterations to refine global rotations. If 0, only the Laplacian
+    eigen-decomposition initialization is used.
+- `eps`: small value to prevent division by zero.
 
 Returns
 ----
-- `poses_global`: (N, 4, 4) global poses (world-to-camera, canonical-to-observation, global-to-node, etc.) for each node.
+- `poses_global`: (N, 4, 4) global poses (world-to-node) for each node. The linear part is `R_i`
+    (rigid) or `s_i R_i` (similar).
 
-    `poses_relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`"""
+    `relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`, where `relative[i->j]` has rotation
+    `polar(cov_yx)`, scale `sqrt(tr(cov_yy) / tr(cov_xx))` (similar mode) and translation
+    `mean_y - s_ij R_ij @ mean_x`."""
     utils3d.torch.pose.pose_graph_optimization
+
+@overload
+def pose_graph_optimization_gnc(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar'] = 'rigid', threshold: float = 0.05, niter: int = 10, gnc_iters: int = 20, gnc_factor: float = 1.4, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+    """Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection.
+
+Wraps `pose_graph_optimization` in an outer loop that re-weights each edge by a Truncated Least
+Squares (TLS) surrogate, gradually annealed from a near-convex problem to the true (non-convex)
+truncated cost via the control parameter `mu` (Yang et al., "Graduated Non-Convexity for Robust
+Spatial Perception", RA-L 2020). Bad edges (wrong loop closures / outlier constraints) converge
+to weight 0 and are effectively removed.
+
+The outlier test uses the *exact* per-edge mean squared point residual (see
+`_pose_graph_optimization_moment_residual`), so `threshold` is a plain point distance in the units of
+your correspondences — no rotation/translation scale to juggle. Each GNC iteration solves the
+weighted graph, evaluates the residual, then updates each edge's weight in closed form:
+
+    `w_ij = 1`                                          if `r_ij^2 <= mu/(mu+1) * c^2`
+    `w_ij = sqrt(mu(mu+1) c^2 / r_ij^2) - mu`           if in the ambiguous band
+    `w_ij = 0`                                          if `r_ij^2 >= (mu+1)/mu * c^2`
+
+where `c = threshold`. `mu` starts small (near-convex) and is multiplied by `gnc_factor` each
+iteration to recover the truncated cost.
+
+Parameters
+----
+- `num_nodes`: number of nodes `N` in the pose graph.
+- `edges`: (E, 2) edge list. Each edge is a pair of node indices `i -> j`.
+- `cov_yx`: (E, 3, 3) centered cross-covariance per edge (see `pose_graph_edge_moments`).
+- `cov_xx`: (E, 3, 3) centered covariance of the source (node `i`) points per edge.
+- `cov_yy`: (E, 3, 3) centered covariance of the destination (node `j`) points per edge.
+- `mean_x`: (E, 3) source (node `i`) centroid per edge.
+- `mean_y`: (E, 3) destination (node `j`) centroid per edge.
+- `w`: (E,) total correspondence weight per edge (translation information).
+- `edge_weights`: optional (E,) per-edge confidence prior, multiplied with the GNC weight. If None, uniform.
+- `mode`: `'rigid'` for `(R, t)` poses (default), or `'similar'` to additionally solve a per-node scale
+    (see `pose_graph_optimization`). The residual threshold stays a plain point distance either way.
+- `threshold`: inlier point distance `c`. An edge is treated as an inlier when its RMS point
+    residual is roughly below `threshold`; set it to your expected correspondence noise.
+- `niter`: inner Procrustes iterations per `pose_graph_optimization` solve.
+- `gnc_iters`: maximum number of outer GNC iterations.
+- `gnc_factor`: `mu` growth factor per outer iteration (`> 1` for GNC-TLS).
+- `eps`: small value to prevent division by zero.
+
+Returns
+----
+- `poses_global`: (N, 4, 4) global poses for each node.
+
+    `relative[i->j] ≈ poses_global[j] @ poses_global[i].inv()`
+- `weights`: (E,) GNC inlier weights in `[0, 1]` (independent of the input `edge_weights`). 1 marks a
+    confident inlier, 0 an edge rejected as an outlier; intermediate values are still in the
+    ambiguous band. Threshold this to classify edges."""
+    utils3d.torch.pose.pose_graph_optimization_gnc
 
 @overload
 def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int, dim: int = 0) -> torch_.Tensor:

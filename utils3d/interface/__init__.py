@@ -159,7 +159,10 @@ __all__ = ["sliding_window",
 "rotate_2d", 
 "translate_2d", 
 "scale_2d", 
+"pose_graph_edge_moments", 
+"segment_pose_graph_edge_moments", 
 "pose_graph_optimization", 
+"pose_graph_optimization_gnc", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -1135,10 +1138,28 @@ def scale_2d(*args, **kwargs):
     return _call_based_on_args('scale_2d', args, kwargs)
 
 @suppress_traceback
+def pose_graph_edge_moments(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.pose_graph_edge_moments
+    return _call_based_on_args('pose_graph_edge_moments', args, kwargs)
+
+@suppress_traceback
+def segment_pose_graph_edge_moments(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.segment_pose_graph_edge_moments
+    return _call_based_on_args('segment_pose_graph_edge_moments', args, kwargs)
+
+@suppress_traceback
 def pose_graph_optimization(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.pose_graph_optimization
     return _call_based_on_args('pose_graph_optimization', args, kwargs)
+
+@suppress_traceback
+def pose_graph_optimization_gnc(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.pose_graph_optimization_gnc
+    return _call_based_on_args('pose_graph_optimization_gnc', args, kwargs)
 
 @suppress_traceback
 def segment_median(*args, **kwargs):
