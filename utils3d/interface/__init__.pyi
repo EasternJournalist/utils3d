@@ -4684,13 +4684,14 @@ def build_mesh_from_depth_map(depth: torch_.Tensor, *other_maps: torch_.Tensor, 
     utils3d.torch.maps.build_mesh_from_depth_map
 
 @overload
-def depth_map_edge(depth: torch_.Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: torch_.Tensor = None) -> torch_.BoolTensor:
+def depth_map_edge(depth: torch_.Tensor, atol: float = None, rtol: float = None, ltol: float = None, kernel_size: int = 3, mask: torch_.Tensor = None) -> torch_.BoolTensor:
     """Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
 
 ## Parameters
     depth (Tensor): shape (..., height, width), linear depth map
     atol (float): absolute tolerance
     rtol (float): relative tolerance
+    ltol (float): relative tolerance of inverse depth laplacian
 
 ## Returns
     edge (Tensor): shape (..., height, width) of dtype torch.bool"""

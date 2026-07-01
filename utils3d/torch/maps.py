@@ -243,7 +243,7 @@ def build_mesh_from_depth_map(
 
 
 @batched(2)
-def depth_map_edge(depth: Tensor, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: Tensor = None) -> torch.BoolTensor:
+def depth_map_edge(depth: Tensor, atol: float = None, rtol: float = None, ltol: float = None, kernel_size: int = 3, mask: Tensor = None) -> torch.BoolTensor:
     """
     Compute the edge mask of a depth map. The edge is defined as the pixels whose neighbors have a large difference in depth.
     
@@ -251,20 +251,31 @@ def depth_map_edge(depth: Tensor, atol: float = None, rtol: float = None, kernel
         depth (Tensor): shape (..., height, width), linear depth map
         atol (float): absolute tolerance
         rtol (float): relative tolerance
+        ltol (float): relative tolerance of inverse depth laplacian
 
     ## Returns
         edge (Tensor): shape (..., height, width) of dtype torch.bool
     """
-    if mask is None:
-        diff = (F.max_pool2d(depth, kernel_size, stride=1, padding=kernel_size // 2) + F.max_pool2d(-depth, kernel_size, stride=1, padding=kernel_size // 2))
-    else:
-        diff = (F.max_pool2d(torch.where(mask, depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2) + F.max_pool2d(torch.where(mask, -depth, -torch.inf), kernel_size, stride=1, padding=kernel_size // 2))
+    if mask is not None:
+        depth = torch.where(mask, depth, torch.nan)
+
+    if atol is not None or rtol is not None:
+        diff = (F.max_pool2d(depth.nan_to_num(-torch.inf), kernel_size, stride=1, padding=kernel_size // 2) + F.max_pool2d((-depth).nan_to_num(-torch.inf), kernel_size, stride=1, padding=kernel_size // 2))
 
     edge = torch.zeros_like(depth, dtype=torch.bool)
     if atol is not None:
         edge |= diff > atol
     if rtol is not None:
         edge |= (diff / depth).nan_to_num_() > rtol
+
+    if ltol is not None:
+        disp = 1 / depth
+        disp_mean_pooling = F.avg_pool2d(disp, kernel_size, stride=1, padding=kernel_size // 2)
+        laplacian = (disp - disp_mean_pooling) / disp
+        laplacian_window_max = F.max_pool2d(laplacian, kernel_size, stride=1, padding=kernel_size // 2)
+        laplacian_window_min = -F.max_pool2d(-laplacian, kernel_size, stride=1, padding=kernel_size // 2)
+        edge |= (laplacian_window_max > ltol) & (laplacian_window_min < -ltol)
+
     return edge
 
 

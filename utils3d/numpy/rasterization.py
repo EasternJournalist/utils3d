@@ -351,7 +351,12 @@ def run_full_screen_program(
         out_tex_or_rbo = [out_tex_or_rbo] if out_tex_or_rbo is not None else []
     fbo = ctx.mgl_ctx.framebuffer(color_attachments=out_tex_or_rbo, depth_attachment=out_depth)
     fbo.use()
-    ctx.mgl_ctx.disable(ctx.mgl_ctx.DEPTH_TEST)
+    if out_depth is not None:
+        fbo.clear(depth=1.0)
+        ctx.mgl_ctx.enable(ctx.mgl_ctx.DEPTH_TEST)
+        ctx.mgl_ctx.depth_func = '1'
+    else:
+        ctx.mgl_ctx.disable(ctx.mgl_ctx.DEPTH_TEST)
     ctx.mgl_ctx.disable(ctx.mgl_ctx.CULL_FACE)
     ctx.mgl_ctx.disable(ctx.mgl_ctx.BLEND)
     vao.render(moderngl.TRIANGLES, vertices=3)
