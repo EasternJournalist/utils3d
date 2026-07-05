@@ -331,13 +331,13 @@ def segment_topk(input: torch.Tensor, offsets: torch.Tensor, k: Union[int, torch
     local_index = torch.arange(len(input), device=input.device) - torch.repeat_interleave(offsets[:-1], lengths)
     
     if isinstance(k, int) or isinstance(k, torch.Tensor) and k.dim() == 0:
-        topk_indices = sorted_indices.index_select(dim, local_index < k)
+        topk_indices = sorted_indices.index_select(dim, (local_index < k).nonzero(as_tuple=True)[0])
     else:
-        topk_indices = sorted_indices.index_select(dim, local_index < torch.repeat_interleave(k, lengths))
+        topk_indices = sorted_indices.index_select(dim, (local_index < torch.repeat_interleave(k, lengths)).nonzero(as_tuple=True)[0])
     
     topk_values = input.index_select(dim, topk_indices)
     
-    result_offsets = _lengths_to_offsets(torch.minimum(lengths, k))
+    result_offsets = _lengths_to_offsets(lengths.clamp_max(k))
 
     return torch.return_types.topk((topk_values, topk_indices)), result_offsets
 

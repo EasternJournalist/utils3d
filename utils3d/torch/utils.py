@@ -418,9 +418,9 @@ def scatter_argmin(input: Tensor, dim: int, index: Tensor, src: Tensor, include_
     """
     dim = dim % input.ndim
     min_values = input.scatter_reduce(dim=dim, index=index, src=src, reduce='amin', include_self=include_self)
-    min_where_in_src = torch.where(src == torch.gather(min_values, dim=dim, index=index))
+    winners = torch.where(src == torch.gather(min_values, dim=dim, index=index))
     min_indices = torch.full_like(min_values, -1, dtype=torch.long)
-    index_reduce_(min_indices, (*min_where_in_src[:dim], index[min_where_in_src[dim]], *min_where_in_src[dim + 1:]), include_self=False)
+    index_reduce_(min_indices, (*winners[:dim], index[winners], *winners[dim + 1:]), winners[dim], reduce='amin', include_self=False)
     return min_indices
 
 
@@ -446,9 +446,9 @@ def scatter_argmax(input: Tensor, dim: int, index: Tensor, src: Tensor, include_
     """
     dim = dim % input.ndim
     max_values = input.scatter_reduce(dim=dim, index=index, src=src, reduce='amax', include_self=include_self)
-    max_where_in_src = torch.where(src == torch.gather(max_values, dim=dim, index=index))
+    winners = torch.where(src == torch.gather(max_values, dim=dim, index=index))
     max_indices = torch.full_like(max_values, -1, dtype=torch.long)
-    index_reduce_(max_indices, (*max_where_in_src[:dim], index[max_where_in_src[dim]], *max_where_in_src[dim + 1:]), include_self=False)
+    index_reduce_(max_indices, (*winners[:dim], index[winners], *winners[dim + 1:]), winners[dim], reduce='amin', include_self=False)
     return max_indices
 
 
