@@ -7,6 +7,7 @@ from torch import Tensor
 import torch.nn.functional as F
 
 from .helpers import batched, totensor
+from .utils import safe_inv
 
 
 __all__ = [
@@ -665,12 +666,12 @@ def unproject_gl(
     """
     ndc_xy = uv * 2 - 1
     view_z = -depth
-    clip_xy = torch.linalg.inv(projection[..., :2, :2] - ndc_xy[..., :, None] * projection[..., 3:, :2]) \
+    clip_xy = safe_inv(projection[..., :2, :2] - ndc_xy[..., :, None] * projection[..., 3:, :2]) \
         @ ((ndc_xy[..., :, None] * projection[..., 3:, 2:] - projection[..., :2, 2:]) \
         @ torch.cat([view_z[..., None, None], torch.ones_like(view_z[..., None, None])], axis=-2))
     points = torch.cat([clip_xy.squeeze(-1), view_z[..., None], torch.ones_like(view_z)[..., None]], axis=-1)
     if view is not None:
-        points = points @ torch.linalg.inv(view).mT
+        points = points @ safe_inv(view).mT
     return points[..., :3]
     
 
@@ -700,7 +701,7 @@ def unproject_cv(
     transform = intrinsics @ extrinsics if extrinsics is not None else intrinsics
     points = torch.cat([uv, torch.ones((*uv.shape[:-1], 1), dtype=uv.dtype, device=uv.device)], dim=-1) * depth[..., None]
     points = torch.cat([points, torch.ones((*points.shape[:-1], 1), dtype=uv.dtype, device=uv.device)], dim=-1)
-    points = points @ torch.linalg.inv(transform).mT
+    points = points @ safe_inv(transform).mT
     points = points[..., :3]
     return points
 

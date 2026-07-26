@@ -510,3 +510,18 @@ def vector_outer(x: Tensor, y: Optional[Tensor] = None) -> Tensor:
     if y is None:
         return x[..., :, None] * x[..., None, :]
     return x[..., :, None] * y[..., None, :]
+
+
+def safe_inv(A: Tensor) -> Tensor:
+    """Batched matrix inverse that returns NaN for singular inputs instead of raising.
+
+    `torch.linalg.inv` raises `LinAlgError` whenever any batch element is singular, which forces
+    callers to either pre-validate inputs or wrap in try/except. NumPy inherited this behavior
+    and PyTorch followed; for our pipelines we'd rather let NaN propagate (consistent with the
+    rest of floating-point arithmetic), so degenerate elements simply mark themselves as invalid
+    downstream without taking out the whole batch. Uses `torch.linalg.inv_ex` under the hood.
+    """
+    inv, info = torch.linalg.inv_ex(A)
+    if info.any():
+        inv = torch.where((info > 0)[..., None, None], torch.full_like(inv, float('nan')), inv)
+    return inv

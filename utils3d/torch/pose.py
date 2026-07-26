@@ -5,7 +5,7 @@ from torch import Tensor
 from typing import *
 
 from .transforms import transform_points, make_affine_matrix
-from .utils import matrix_trace, vector_outer
+from .utils import matrix_trace, vector_outer, safe_inv
 
 
 __all__ = ['kabsch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_edge_moments', 'segment_pose_graph_edge_moments', 'pose_graph_optimization', 'pose_graph_optimization_gnc']
@@ -66,21 +66,6 @@ def kabsch(cov: Tensor, eps: float = 1e-12):
     """Backward gradients friendly Kabsch method (compute rotation from input covarience matrix).
     """
     return Kabsch.apply(cov, eps)
-
-
-def safe_inv(A: Tensor) -> Tensor:
-    """Batched matrix inverse that returns NaN for singular inputs instead of raising.
-
-    `torch.linalg.inv` raises `LinAlgError` whenever any batch element is singular, which forces
-    callers to either pre-validate inputs or wrap in try/except. NumPy inherited this behavior
-    and PyTorch followed; for our pipelines we'd rather let NaN propagate (consistent with the
-    rest of floating-point arithmetic), so degenerate elements simply mark themselves as invalid
-    downstream without taking out the whole batch. Uses `torch.linalg.inv_ex` under the hood.
-    """
-    inv, info = torch.linalg.inv_ex(A)
-    if info.any():
-        inv = torch.where((info > 0)[..., None, None], torch.full_like(inv, float('nan')), inv)
-    return inv
 
 
 def umeyama(cov_yx: Tensor, cov_xx: Optional[Tensor] = None, cov_yy: Optional[Tensor] = None, mean_x: Optional[Tensor] = None, mean_y: Optional[Tensor] = None, eps: float = 1e-12) -> Tuple[Tensor, Tensor, Tensor]:

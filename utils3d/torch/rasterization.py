@@ -11,6 +11,7 @@ except ImportError:
     raise ImportError("nvdiffrast is not installed. Please install nvdiffrast to use the rasterization functions of utils3d.")
 
 from .transforms import extrinsics_to_view, intrinsics_to_perspective
+from .utils import safe_inv
 
 __all__ = [
     'RastContext',
@@ -170,7 +171,7 @@ def rasterize_triangles(
             rast_out[..., 2:3].flip(1),
             torch.ones((*rast_out.shape[:3], 1), device=rast_out.device, dtype=rast_out.dtype)
         ], dim=-1)
-        view_coord_map = ndc_coord_map @ torch.linalg.inv(projection[..., None, :, :]).mT
+        view_coord_map = ndc_coord_map @ safe_inv(projection[..., None, :, :]).mT
         depth = -view_coord_map[..., 2] / view_coord_map[..., 3]
         depth = torch.where(mask, depth, torch.inf)
     else:
@@ -328,7 +329,7 @@ def rasterize_triangles_peeling(
                     rast_out[..., 2:3].flip(1),
                     torch.ones((*rast_out.shape[:3], 1), device=rast_out.device, dtype=rast_out.dtype)
                 ], dim=-1)
-                view_coord_map = ndc_coord_map @ torch.linalg.inv(projection[..., None, :, :]).mT
+                view_coord_map = ndc_coord_map @ safe_inv(projection[..., None, :, :]).mT
                 depth = -view_coord_map[..., 2] / view_coord_map[..., 3]
                 depth = torch.where(mask, depth, torch.inf)
             else:
