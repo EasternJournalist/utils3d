@@ -1,3 +1,5 @@
+> This is a stable fork of [utils3d](https://github.com/EasternJournalist/utils3d) maintained as a dependency for [microsoft/MoGe](https://github.com/microsoft/MoGe).
+
 # utils3d
 
 <img src="doc/teaser.jpg" width="100%">
