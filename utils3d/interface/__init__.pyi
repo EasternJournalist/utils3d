@@ -1152,32 +1152,41 @@ Returns
     utils3d.numpy.pose.solve_pose
 
 @overload
-def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, numpy_.ndarray] = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, rng: Optional[numpy_.random._generator.Generator] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, numpy_.ndarray, NoneType] = None, ratio: Optional[float] = None, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, rng: Optional[numpy_.random._generator.Generator] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
-one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+    Hypotheses are sampled from minimal subsets, scored using either a known inlier threshold or a
+    known inlier ratio, and the best one is refit on its inliers. Exactly one of `threshold` and
+    `ratio` must be provided. Vectorized over hypotheses and leading batch dimensions.
 
-The solve minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` (as in `solve_pose`), while the
-inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. `w`, `sigma`, and
-`threshold` act independently.
+    - Threshold mode: a point is an inlier when
+        `||pose @ p_i - q_i|| / sigma_i < threshold_i` (`sigma_i = 1` when omitted). Hypotheses
+        are ranked by their total inlier weight (the standard RANSAC consensus criterion).
+    - Ratio mode: for each hypothesis, correspondences are sorted by `residual_i / sigma_i`
+        (`sigma_i = 1` when omitted) and the lowest-residual `ratio` fraction of the total weight is
+        selected. The boundary correspondence may carry fractional support weight. Hypotheses are
+        ranked by the weighted sum of normalized residual over that fixed weight mass.
 
 Parameters
 ----
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
-    proportional to `w`), weights the solve and the consensus score; does not relax the
-    threshold. If None, uniform weights are used.
-- `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
-    (same meaning as in `solve_pose`). If None, treated as 1.
+- `w`: optional (..., N) per-point multiplicity weight. Weight 2 is equivalent to two copies of
+    weight 1, and weight 0 removes the correspondence. It weights hypothesis sampling, fitting,
+    and the consensus criterion. If None, uniform weights are used.
+- `sigma`: optional (..., N) per-point error scale. Residuals are compared as
+    `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
+    `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
-- `threshold`: inlier distance threshold (scalar or per-point array, broadcastable to (..., N)). A
-    correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
-    pass `relative_threshold * ||p_i||`.
+- `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point array,
+    broadcastable to (..., N)). A correspondence is an inlier when
+    `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
+- `ratio`: fraction of total correspondence weight selected as inliers by lowest normalized
+    residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
+    equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
 - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
 - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
 - `lam`: regularization weight for 'affine' mode.
@@ -3626,33 +3635,41 @@ Returns
     utils3d.torch.pose.solve_pose
 
 @overload
-def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, torch_.Tensor] = 0.05, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, eps: float = 1e-12, generator: Optional[torch_._C.Generator] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, torch_.Tensor, NoneType] = None, ratio: Optional[float] = None, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, eps: float = 1e-12, generator: Optional[torch_._C.Generator] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
-one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+Hypotheses are sampled from minimal subsets, scored using either a known inlier threshold or a
+known inlier ratio, and the best one is refit on its inliers. Exactly one of `threshold` and
+`ratio` must be provided. Vectorized over hypotheses and leading batch dimensions.
 
-The solve minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2` (as in `solve_pose`), while the
-inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. 
-
-The best hypothesis is selected by minimizing `sum_i w_i * min(1, ||pose @ p_i - q_i|| / threshold_i)` (a truncated soft-inlier cost).
+    - Threshold mode: a point is an inlier when
+        `||pose @ p_i - q_i|| / sigma_i < threshold_i` (`sigma_i = 1` when omitted). Hypotheses
+        are ranked by their total inlier weight (the standard RANSAC consensus criterion).
+    - Ratio mode: for each hypothesis, correspondences are sorted by `residual_i / sigma_i`
+        (`sigma_i = 1` when omitted) and the lowest-residual `ratio` fraction of the total weight is
+        selected. The boundary correspondence may carry fractional support weight. Hypotheses are
+        ranked by the weighted mean normalized residual over that fixed weight mass.
 
 Parameters
 ----
 - `p`: (..., N, 3) source points
 - `q`: (..., N, 3) target points
-- `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
-    proportional to `w`), weights the solve and the consensus score; does not relax the
-    threshold. If None, uniform weights are used.
-- `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
-    (same meaning as in `solve_pose`). If None, treated as 1.
+- `w`: optional (..., N) per-point multiplicity weight. Weight 2 is equivalent to two copies of
+    weight 1, and weight 0 removes the correspondence. It weights hypothesis sampling, fitting,
+    and the consensus criterion. If None, uniform weights are used.
+- `sigma`: optional (..., N) per-point error scale. Residuals are compared as
+    `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
+    `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
 - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
     - For 'affine', full affine transformation is allowed. Using least squares.
-- `threshold`: inlier distance threshold (scalar or per-point tensor, broadcastable to (..., N)). A
-    correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
-    pass `relative_threshold * ||p_i||`.
+- `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point tensor,
+    broadcastable to (..., N)). A correspondence is an inlier when
+    `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
+- `ratio`: fraction of total correspondence weight selected as inliers by lowest normalized
+    residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
+    equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
 - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
 - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
 - `lam`: regularization weight for 'affine' mode.

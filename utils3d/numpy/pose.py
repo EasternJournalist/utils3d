@@ -142,7 +142,6 @@ def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: nd
     return A, t
 
 
-
 def solve_pose(
     p: np.ndarray, 
     q: np.ndarray, 
@@ -195,7 +194,7 @@ def solve_pose(
         pose = make_affine_matrix(R, t)
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
-        pose = make_affine_matrix(s * R, t)
+        pose = make_affine_matrix(s[..., None, None] * R, t)
     elif mode == 'affine':
         A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam)
         pose = make_affine_matrix(A, t)
@@ -210,7 +209,8 @@ def solve_pose_ransac(
     sigma: Optional[np.ndarray] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    threshold: Union[float, np.ndarray] = 0.05,
+    threshold: Optional[Union[float, np.ndarray]] = None,
+    ratio: Optional[float] = None,
     num_samples: int = 32,
     sample_size: Optional[int] = None,
     lam: float = 1e-2, 
@@ -218,29 +218,38 @@ def solve_pose_ransac(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-    Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
-    one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+        Hypotheses are sampled from minimal subsets, scored using either a known inlier threshold or a
+        known inlier ratio, and the best one is refit on its inliers. Exactly one of `threshold` and
+        `ratio` must be provided. Vectorized over hypotheses and leading batch dimensions.
 
-    The solve minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` (as in `solve_pose`), while the
-    inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. `w`, `sigma`, and
-    `threshold` act independently.
+        - Threshold mode: a point is an inlier when
+            `||pose @ p_i - q_i|| / sigma_i < threshold_i` (`sigma_i = 1` when omitted). Hypotheses
+            are ranked by their total inlier weight (the standard RANSAC consensus criterion).
+        - Ratio mode: for each hypothesis, correspondences are sorted by `residual_i / sigma_i`
+            (`sigma_i = 1` when omitted) and the lowest-residual `ratio` fraction of the total weight is
+            selected. The boundary correspondence may carry fractional support weight. Hypotheses are
+            ranked by the weighted sum of normalized residual over that fixed weight mass.
 
     Parameters
     ----
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
-        proportional to `w`), weights the solve and the consensus score; does not relax the
-        threshold. If None, uniform weights are used.
-    - `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
-        (same meaning as in `solve_pose`). If None, treated as 1.
+    - `w`: optional (..., N) per-point multiplicity weight. Weight 2 is equivalent to two copies of
+        weight 1, and weight 0 removes the correspondence. It weights hypothesis sampling, fitting,
+        and the consensus criterion. If None, uniform weights are used.
+    - `sigma`: optional (..., N) per-point error scale. Residuals are compared as
+        `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
+        `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
-    - `threshold`: inlier distance threshold (scalar or per-point array, broadcastable to (..., N)). A
-        correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
-        pass `relative_threshold * ||p_i||`.
+    - `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point array,
+        broadcastable to (..., N)). A correspondence is an inlier when
+        `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
+    - `ratio`: fraction of total correspondence weight selected as inliers by lowest normalized
+        residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
+        equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
     - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
     - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
     - `lam`: regularization weight for 'affine' mode.
@@ -251,6 +260,11 @@ def solve_pose_ransac(
     - `pose`: (..., 4, 4) transformations matrix from p to q.
     - `inliers`: (..., N) boolean mask of inliers w.r.t. the returned pose.
     """
+    if (threshold is None) == (ratio is None):
+        raise ValueError("Exactly one of threshold and ratio must be provided.")
+    if ratio is not None and not 0.0 < ratio <= 1.0:
+        raise ValueError(f"ratio must be in (0, 1], got {ratio}.")
+
     if sample_size is None:
         sample_size = 4 if mode == 'affine' else 3
     if rng is None:
@@ -265,6 +279,8 @@ def solve_pose_ransac(
         w_flat = np.ones((B, N), dtype=p.dtype)
     else:
         w_flat = w.reshape(B, N)
+    if np.any(w_flat < 0):
+        raise ValueError("w must be non-negative.")
 
     # Optional per-point noise scale, passed through to every solve (identical meaning to solve_pose).
     if sigma is not None:
@@ -273,20 +289,26 @@ def solve_pose_ransac(
     else:
         sigma_flat = None
 
-    # Inlier threshold: a purely geometric gate (scalar or per-point), never folded into the solve.
     tiny = np.finfo(p.dtype).tiny
-    threshold = np.maximum(np.asarray(threshold, dtype=p.dtype), tiny)
-    threshold_b = np.broadcast_to(threshold, p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
+    if threshold is not None:
+        threshold = np.maximum(np.asarray(threshold, dtype=p.dtype), tiny)
+        threshold_b = np.broadcast_to(threshold, p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
 
     # Draw `num_samples` minimal subsets without replacement per batch element, sampling each point
     # with probability proportional to its confidence `w`, so high-confidence correspondences are
     # more likely to seed a hypothesis. `np.random.choice` can't draw a batch of independent subsets
     # in one vectorized call, so we use the Gumbel-top-k trick (Efraimidis-Spirakis): perturbing each
     # `log(w_i)` by i.i.d. Gumbel noise and taking the top-`sample_size` keys yields exactly weighted
-    # sampling without replacement. Weights are floored to `tiny` so a draw is always possible even
-    # when fewer than `sample_size` points have nonzero weight. Uniform `w` -> uniform sampling.
+    # sampling without replacement. Zero-weight correspondences receive key `-inf` and are absent.
+    positive_weight_count = np.count_nonzero(w_flat > 0, axis=-1)
+    if np.any(positive_weight_count < sample_size):
+        raise ValueError(
+            f"Each batch element must have at least {sample_size} positive-weight correspondences."
+        )
     u = np.maximum(rng.random((B, num_samples, N)).astype(p.dtype), tiny)
-    keys = np.log(np.maximum(w_flat[:, None, :], tiny)) - np.log(-np.log(u))  # log(w_i) + Gumbel noise
+    log_weight = np.full_like(w_flat, -np.inf)
+    np.log(w_flat, out=log_weight, where=w_flat > 0)
+    keys = log_weight[:, None, :] - np.log(-np.log(u))  # log(w_i) + Gumbel noise
     idx = np.argpartition(keys, -sample_size, axis=-1)[..., -sample_size:].astype(np.int32)  # (B, num_samples, sample_size)
     p_s = np.take_along_axis(p_flat[:, None, :, :], idx[..., None], axis=2)  # (B, num_samples, sample_size, 3)
     q_s = np.take_along_axis(q_flat[:, None, :, :], idx[..., None], axis=2)
@@ -296,24 +318,45 @@ def solve_pose_ransac(
     # Solve a candidate pose for every hypothesis.
     pose_h = solve_pose(p_s, q_s, w_s, sigma_s, mode=mode, lam=lam)  # (B, num_samples, 4, 4)
 
-    # Score hypotheses by a robust, truncated soft-inlier cost. The threshold normalizes the raw
-    # residual (purely geometric); the confidence `w` weights each point's contribution but does
-    # NOT relax its threshold. Each correspondence contributes `w_i * min(1, residual_i / threshold_i)`.
     p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])     # (B, num_samples, N, 3)
     residual = np.linalg.norm(p_t - q_flat[:, None, :, :], axis=-1)             # (B, num_samples, N)
-    normalized_residual = residual / threshold_b                               # (B, num_samples, N)
-    inliers = normalized_residual < 1.0  # (B, num_samples, N)
-    inlier_cost = (w_flat[:, None, :] * np.minimum(normalized_residual, 1.0)).mean(axis=-1)  # (B, num_samples)
+    scaled_residual = residual if sigma_flat is None else residual / np.maximum(sigma_flat[:, None, :], tiny)
 
-    best = np.argmin(inlier_cost, axis=-1)  # (B,)
-    best_inliers = np.take_along_axis(inliers, best[:, None, None], axis=1)[:, 0]  # (B, N)
+    if threshold is not None:
+        support_mask = scaled_residual < threshold_b                           # (B, num_samples, N)
+        hypothesis_cost = -(w_flat[:, None, :] * support_mask).sum(axis=-1)
+    else:
+        sorted_indices = np.argsort(scaled_residual, axis=-1)
+        sorted_residual = np.take_along_axis(scaled_residual, sorted_indices, axis=-1)
+        sorted_weight = np.take_along_axis(w_flat[:, None, :], sorted_indices, axis=-1)
+        target_weight = ratio * w_flat.sum(axis=-1)                             # (B,)
+        cum_weight_before = sorted_weight.cumsum(axis=-1) - sorted_weight
+        selected_sorted_weight = np.minimum(
+            sorted_weight,
+            np.maximum(target_weight[:, None, None] - cum_weight_before, 0.0),
+        )
+        hypothesis_cost = (selected_sorted_weight * sorted_residual).sum(axis=-1)
 
-    # Refit on all inliers of the best hypothesis (same w / sigma weighting as the hypotheses).
-    refit_w = w_flat * best_inliers.astype(w_flat.dtype)
-    pose = solve_pose(p_flat, q_flat, refit_w, sigma_flat, mode=mode, lam=lam)  # (B, 4, 4)
+    best = np.argmin(hypothesis_cost, axis=-1)  # (B,)
+    if threshold is not None:
+        best_support_mask = np.take_along_axis(
+            support_mask, best[:, None, None], axis=1
+        )[:, 0]
+        best_support_weight = w_flat * best_support_mask
+    else:
+        best_sorted_indices = np.take_along_axis(
+            sorted_indices, best[:, None, None], axis=1
+        )[:, 0]
+        best_sorted_weight = np.take_along_axis(
+            selected_sorted_weight, best[:, None, None], axis=1
+        )[:, 0]
+        best_support_weight = np.zeros_like(w_flat)
+        np.put_along_axis(best_support_weight, best_sorted_indices, best_sorted_weight, axis=-1)
+
+    pose = solve_pose(p_flat, q_flat, best_support_weight, sigma_flat, mode=mode, lam=lam)  # (B, 4, 4)
 
     pose = pose.reshape(*batch_shape, 4, 4)
-    best_inliers = best_inliers.reshape(*batch_shape, N)
+    best_inliers = (best_support_weight > 0).reshape(*batch_shape, N)
     return pose, best_inliers
 
 
@@ -372,7 +415,7 @@ def segment_solve_pose(
         pose = make_affine_matrix(R, t)
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
-        pose = make_affine_matrix(s * R, t)
+        pose = make_affine_matrix(s[..., None, None] * R, t)
     elif mode == 'affine':
         A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam)
         pose = make_affine_matrix(A, t)
@@ -494,7 +537,7 @@ def solve_poses_sequential(
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y)
-            poses[i] = make_affine_matrix(s * R, t)
+            poses[i] = make_affine_matrix(s[..., None, None] * R, t)
         elif mode == 'affine':
             A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam)
             poses[i] = make_affine_matrix(A, t)
@@ -629,7 +672,7 @@ def segment_solve_poses_sequential(
             poses[i] = make_affine_matrix(R, t)
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y)
-            poses[i] = make_affine_matrix(s * R, t)
+            poses[i] = make_affine_matrix(s[..., None, None] * R, t)
         elif mode == 'affine':
             A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam)
             poses[i] = make_affine_matrix(A, t)

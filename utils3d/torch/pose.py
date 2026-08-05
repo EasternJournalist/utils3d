@@ -326,7 +326,8 @@ def solve_pose_ransac(
     sigma: Optional[Tensor] = None, 
     *,
     mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
-    threshold: Union[float, Tensor] = 0.05,
+    threshold: Optional[Union[float, Tensor]] = None,
+    ratio: Optional[float] = None,
     num_samples: int = 32,
     sample_size: Optional[int] = None,
     lam: float = 1e-2, 
@@ -335,30 +336,38 @@ def solve_pose_ransac(
 ) -> Tuple[Tensor, Tensor]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
-    Hypotheses are sampled from minimal subsets, scored by a truncated soft-inlier cost, and the best
-    one is refit on all of its inliers. Vectorized over hypotheses and leading batch dimensions.
+    Hypotheses are sampled from minimal subsets, scored using either a known inlier threshold or a
+    known inlier ratio, and the best one is refit on its inliers. Exactly one of `threshold` and
+    `ratio` must be provided. Vectorized over hypotheses and leading batch dimensions.
 
-    The solve minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2` (as in `solve_pose`), while the
-    inlier test is the purely geometric `||pose @ p_i - q_i|| < threshold_i`. 
-
-    The best hypothesis is selected by minimizing `sum_i w_i * min(1, ||pose @ p_i - q_i|| / threshold_i)` (a truncated soft-inlier cost).
+        - Threshold mode: a point is an inlier when
+            `||pose @ p_i - q_i|| / sigma_i < threshold_i` (`sigma_i = 1` when omitted). Hypotheses
+            are ranked by their total inlier weight (the standard RANSAC consensus criterion).
+        - Ratio mode: for each hypothesis, correspondences are sorted by `residual_i / sigma_i`
+            (`sigma_i = 1` when omitted) and the lowest-residual `ratio` fraction of the total weight is
+            selected. The boundary correspondence may carry fractional support weight. Hypotheses are
+            ranked by the weighted mean normalized residual over that fixed weight mass.
 
     Parameters
     ----
     - `p`: (..., N, 3) source points
     - `q`: (..., N, 3) target points
-    - `w`: optional (..., N) per-point confidence weight. Biases the hypothesis sampling (drawn
-        proportional to `w`), weights the solve and the consensus score; does not relax the
-        threshold. If None, uniform weights are used.
-    - `sigma`: optional (..., N) per-point noise scale used in the solve weighting `w_i / sigma_i^2`
-        (same meaning as in `solve_pose`). If None, treated as 1.
+    - `w`: optional (..., N) per-point multiplicity weight. Weight 2 is equivalent to two copies of
+        weight 1, and weight 0 removes the correspondence. It weights hypothesis sampling, fitting,
+        and the consensus criterion. If None, uniform weights are used.
+    - `sigma`: optional (..., N) per-point error scale. Residuals are compared as
+        `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
+        `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
     - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
         - For 'affine', full affine transformation is allowed. Using least squares.
-    - `threshold`: inlier distance threshold (scalar or per-point tensor, broadcastable to (..., N)). A
-        correspondence is an inlier when `||pose @ p_i - q_i|| < threshold_i`. For a relative tolerance
-        pass `relative_threshold * ||p_i||`.
+    - `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point tensor,
+        broadcastable to (..., N)). A correspondence is an inlier when
+        `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
+    - `ratio`: fraction of total correspondence weight selected as inliers by lowest normalized
+        residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
+        equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
     - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
     - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
     - `lam`: regularization weight for 'affine' mode.
@@ -370,6 +379,11 @@ def solve_pose_ransac(
     - `pose`: (..., 4, 4) transformations matrix from p to q.
     - `inliers`: (..., N) boolean mask of inliers w.r.t. the returned pose.
     """
+    if (threshold is None) == (ratio is None):
+        raise ValueError("Exactly one of threshold and ratio must be provided.")
+    if ratio is not None and not 0.0 < ratio <= 1.0:
+        raise ValueError(f"ratio must be in (0, 1], got {ratio}.")
+
     if sample_size is None:
         sample_size = 4 if mode == 'affine' else 3
     batch_shape = p.shape[:-2]
@@ -382,6 +396,8 @@ def solve_pose_ransac(
         w_flat = torch.ones((B, N), dtype=p.dtype, device=p.device)
     else:
         w_flat = w.reshape(B, N)
+    if torch.any(w_flat < 0):
+        raise ValueError("w must be non-negative.")
 
     # Optional per-point noise scale, passed through to every solve (identical meaning to solve_pose).
     if sigma is not None:
@@ -390,15 +406,19 @@ def solve_pose_ransac(
     else:
         sigma_flat = None
 
-    # Inlier threshold: a purely geometric gate (scalar or per-point), never folded into the solve.
-    threshold = torch.as_tensor(threshold, dtype=p.dtype, device=p.device).clamp_min(eps)
-    threshold_b = threshold.expand(p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
+    if threshold is not None:
+        threshold = torch.as_tensor(threshold, dtype=p.dtype, device=p.device).clamp_min(eps)
+        threshold_b = threshold.expand(p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
 
     # Draw `num_samples` minimal subsets without replacement per batch element, sampling each point
-    # with probability proportional to its confidence `w`, so high-confidence correspondences are
-    # more likely to seed a hypothesis. Weights are floored to `eps` so a draw is always possible
-    # even when fewer than `sample_size` points have nonzero weight. Uniform `w` -> uniform sampling.
-    probs = w_flat.clamp_min(eps)[:, None, :].expand(B, num_samples, N).reshape(B * num_samples, N)
+    # with probability proportional to `w`. Zero-weight correspondences are absent. Uniform positive
+    # weights give uniform sampling.
+    positive_weight_count = (w_flat > 0).sum(dim=-1)
+    if torch.any(positive_weight_count < sample_size):
+        raise ValueError(
+            f"Each batch element must have at least {sample_size} positive-weight correspondences."
+        )
+    probs = w_flat[:, None, :].expand(B, num_samples, N).reshape(B * num_samples, N)
     idx = torch.multinomial(probs, sample_size, replacement=False, generator=generator).reshape(B, num_samples, sample_size)  # (B, num_samples, sample_size)
     p_s = torch.take_along_dim(p_flat[:, None, :, :], idx[..., None], dim=2)  # (B, num_samples, sample_size, 3)
     q_s = torch.take_along_dim(q_flat[:, None, :, :], idx[..., None], dim=2)
@@ -408,24 +428,50 @@ def solve_pose_ransac(
     # Solve a candidate pose for every hypothesis.
     pose_h = solve_pose(p_s, q_s, w_s, sigma_s, mode=mode, lam=lam, eps=eps)  # (B, num_samples, 4, 4)
 
-    # Score hypotheses by a robust, truncated soft-inlier cost. The threshold normalizes the raw
-    # residual (purely geometric); the confidence `w` weights each point's contribution but does
-    # NOT relax its threshold. Each correspondence contributes `w_i * min(1, residual_i / threshold_i)`.
     p_t = transform_points(p_flat[:, None, :, :], pose_h[:, :, None, :, :])     # (B, num_samples, N, 3)
     residual = torch.linalg.norm(p_t - q_flat[:, None, :, :], dim=-1)           # (B, num_samples, N)
-    normalized_residual = residual / threshold_b                                # (B, num_samples, N)
-    inliers = normalized_residual < 1.0  # (B, num_samples, N)
-    inlier_cost = (w_flat[:, None, :] * normalized_residual.clamp_max(1.0)).mean(dim=-1)  # (B, num_samples)
+    scaled_residual = residual if sigma_flat is None else residual / sigma_flat[:, None, :].clamp_min(eps)
 
-    best = torch.argmin(inlier_cost, dim=-1)  # (B,)
-    best_inliers = torch.take_along_dim(inliers, best[:, None, None], dim=1)[:, 0]  # (B, N)
+    if threshold is not None:
+        # Standard RANSAC consensus: maximize multiplicity weight below the scaled-error threshold.
+        support_mask = scaled_residual < threshold_b                           # (B, num_samples, N)
+        hypothesis_cost = -(w_flat[:, None, :] * support_mask).sum(dim=-1)
+    else:
+        # Weighted least-trimmed residual mode. Sort by normalized residual and take exactly `ratio`
+        # of the total correspondence weight. A fractional boundary weight makes this equivalent to
+        # expanding a point of weight k into k unit-weight copies, including for non-integer weights.
+        sorted_residual, sorted_indices = torch.sort(scaled_residual, dim=-1)
+        sorted_weight = torch.take_along_dim(w_flat[:, None, :], sorted_indices, dim=-1)
+        target_weight = ratio * w_flat.sum(dim=-1)                              # (B,)
+        cum_weight_before = sorted_weight.cumsum(dim=-1) - sorted_weight
+        selected_sorted_weight = torch.minimum(
+            sorted_weight,
+            (target_weight[:, None, None] - cum_weight_before).clamp_min(0.0),
+        )
+        hypothesis_cost = (selected_sorted_weight * sorted_residual).sum(dim=-1)
 
-    # Refit on all inliers of the best hypothesis (same w / sigma weighting as the hypotheses).
-    refit_w = w_flat * best_inliers.to(w_flat.dtype)
-    pose = solve_pose(p_flat, q_flat, refit_w, sigma_flat, mode=mode, lam=lam, eps=eps)  # (B, 4, 4)
+    best = torch.argmin(hypothesis_cost, dim=-1)  # (B,)
+    if threshold is not None:
+        best_support_mask = torch.take_along_dim(
+            support_mask, best[:, None, None], dim=1
+        )[:, 0]
+        best_support_weight = w_flat * best_support_mask
+    else:
+        best_sorted_indices = torch.take_along_dim(
+            sorted_indices, best[:, None, None], dim=1
+        )[:, 0]
+        best_sorted_weight = torch.take_along_dim(
+            selected_sorted_weight, best[:, None, None], dim=1
+        )[:, 0]
+        best_support_weight = torch.zeros_like(w_flat).scatter_(
+            -1, best_sorted_indices, best_sorted_weight
+        )
+
+    # Refit on the best support. In ratio mode this preserves the fractional boundary weight.
+    pose = solve_pose(p_flat, q_flat, best_support_weight, sigma_flat, mode=mode, lam=lam, eps=eps)  # (B, 4, 4)
 
     pose = pose.reshape(*batch_shape, 4, 4)
-    best_inliers = best_inliers.reshape(*batch_shape, N)
+    best_inliers = (best_support_weight > 0).reshape(*batch_shape, N)
     return pose, best_inliers
 
 
