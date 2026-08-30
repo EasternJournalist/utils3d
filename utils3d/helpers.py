@@ -23,28 +23,6 @@ def suppress_traceback(fn):
 P = TypeVar('P')
 R = TypeVar('R')
 
-class no_warnings:
-    def __init__(self, action: str = 'ignore', **kwargs):
-        self.action = action
-        self.filter_kwargs = kwargs
-    
-    def __call__(self, fn: Callable[[P], R]) -> Callable[[P], R]:
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            with warnings.catch_warnings():
-                warnings.simplefilter(self.action, **self.filter_kwargs)
-                return fn(*args, **kwargs)
-        return wrapper  
-    
-    def __enter__(self):
-        self.warnings_manager = warnings.catch_warnings()
-        self.warnings_manager.__enter__()
-        warnings.simplefilter(self.action, **self.filter_kwargs)
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.warnings_manager.__exit__(exc_type, exc_val, exc_tb)
-
-
 class LazyImportWarning(UserWarning):
     pass
 

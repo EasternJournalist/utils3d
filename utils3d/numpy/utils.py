@@ -173,11 +173,11 @@ def pooling(
     if mode == 'max':
         pad_mode = 'constant'
         pad_value = -np.inf if x.dtype.kind == 'f' else np.iinfo(x.dtype).min
-        pool_fn = np.nanmax
+        pool_fn = np.fmax.reduce
     elif mode == 'min':
         pad_mode = 'constant'
         pad_value = np.inf if x.dtype.kind == 'f' else np.iinfo(x.dtype).max
-        pool_fn = np.nanmin
+        pool_fn = np.fmin.reduce
     elif mode == 'sum':
         pad_mode = 'constant'
         pad_value = 0

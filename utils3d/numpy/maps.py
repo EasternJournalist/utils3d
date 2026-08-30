@@ -5,7 +5,7 @@ import math
 import numpy as np
 from numpy import ndarray
 
-from ..helpers import no_warnings, timeit
+from ..helpers import timeit
 from .utils import max_pool_2d, sliding_window, pooling, lite_sum, lite_prod, lite_dot, lite_norm
 from .transforms import angle_between, unproject_cv
 from .mesh import triangulate_mesh, remove_unused_vertices
@@ -314,7 +314,7 @@ def build_mesh_from_depth_map(
     return faces, vertices, *attributes
 
 
-@no_warnings(category=RuntimeWarning)
+@np.errstate(divide='ignore', invalid='ignore')
 def depth_map_edge(
     depth: ndarray, 
     atol: Optional[float] = None, 
@@ -359,7 +359,7 @@ def depth_map_edge(
     return edge
 
 
-@no_warnings(category=RuntimeWarning)
+@np.errstate(divide='ignore', invalid='ignore')
 def depth_map_aliasing(depth: ndarray, atol: float = None, rtol: float = None, kernel_size: int = 3, mask: ndarray = None) -> ndarray:
     """
     Compute the map that indicates the aliasing of x depth map, identifying pixels which neither close to the maximum nor the minimum of its neighbors.
@@ -387,7 +387,7 @@ def depth_map_aliasing(depth: ndarray, atol: float = None, rtol: float = None, k
     return edge
 
 
-@no_warnings(category=RuntimeWarning)
+@np.errstate(invalid='ignore')
 def normal_map_edge(normals: ndarray, tol: float, kernel_size: int = 3, mask: ndarray = None) -> ndarray:
     """
     Compute the edge mask from normal map.
@@ -425,7 +425,7 @@ def normal_map_edge(normals: ndarray, tol: float, kernel_size: int = 3, mask: nd
     return edge
 
 
-@no_warnings(category=RuntimeWarning)
+@np.errstate(invalid='ignore')
 def point_map_to_normal_map(point: ndarray, mask: ndarray = None, edge_threshold: float = None) -> ndarray:
     """Calculate normal map from point map. Value range is [-1, 1]. 
 
