@@ -155,8 +155,8 @@ def screen_coord_map(
         height, width = size[0]
     else:
         height, width = size
-    x = np.linspace(left + 0.5 / width, right - 0.5 / width, width, dtype=dtype)
-    y = np.linspace(top - 0.5 / height, bottom - 0.5 / height, height, dtype=dtype)
+    x = np.linspace(left + 0.5 / width * (right - left), right - 0.5 / width * (right - left), width, dtype=dtype)
+    y = np.linspace(top + 0.5 / height * (bottom - top), bottom - 0.5 / height * (bottom - top), height, dtype=dtype)
     x, y = np.meshgrid(x, y, indexing='xy')
     return np.stack([x, y], axis=2)
 
