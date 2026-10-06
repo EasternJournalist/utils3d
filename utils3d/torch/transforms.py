@@ -1190,7 +1190,7 @@ def slerp(v1: Tensor, v2: Tensor, t: Tensor, eps: float = 1e-12) -> Tensor:
     v_ortho1 = v2 - v1 * cos[..., None]
     v_ortho2 = v1 - v2 * cos[..., None]
     sin = torch.minimum(v_ortho1.norm(dim=-1), v_ortho2.norm(dim=-1))
-    theta = torch.atan2(sin + eps, cos) * t
+    theta = torch.atan2(sin + eps, cos)[..., None] * t
     v_ortho1 = F.normalize(v_ortho1, dim=-1, eps=eps)
     v = v1[..., None, :] * torch.cos(theta)[..., None] + v_ortho1[..., None, :] * torch.sin(theta)[..., None]
     return v
