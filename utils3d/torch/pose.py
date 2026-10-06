@@ -207,17 +207,19 @@ def _affine_umeyama_iterative(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, me
     return A, t
 
 
-def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor, lam: float = 1e-2, eps: float = 1e-12) -> Tuple[Tensor, Tensor]:
+def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor, lam: float = 1e-2, eps: float = 1e-12, *, allow_flip: bool = True) -> Tuple[Tensor, Tensor]:
     """
     Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
     The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
     satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
-    an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+    an orthogonal Procrustes problem in the whitened space, where the optimal map is an orthogonal `Q`
     (so `(A^{-1})` is automatically the consistent inverse):
 
         `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
 
+    When `allow_flip=False`, `Q` is instead the closest proper rotation (Kabsch), so `det(A) > 0`.
+    The covariance square roots above use the regularized covariances when `lam > 0`.
     No iteration, no penalty annealing, and the result is differentiable.
 
     Parameters
@@ -227,9 +229,12 @@ def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tenso
     - `cov_yy`: (..., 3, 3) covariance matrix of y points.
     - `mean_x`: (..., 3) mean of x points.
     - `mean_y`: (..., 3) mean of y points.
-    - `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
-        toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt.
+    - `lam`: isotropy regularization weight. Shrinks the whitening toward isotropic and stabilizes
+        the inverse sqrt for near-planar inputs. Independent of `allow_flip`; with `lam=0`,
+        nondegenerate input covariances are required for a well-conditioned solve.
     - `eps`: small value to clamp eigenvalues / prevent division by zero.
+    - `allow_flip`: whether to allow reflections. If False, constrain `A` to preserve orientation
+        (`det(A) > 0`), while still allowing nonuniform scaling and shear.
 
     Returns
     ----
@@ -249,8 +254,11 @@ def affine_umeyama(cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tenso
     cov_yy_sqrt, cov_yy_inv_sqrt = _sym_sqrt_and_inv_sqrt(reg_yy, eps)
 
     M = cov_yy_inv_sqrt @ cov_yx @ cov_xx_inv_sqrt
-    U, _, Vh = torch.linalg.svd(M)
-    Q = U @ Vh
+    if allow_flip:
+        U, _, Vh = torch.linalg.svd(M)
+        Q = U @ Vh
+    else:
+        Q = kabsch(M, eps=eps)
 
     A = cov_yy_sqrt @ Q @ cov_xx_inv_sqrt
     t = mean_y - transform_points(mean_x, A)
@@ -263,7 +271,7 @@ def solve_pose(
     w: Optional[Tensor] = None, 
     sigma: Optional[Tensor] = None, 
     *,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2, 
     eps: float = 1e-12
 ) -> Tensor:
@@ -278,11 +286,12 @@ def solve_pose(
     - `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
     - `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
         relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -302,7 +311,7 @@ def solve_pose(
     pw = p * w[..., None]
     qw = q * w[..., None]
     cov_qp = torch.sum(vector_outer(qw, p), dim=-3) / w_sum[..., None, None]
-    if mode == 'similar' or mode == 'affine':
+    if mode in ('similar', 'affine', 'affine-no-flip'):
         cov_pp = torch.sum(vector_outer(pw, p), dim=-3) / w_sum[..., None, None]
         cov_qq = torch.sum(vector_outer(qw, q), dim=-3) / w_sum[..., None, None]
     
@@ -312,8 +321,8 @@ def solve_pose(
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean, eps=eps)
         pose = make_affine_matrix(s[..., None, None] * R, t)
-    elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps)
+    elif mode in ('affine', 'affine-no-flip'):
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps, allow_flip=mode == 'affine')
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -325,7 +334,7 @@ def solve_pose_ransac(
     w: Optional[Tensor] = None, 
     sigma: Optional[Tensor] = None, 
     *,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     threshold: Optional[Union[float, Tensor]] = None,
     ratio: Optional[float] = None,
     num_samples: int = 32,
@@ -358,10 +367,11 @@ def solve_pose_ransac(
     - `sigma`: optional (..., N) per-point error scale. Residuals are compared as
         `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
         `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
     - `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point tensor,
         broadcastable to (..., N)). A correspondence is an inlier when
         `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
@@ -369,8 +379,8 @@ def solve_pose_ransac(
         residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
         equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
     - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
-    - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
-    - `lam`: regularization weight for 'affine' mode.
+    - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for both affine modes.
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     - `eps`: small value to prevent division by zero.
     - `generator`: optional random generator for reproducible sampling.
 
@@ -385,7 +395,7 @@ def solve_pose_ransac(
         raise ValueError(f"ratio must be in (0, 1], got {ratio}.")
 
     if sample_size is None:
-        sample_size = 4 if mode == 'affine' else 3
+        sample_size = 4 if mode in ('affine', 'affine-no-flip') else 3
     batch_shape = p.shape[:-2]
     N = p.shape[-2]
     B = math.prod(batch_shape)
@@ -396,8 +406,6 @@ def solve_pose_ransac(
         w_flat = torch.ones((B, N), dtype=p.dtype, device=p.device)
     else:
         w_flat = w.reshape(B, N)
-    if torch.any(w_flat < 0):
-        raise ValueError("w must be non-negative.")
 
     # Optional per-point noise scale, passed through to every solve (identical meaning to solve_pose).
     if sigma is not None:
@@ -410,16 +418,12 @@ def solve_pose_ransac(
         threshold = torch.as_tensor(threshold, dtype=p.dtype, device=p.device).clamp_min(eps)
         threshold_b = threshold.expand(p.shape[:-1]).reshape(B, N)[:, None, :] if threshold.ndim > 0 else threshold  # (B, 1, N) or scalar
 
-    # Draw `num_samples` minimal subsets without replacement per batch element, sampling each point
-    # with probability proportional to `w`. Zero-weight correspondences are absent. Uniform positive
-    # weights give uniform sampling.
-    positive_weight_count = (w_flat > 0).sum(dim=-1)
-    if torch.any(positive_weight_count < sample_size):
-        raise ValueError(
-            f"Each batch element must have at least {sample_size} positive-weight correspondences."
-        )
-    probs = w_flat[:, None, :].expand(B, num_samples, N).reshape(B * num_samples, N)
-    idx = torch.multinomial(probs, sample_size, replacement=False, generator=generator).reshape(B, num_samples, sample_size)  # (B, num_samples, sample_size)
+    # Draw weighted subsets without replacement with Gumbel top-k. Unlike `torch.multinomial`, this
+    # still returns indices when a batch element has fewer than `sample_size` positive weights; any
+    # zero-weight points selected to fill the subset remain excluded from the weighted fit.
+    sample_noise = torch.empty((B, num_samples, N), dtype=p.dtype, device=p.device).exponential_(generator=generator)
+    sample_score = w_flat[:, None, :].log() - sample_noise.log()
+    idx = torch.topk(sample_score, sample_size, dim=-1).indices  # (B, num_samples, sample_size)
     p_s = torch.take_along_dim(p_flat[:, None, :, :], idx[..., None], dim=2)  # (B, num_samples, sample_size, 3)
     q_s = torch.take_along_dim(q_flat[:, None, :, :], idx[..., None], dim=2)
     w_s = torch.take_along_dim(w_flat[:, None, :], idx, dim=2)
@@ -482,7 +486,7 @@ def segment_solve_pose(
     sigma: Optional[Tensor] = None, 
     *,
     offsets: Tensor, 
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2, 
     eps: float = 1e-12
 ) -> Tensor:
@@ -497,11 +501,12 @@ def segment_solve_pose(
     - `w`: (N,) weights for each point correspondence
     - `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
     - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -523,7 +528,7 @@ def segment_solve_pose(
     pw = p * w[..., None]
     qw = q * w[..., None]
     cov_qp = torch.segment_reduce(vector_outer(qw, p), 'sum', offsets=offsets, axis=0) / w_sum[:, None, None]
-    if mode == 'similar' or mode == 'affine':
+    if mode in ('similar', 'affine', 'affine-no-flip'):
         cov_pp = torch.segment_reduce(vector_outer(pw, p), 'sum', offsets=offsets, axis=0) / w_sum[:, None, None]
         cov_qq = torch.segment_reduce(vector_outer(qw, q), 'sum', offsets=offsets, axis=0) / w_sum[:, None, None]
 
@@ -533,8 +538,8 @@ def segment_solve_pose(
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean, eps=eps)
         pose = make_affine_matrix(s[..., None, None] * R, t)
-    elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps)
+    elif mode in ('affine', 'affine-no-flip'):
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, eps=eps, allow_flip=mode == 'affine')
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -547,7 +552,7 @@ def solve_poses_sequential(
     *,
     accum: Optional[Tuple[Tensor, ...]] = None,
     min_valid_size: int = 3,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2,
     eps: float = 1e-12,
 ) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor, Tensor, Tensor], Tensor, Tensor, Tuple[Tensor, ...]]:
@@ -562,11 +567,12 @@ def solve_poses_sequential(
         `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: rigidity regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -614,7 +620,7 @@ def solve_poses_sequential(
         xc = mean_sqrtwx - center_x[..., None, :]
         yc = yi - center_y[..., None, :]
         cov_yx = torch.einsum('...i,...ij,...ik->...jk', w, yc, xc) / sum_w[..., None, None]
-        if mode == 'affine' or mode == 'similar':
+        if mode in ('similar', 'affine', 'affine-no-flip'):
             cov_xx = (torch.einsum('...i,...ij,...ik->...jk', w, xc, xc) + torch.einsum('...i,...ijk->...jk', sqrtwi, accum_sqrtwxx)) / sum_w[..., None, None]
             cov_yy = torch.einsum('...i,...ij,...ik->...jk', w, yc, yc) / sum_w[..., None, None]
 
@@ -624,8 +630,8 @@ def solve_poses_sequential(
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, eps=eps)
             poses[i] = make_affine_matrix(s[..., None, None] * R, t)
-        elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps)
+        elif mode in ('affine', 'affine-no-flip'):
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps, allow_flip=mode == 'affine')
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, safe_inv(poses[i])[..., None, :, :])
@@ -664,7 +670,7 @@ def segment_solve_poses_sequential(
     *,
     accum: Optional[Tuple[Tensor, ...]] = None,
     min_valid_size: int = 3,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2,
     eps: float = 1e-12,
 ) -> Tuple[Tensor, Tensor, Tuple[Tensor, Tensor, Tensor, Tensor], Tensor, Tensor, Tuple[Tensor, ...]]:
@@ -680,8 +686,12 @@ def segment_solve_poses_sequential(
         `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
-    - `lam`: rigidity regularization weight for 'affine' mode.
+    - `mode`: mode of transformation to apply.
+        - For 'rigid', only rotation and translation are allowed.
+        - For 'similar', uniform scaling, rotation and translation are allowed.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     - `eps`: small value to prevent division by zero.
 
     Returns
@@ -732,7 +742,7 @@ def segment_solve_poses_sequential(
         xc = mean_sqrtwx - center_x_broadcast
         yc = yi - center_y_broadcast
         cov_yx = torch.segment_reduce(w[:, None, None] * vector_outer(yc, xc), 'sum', offsets=offsets, axis=0) / sum_w[:, None, None]
-        if mode == 'affine' or mode == 'similar':
+        if mode in ('similar', 'affine', 'affine-no-flip'):
             cov_xx = torch.segment_reduce(sqrtwi[:, None, None] * accum_sqrtwxx + w[:, None, None] * vector_outer(xc), 'sum', offsets=offsets, axis=0) / sum_w[:, None, None]
             cov_yy = torch.segment_reduce(w[:, None, None] * vector_outer(yc), 'sum', offsets=offsets, axis=0) / sum_w[:, None, None]
 
@@ -742,8 +752,8 @@ def segment_solve_poses_sequential(
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y, eps=eps)
             poses[i] = make_affine_matrix(s[..., None, None] * R, t)
-        elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps)
+        elif mode in ('affine', 'affine-no-flip'):
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, eps=eps, allow_flip=mode == 'affine')
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, torch.repeat_interleave(safe_inv(poses[i]), lengths, dim=0))
@@ -803,13 +813,22 @@ def _pose_graph_optimization_construct_laplacian(edge: Tensor, num_nodes: int, R
     return laplacian
 
 
+def _pose_graph_optimization_solve_laplacian(laplacian: Tensor, rhs: Tensor) -> Tensor:
+    """Solve a scalar graph system with one or more RHS columns and zero mean per component."""
+    # Apply the pseudoinverse to the RHS columns without materializing a dense inverse.
+    eigenvalues, eigenvectors = torch.linalg.eigh(laplacian)
+    tolerance = laplacian.shape[0] * torch.finfo(laplacian.dtype).eps * eigenvalues[-1].clamp_min(0)
+    inverse_eigenvalues = eigenvalues.masked_fill(eigenvalues <= tolerance, float('inf')).reciprocal()
+    return eigenvectors @ (inverse_eigenvalues[:, None] * (eigenvectors.mT @ rhs))
+
+
 def _pose_graph_optimization_scale_sync(edges: Tensor, num_nodes: int, s_relative: Tensor, w: Tensor, eps: float = 1e-12) -> Tensor:
     """Global per-node scales `s_i` from per-edge relative scales `s_ij ≈ s_j / s_i`.
 
     In log-space `log s_ij = log s_j - log s_i` is linear, so the scales follow from a weighted scalar
     graph-Laplacian least squares `min sum_ij w_ij (l_j - l_i - log s_ij)^2` (`l_i = log s_i`). The
-    overall scale is a free gauge (the all-ones null space); the min-norm `lstsq` solution fixes it to
-    `sum_i l_i = 0`, i.e. the geometric mean of the node scales is 1.
+    overall scale is a free gauge (the all-ones null space); the pseudoinverse solution fixes it to
+    `sum_i l_i = 0` in each connected component, i.e. the geometric mean of its node scales is 1.
     """
     log_s = torch.log(s_relative.clamp_min(eps))
     src, dst = edges[:, 0], edges[:, 1]
@@ -821,7 +840,7 @@ def _pose_graph_optimization_scale_sync(edges: Tensor, num_nodes: int, s_relativ
     laplacian.index_put_((dst, dst), w, accumulate=True)
     wl = w * log_s
     b = torch.zeros(num_nodes, device=s_relative.device, dtype=s_relative.dtype).index_add(0, dst, wl).index_add(0, src, -wl)
-    log_s_global = torch.linalg.lstsq(laplacian, b).solution
+    log_s_global = _pose_graph_optimization_solve_laplacian(laplacian, b[:, None]).squeeze(-1)
     return torch.exp(log_s_global)
 
 
@@ -1016,7 +1035,12 @@ def pose_graph_optimization(
     satisfies `s_ij = s_j / s_i`, so the global node scales are recovered by a separate weighted
     least squares in log-scale (see `_pose_graph_optimization_scale_sync`); the overall scale is a
     free gauge, fixed so the geometric mean of the node scales is 1. Rotation is scale-invariant and
-    solved identically to the rigid case; translation uses the scaled relative block `s_ij R_ij`.
+    solved identically to the rigid case. Given the synchronized rotations and scales, translations
+    exactly minimize the weighted point-level objective, not a residual on measured edge transforms.
+    Writing `L_i = s_i R_i` and camera centers `c_i = -L_i^{-1} t_i`, this subproblem is
+    `min sum_ij edge_weights_ij * w_ij * s_j^2 * ||c_j - c_i - d_ij||^2`, where
+    `d_ij = L_i^{-1} mean_x - L_j^{-1} mean_y`. A scalar graph Laplacian solves all three coordinates;
+    its pseudoinverse fixes the mean camera center to zero within each connected component.
 
     Parameters
     ----
@@ -1069,26 +1093,24 @@ def pose_graph_optimization(
     if mode == 'similar':
         s_relative = torch.sqrt((tr_yy / tr_xx.clamp_min(eps)).clamp_min(eps))
         s_global = _pose_graph_optimization_scale_sync(edges, num_nodes, s_relative, w_translation, eps=eps)
-    else:
-        s_relative = None
-
-    # Global translations: connection-Laplacian least squares, weighted by per-edge translation
-    # information (a separate Laplacian from the rotation one). In similar mode the relative block is
-    # the scaled rotation `s_ij R_ij`.
-    sR_mean_x = (R_relative @ mean_x[..., None]).squeeze(-1)
-    if mode == 'similar':
-        sR_mean_x = s_relative[:, None] * sR_mean_x
-    t_relative = mean_y - sR_mean_x
-    laplacian_trans = _pose_graph_optimization_construct_laplacian(edges, num_nodes, R_relative, w_translation, s=s_relative)
-    w_t = w_translation[:, None] * t_relative
-    src_term = (R_relative.mT @ w_t[:, :, None]).squeeze(-1)
-    if mode == 'similar':
-        src_term = s_relative[:, None] * src_term
-    b = torch.zeros((num_nodes, 3), device=cov_yx.device, dtype=cov_yx.dtype).index_add(0, edges[:, 1], w_t).index_add(0, edges[:, 0], -src_term).reshape(-1)
-    # NOTE: currently we have to use dense solver for translations since PyTorch doesn't support sparse linear solver well.
-    t_global = torch.linalg.lstsq(laplacian_trans.to_dense(), b).solution.reshape(num_nodes, 3)
 
     linear = R_global if mode == 'rigid' else s_global[:, None, None] * R_global
+    inverse_linear = R_global.mT if mode == 'rigid' else R_global.mT / s_global[:, None, None]
+    src, dst = edges[:, 0], edges[:, 1]
+
+    # Express centroid residuals in world coordinates, retaining the target scale squared in the weights.
+    center_offsets = (inverse_linear[src] @ mean_x[..., None] - inverse_linear[dst] @ mean_y[..., None]).squeeze(-1)
+    center_weights = w_translation if mode == 'rigid' else w_translation * s_global[dst].square()
+    laplacian = torch.zeros((num_nodes, num_nodes), device=cov_yx.device, dtype=cov_yx.dtype)
+    laplacian.index_put_((src, src), center_weights, accumulate=True)
+    laplacian.index_put_((dst, dst), center_weights, accumulate=True)
+    laplacian.index_put_((src, dst), -center_weights, accumulate=True)
+    laplacian.index_put_((dst, src), -center_weights, accumulate=True)
+    weighted_offsets = center_weights[:, None] * center_offsets
+    rhs = torch.zeros((num_nodes, 3), device=cov_yx.device, dtype=cov_yx.dtype).index_add(0, dst, weighted_offsets).index_add(0, src, -weighted_offsets)
+
+    centers = _pose_graph_optimization_solve_laplacian(laplacian, rhs)
+    t_global = -(linear @ centers[..., None]).squeeze(-1)
     return make_affine_matrix(linear, t_global)
 
 
@@ -1228,4 +1250,3 @@ def pose_graph_optimization_gnc(
         mu = mu * gnc_factor
 
     return poses_global, w_gnc
-

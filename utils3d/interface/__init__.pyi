@@ -188,7 +188,7 @@ __all__ = ["sliding_window",
 "texture_composite"]
 
 @overload
-def sliding_window(x: numpy_.ndarray, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, dilation: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Optional[Tuple[int, ...]] = None) -> numpy_.ndarray:
+def sliding_window(x: numpy_.ndarray, window_size: int | Tuple[int, ...], stride: int | Tuple[int, ...] | None = None, dilation: int | Tuple[int, ...] | None = None, pad_size: int | Tuple[int, int] | Tuple[Tuple[int, int]] | None = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Tuple[int, ...] | None = None) -> numpy_.ndarray:
     """Get a sliding window of the input array. Window axis(axes) will be appended as the last dimension(s).
 This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with additional support for padding and stride.
 
@@ -219,7 +219,7 @@ This function is a wrapper of `numpy.lib.stride_tricks.sliding_window_view` with
     utils3d.numpy.utils.sliding_window
 
 @overload
-def pooling(x: numpy_.ndarray, kernel_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, padding: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, axis: Union[int, Tuple[int, ...], NoneType] = None, mode: Literal['min', 'max', 'sum', 'mean'] = 'max') -> numpy_.ndarray:
+def pooling(x: numpy_.ndarray, kernel_size: int | Tuple[int, ...], stride: int | Tuple[int, ...] | None = None, padding: int | Tuple[int, int] | Tuple[Tuple[int, int]] | None = None, axis: int | Tuple[int, ...] | None = None, mode: Literal['min', 'max', 'sum', 'mean'] = 'max') -> numpy_.ndarray:
     """Compute the pooling of the input array. 
 NOTE: NaNs will be ignored.
 
@@ -243,7 +243,7 @@ NOTE: NaNs will be ignored.
     utils3d.numpy.utils.pooling
 
 @overload
-def max_pool_2d(x: numpy_.ndarray, kernel_size: Union[int, Tuple[int, int]], stride: Union[int, Tuple[int, int]], padding: Union[int, Tuple[int, int]], axis: Tuple[int, int] = (-2, -1)):
+def max_pool_2d(x: numpy_.ndarray, kernel_size: int | Tuple[int, int], stride: int | Tuple[int, int], padding: int | Tuple[int, int], axis: Tuple[int, int] = (-2, -1)):
     utils3d.numpy.utils.max_pool_2d
 
 @overload
@@ -265,7 +265,7 @@ Notes
     utils3d.numpy.utils.lookup
 
 @overload
-def lookup_get(key: numpy_.ndarray, value: numpy_.ndarray, get_key: numpy_.ndarray, default_value: Union[numbers.Number, numpy_.ndarray] = 0) -> numpy_.ndarray:
+def lookup_get(key: numpy_.ndarray, value: numpy_.ndarray, get_key: numpy_.ndarray, default_value: numbers.Number | numpy_.ndarray = 0) -> numpy_.ndarray:
     """Dictionary-like get for arrays
 
 ## Parameters
@@ -296,7 +296,7 @@ def lookup_set(key: numpy_.ndarray, value: numpy_.ndarray, set_key: numpy_.ndarr
     utils3d.numpy.utils.lookup_set
 
 @overload
-def group(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def group(labels: numpy_.ndarray, data: numpy_.ndarray | None = None) -> List[Tuple[numpy_.ndarray, numpy_.ndarray]]:
     """Split the data into groups based on the provided labels.
 
 ## Parameters
@@ -342,7 +342,7 @@ Equivalent to `np.argsort(perm, axis=axis)`, but more efficient."""
     utils3d.numpy.utils.reverse_permutation
 
 @overload
-def vector_outer(x: numpy_.ndarray, y: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def vector_outer(x: numpy_.ndarray, y: numpy_.ndarray | None = None) -> numpy_.ndarray:
     """Compute the outer product of two arrays.
 
 Parameters
@@ -356,7 +356,7 @@ Returns
     utils3d.numpy.utils.vector_outer
 
 @overload
-def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None, near: Union[float, numpy_.ndarray, NoneType], far: Union[float, numpy_.ndarray, NoneType]) -> numpy_.ndarray:
+def perspective_from_fov(*, fov_x: float | numpy_.ndarray | None = None, fov_y: float | numpy_.ndarray | None = None, fov_min: float | numpy_.ndarray | None = None, fov_max: float | numpy_.ndarray | None = None, aspect_ratio: float | numpy_.ndarray | None = None, near: float | numpy_.ndarray | None, far: float | numpy_.ndarray | None) -> numpy_.ndarray:
     """Get OpenGL perspective matrix from field of view 
 
 ## Returns
@@ -364,7 +364,7 @@ def perspective_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None
     utils3d.numpy.transforms.perspective_from_fov
 
 @overload
-def perspective_from_window(left: Union[float, numpy_.ndarray], right: Union[float, numpy_.ndarray], bottom: Union[float, numpy_.ndarray], top: Union[float, numpy_.ndarray], near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+def perspective_from_window(left: float | numpy_.ndarray, right: float | numpy_.ndarray, bottom: float | numpy_.ndarray, top: float | numpy_.ndarray, near: float | numpy_.ndarray, far: float | numpy_.ndarray) -> numpy_.ndarray:
     """Get OpenGL perspective matrix from the window of z=-1 projection plane
 
 ## Returns
@@ -372,7 +372,7 @@ def perspective_from_window(left: Union[float, numpy_.ndarray], right: Union[flo
     utils3d.numpy.transforms.perspective_from_window
 
 @overload
-def intrinsics_from_fov(*, fov_x: Union[float, numpy_.ndarray, NoneType] = None, fov_y: Union[float, numpy_.ndarray, NoneType] = None, fov_max: Union[float, numpy_.ndarray, NoneType] = None, fov_min: Union[float, numpy_.ndarray, NoneType] = None, cx: Union[float, numpy_.ndarray] = 0.5, cy: Union[float, numpy_.ndarray] = 0.5, aspect_ratio: Union[float, numpy_.ndarray, NoneType] = None) -> numpy_.ndarray:
+def intrinsics_from_fov(*, fov_x: float | numpy_.ndarray | None = None, fov_y: float | numpy_.ndarray | None = None, fov_max: float | numpy_.ndarray | None = None, fov_min: float | numpy_.ndarray | None = None, cx: float | numpy_.ndarray = 0.5, cy: float | numpy_.ndarray = 0.5, aspect_ratio: float | numpy_.ndarray | None = None) -> numpy_.ndarray:
     """Get normalized OpenCV intrinsics matrix from given field of view.
 You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
@@ -392,7 +392,7 @@ Returns
     utils3d.numpy.transforms.intrinsics_from_fov
 
 @overload
-def intrinsics_from_focal_center(fx: Union[float, numpy_.ndarray], fy: Union[float, numpy_.ndarray], cx: Union[float, numpy_.ndarray], cy: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+def intrinsics_from_focal_center(fx: float | numpy_.ndarray, fy: float | numpy_.ndarray, cx: float | numpy_.ndarray, cy: float | numpy_.ndarray) -> numpy_.ndarray:
     """Get OpenCV intrinsics matrix
 
 ## Returns
@@ -456,7 +456,7 @@ def perspective_to_near_far(perspective: numpy_.ndarray) -> Tuple[numpy_.ndarray
     utils3d.numpy.transforms.perspective_to_near_far
 
 @overload
-def intrinsics_to_perspective(intrinsics: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+def intrinsics_to_perspective(intrinsics: numpy_.ndarray, near: float | numpy_.ndarray, far: float | numpy_.ndarray) -> numpy_.ndarray:
     """OpenCV intrinsics to OpenGL perspective matrix
 
 ## Parameters
@@ -490,7 +490,7 @@ def view_to_extrinsics(view: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
+def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Tuple[numbers.Number, numbers.Number] | numpy_.ndarray, pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Normalize intrinsics from pixel cooridnates to uv coordinates
 
 ## Parameters
@@ -505,7 +505,7 @@ def normalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.N
     utils3d.numpy.transforms.normalize_intrinsics
 
 @overload
-def denormalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
+def denormalize_intrinsics(intrinsics: numpy_.ndarray, size: Tuple[numbers.Number, numbers.Number] | numpy_.ndarray, pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Denormalize intrinsics from uv cooridnates to pixel coordinates
 
 ## Parameters
@@ -520,7 +520,7 @@ def denormalize_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers
     utils3d.numpy.transforms.denormalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], cropped_top: Union[numbers.Number, numpy_.ndarray], cropped_left: Union[numbers.Number, numpy_.ndarray], cropped_height: Union[numbers.Number, numpy_.ndarray], cropped_width: Union[numbers.Number, numpy_.ndarray]) -> numpy_.ndarray:
+def crop_intrinsics(intrinsics: numpy_.ndarray, size: Tuple[numbers.Number, numbers.Number] | numpy_.ndarray, cropped_top: numbers.Number | numpy_.ndarray, cropped_left: numbers.Number | numpy_.ndarray, cropped_height: numbers.Number | numpy_.ndarray, cropped_width: numbers.Number | numpy_.ndarray) -> numpy_.ndarray:
     """Evaluate the new intrinsics after cropping the image
 
 ## Parameters
@@ -537,7 +537,7 @@ def crop_intrinsics(intrinsics: numpy_.ndarray, size: Union[Tuple[numbers.Number
     utils3d.numpy.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
+def pixel_to_uv(pixel: numpy_.ndarray, size: Tuple[numbers.Number, numbers.Number] | numpy_.ndarray, pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Convert pixel space coordiantes to UV space coordinates.
 
 ## Parameters
@@ -552,7 +552,7 @@ def pixel_to_uv(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers
     utils3d.numpy.transforms.pixel_to_uv
 
 @overload
-def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
+def pixel_to_ndc(pixel: numpy_.ndarray, size: Tuple[numbers.Number, numbers.Number] | numpy_.ndarray, pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Convert pixel coordinates to NDC (Normalized Device Coordinates).
 
 ## Parameters
@@ -567,7 +567,7 @@ def pixel_to_ndc(pixel: numpy_.ndarray, size: Union[Tuple[numbers.Number, number
     utils3d.numpy.transforms.pixel_to_ndc
 
 @overload
-def uv_to_pixel(uv: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Number], numpy_.ndarray], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
+def uv_to_pixel(uv: numpy_.ndarray, size: Tuple[numbers.Number, numbers.Number] | numpy_.ndarray, pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> numpy_.ndarray:
     """Convert UV space coordinates to pixel space coordinates.
 
 ## Parameters
@@ -582,7 +582,7 @@ def uv_to_pixel(uv: numpy_.ndarray, size: Union[Tuple[numbers.Number, numbers.Nu
     utils3d.numpy.transforms.uv_to_pixel
 
 @overload
-def depth_linear_to_buffer(depth: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+def depth_linear_to_buffer(depth: numpy_.ndarray, near: float | numpy_.ndarray, far: float | numpy_.ndarray) -> numpy_.ndarray:
     """Project linear depth to depth value in screen space
 
 ## Parameters
@@ -595,7 +595,7 @@ def depth_linear_to_buffer(depth: numpy_.ndarray, near: Union[float, numpy_.ndar
     utils3d.numpy.transforms.depth_linear_to_buffer
 
 @overload
-def depth_buffer_to_linear(depth_buffer: numpy_.ndarray, near: Union[float, numpy_.ndarray], far: Union[float, numpy_.ndarray]) -> numpy_.ndarray:
+def depth_buffer_to_linear(depth_buffer: numpy_.ndarray, near: float | numpy_.ndarray, far: float | numpy_.ndarray) -> numpy_.ndarray:
     """OpenGL depth buffer to linear depth
 
 ## Parameters
@@ -623,7 +623,7 @@ def unproject_cv(uv: numpy_.ndarray, depth: numpy_.ndarray, intrinsics: numpy_.n
     utils3d.numpy.transforms.unproject_cv
 
 @overload
-def unproject_gl(uv: numpy_.ndarray, depth: numpy_.ndarray, projection: numpy_.ndarray, view: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def unproject_gl(uv: numpy_.ndarray, depth: numpy_.ndarray, projection: numpy_.ndarray, view: numpy_.ndarray | None = None) -> numpy_.ndarray:
     """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
 ## Parameters
@@ -638,7 +638,7 @@ def unproject_gl(uv: numpy_.ndarray, depth: numpy_.ndarray, projection: numpy_.n
     utils3d.numpy.transforms.unproject_gl
 
 @overload
-def project_cv(points: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def project_cv(points: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: numpy_.ndarray | None = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Project 3D points to 2D following the OpenCV convention
 
 ## Parameters
@@ -669,7 +669,7 @@ def project_gl(points: numpy_.ndarray, projection: numpy_.ndarray, view: numpy_.
     utils3d.numpy.transforms.project_gl
 
 @overload
-def project(points: numpy_.ndarray, *, intrinsics: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def project(points: numpy_.ndarray, *, intrinsics: numpy_.ndarray | None = None, extrinsics: numpy_.ndarray | None = None, view: numpy_.ndarray | None = None, projection: numpy_.ndarray | None = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Calculate projection. 
 - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
 - For OpenGL convention, use `view` and `projection` matrices.
@@ -693,7 +693,7 @@ def project(points: numpy_.ndarray, *, intrinsics: Optional[numpy_.ndarray] = No
     utils3d.numpy.transforms.project
 
 @overload
-def unproject(uv: numpy_.ndarray, depth: Optional[numpy_.ndarray], *, intrinsics: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, view: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def unproject(uv: numpy_.ndarray, depth: numpy_.ndarray | None, *, intrinsics: numpy_.ndarray | None = None, extrinsics: numpy_.ndarray | None = None, projection: numpy_.ndarray | None = None, view: numpy_.ndarray | None = None) -> numpy_.ndarray:
     """Calculate inverse projection. 
 - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
 - For OpenGL convention, use `view` and `projection` matrices.
@@ -1067,7 +1067,7 @@ def kabsch(cov: numpy_.ndarray) -> numpy_.ndarray:
     utils3d.numpy.pose.kabsch
 
 @overload
-def umeyama(cov_yx: numpy_.ndarray, cov_xx: Optional[numpy_.ndarray] = None, cov_yy: Optional[numpy_.ndarray] = None, mean_x: Optional[numpy_.ndarray] = None, mean_y: Optional[numpy_.ndarray] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+def umeyama(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray | None = None, cov_yy: numpy_.ndarray | None = None, mean_x: numpy_.ndarray | None = None, mean_y: numpy_.ndarray | None = None) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Procrustes analysis to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
 Parameters
@@ -1098,16 +1098,18 @@ Returns
     utils3d.numpy.pose.umeyama
 
 @overload
-def affine_umeyama(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def affine_umeyama(cov_yx: numpy_.ndarray, cov_xx: numpy_.ndarray, cov_yy: numpy_.ndarray, mean_x: numpy_.ndarray, mean_y: numpy_.ndarray, lam: float = 0.01, *, allow_flip: bool = True) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
 The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
 satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
-an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+an orthogonal Procrustes problem in the whitened space, where the optimal map is an orthogonal `Q`
 (so `(A^{-1})` is automatically the consistent inverse):
 
     `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
 
+When `allow_flip=False`, `Q` is instead the closest proper rotation (Kabsch), so `det(A) > 0`.
+The covariance square roots above use the regularized covariances when `lam > 0`.
 No iteration and no penalty annealing.
 
 Parameters
@@ -1117,9 +1119,11 @@ Parameters
 - `cov_yy`: (..., 3, 3) covariance matrix of y points.
 - `mean_x`: (..., 3) mean of x points.
 - `mean_y`: (..., 3) mean of y points.
-- `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
-    toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt
-    for degenerate (e.g. near-planar) inputs.
+- `lam`: isotropy regularization weight. Shrinks the whitening toward isotropic and stabilizes
+    the inverse sqrt for near-planar inputs. Independent of `allow_flip`; with `lam=0`,
+    nondegenerate input covariances are required for a well-conditioned solve.
+- `allow_flip`: whether to allow reflections. If False, constrain `A` to preserve orientation
+    (`det(A) > 0`), while still allowing nonuniform scaling and shear.
 
 Returns
 ----
@@ -1128,7 +1132,7 @@ Returns
     utils3d.numpy.pose.affine_umeyama
 
 @overload
-def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
+def solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: numpy_.ndarray | None = None, sigma: numpy_.ndarray | None = None, *, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2`.
@@ -1140,11 +1144,12 @@ Parameters
 - `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
 - `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
     relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 
 Returns
 ----
@@ -1152,7 +1157,7 @@ Returns
     utils3d.numpy.pose.solve_pose
 
 @overload
-def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, numpy_.ndarray, NoneType] = None, ratio: Optional[float] = None, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, rng: Optional[numpy_.random._generator.Generator] = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
+def solve_pose_ransac(p: numpy_.ndarray, q: numpy_.ndarray, w: numpy_.ndarray | None = None, sigma: numpy_.ndarray | None = None, *, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', threshold: float | numpy_.ndarray | None = None, ratio: float | None = None, num_samples: int = 32, sample_size: int | None = None, lam: float = 0.01, rng: numpy_.random._generator.Generator | None = None) -> Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
     Hypotheses are sampled from minimal subsets, scored using either a known inlier threshold or a
@@ -1177,10 +1182,11 @@ Parameters
 - `sigma`: optional (..., N) per-point error scale. Residuals are compared as
     `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
     `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
 - `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point array,
     broadcastable to (..., N)). A correspondence is an inlier when
     `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
@@ -1188,8 +1194,8 @@ Parameters
     residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
     equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
 - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
-- `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
-- `lam`: regularization weight for 'affine' mode.
+- `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for both affine modes.
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 - `rng`: optional random generator for reproducible sampling.
 
 Returns
@@ -1199,7 +1205,7 @@ Returns
     utils3d.numpy.pose.solve_pose_ransac
 
 @overload
-def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: Optional[numpy_.ndarray] = None, sigma: Optional[numpy_.ndarray] = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
+def segment_solve_pose(p: numpy_.ndarray, q: numpy_.ndarray, w: numpy_.ndarray | None = None, sigma: numpy_.ndarray | None = None, *, offsets: numpy_.ndarray, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01) -> numpy_.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` within each segment (see `solve_pose`).
@@ -1211,11 +1217,12 @@ Parameters
 - `w`: (N,) weights for each point correspondence
 - `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
 - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 
 Returns
 ----
@@ -1223,7 +1230,7 @@ Returns
     utils3d.numpy.pose.segment_solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, noise_scales: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def solve_poses_sequential(trajectories: numpy_.ndarray, weights: numpy_.ndarray | None = None, noise_scales: numpy_.ndarray | None = None, *, accum: Tuple[numpy_.ndarray, ...] | None = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
@@ -1234,11 +1241,12 @@ Parameters
     `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed. 
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: rigidity regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 
 Returns
 ----
@@ -1282,7 +1290,7 @@ valid = np.concatenate(valid, axis=0)   # (T_all,), poses' validity over all fra
     utils3d.numpy.pose.solve_poses_sequential
 
 @overload
-def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: Optional[numpy_.ndarray] = None, offsets: numpy_.ndarray = None, noise_scales: Optional[numpy_.ndarray] = None, *, accum: Optional[Tuple[numpy_.ndarray, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
+def segment_solve_poses_sequential(trajectories: numpy_.ndarray, weights: numpy_.ndarray | None = None, offsets: numpy_.ndarray = None, noise_scales: numpy_.ndarray | None = None, *, accum: Tuple[numpy_.ndarray, ...] | None = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01) -> Tuple[numpy_.ndarray, Tuple[numpy_.ndarray, ...], Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]]:
     """Segment array mode for `solve_poses_sequential`.
 
 Parameters
@@ -1294,11 +1302,12 @@ Parameters
     `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed. 
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: rigidity regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 
 Returns
 ----
@@ -1448,7 +1457,7 @@ Returns
     utils3d.numpy.segment_ops.segment_chain
 
 @overload
-def group_as_segments(labels: numpy_.ndarray, data: Optional[numpy_.ndarray] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+def group_as_segments(labels: numpy_.ndarray, data: numpy_.ndarray | None = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Group as segments by labels
 
 Parameters
@@ -1488,7 +1497,7 @@ def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, met
     utils3d.numpy.mesh.triangulate_mesh
 
 @overload
-def compute_face_corner_angles(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def compute_face_corner_angles(vertices: numpy_.ndarray, faces: numpy_.ndarray | None = None) -> numpy_.ndarray:
     """Compute face corner angles of a mesh
 
 ## Parameters
@@ -1500,7 +1509,7 @@ def compute_face_corner_angles(vertices: numpy_.ndarray, faces: Optional[numpy_.
     utils3d.numpy.mesh.compute_face_corner_angles
 
 @overload
-def compute_face_corner_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None, normalize: bool = True) -> numpy_.ndarray:
+def compute_face_corner_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray | None = None, normalize: bool = True) -> numpy_.ndarray:
     """Compute the face corner normals of a mesh
 
 ## Parameters
@@ -1513,7 +1522,7 @@ def compute_face_corner_normals(vertices: numpy_.ndarray, faces: Optional[numpy_
     utils3d.numpy.mesh.compute_face_corner_normals
 
 @overload
-def compute_face_corner_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, faces_vertices: Optional[numpy_.ndarray] = None, faces_uv: Optional[numpy_.ndarray] = None, normalize: bool = True) -> numpy_.ndarray:
+def compute_face_corner_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, faces_vertices: numpy_.ndarray | None = None, faces_uv: numpy_.ndarray | None = None, normalize: bool = True) -> numpy_.ndarray:
     """Compute the face corner tangent (and bitangent) vectors of a mesh
 
 ## Parameters
@@ -1529,7 +1538,7 @@ def compute_face_corner_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, f
     utils3d.numpy.mesh.compute_face_corner_tangents
 
 @overload
-def compute_face_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarray] = None) -> numpy_.ndarray:
+def compute_face_normals(vertices: numpy_.ndarray, faces: numpy_.ndarray | None = None) -> numpy_.ndarray:
     """Compute face normals of a mesh
 
 ## Parameters
@@ -1541,7 +1550,7 @@ def compute_face_normals(vertices: numpy_.ndarray, faces: Optional[numpy_.ndarra
     utils3d.numpy.mesh.compute_face_normals
 
 @overload
-def compute_face_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, faces_vertices: Optional[numpy_.ndarray] = None, faces_uv: Optional[numpy_.ndarray] = None, normalize: bool = True) -> numpy_.ndarray:
+def compute_face_tangents(vertices: numpy_.ndarray, uv: numpy_.ndarray, faces_vertices: numpy_.ndarray | None = None, faces_uv: numpy_.ndarray | None = None, normalize: bool = True) -> numpy_.ndarray:
     """Compute the face corner tangent (and bitangent) vectors of a mesh
 
 ## Parameters
@@ -1624,7 +1633,7 @@ NOTE: All original vertices are kept, and new vertices are appended to the end o
     utils3d.numpy.mesh.subdivide_mesh
 
 @overload
-def mesh_edges(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array')], return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, ForwardRef('csr_array')], ForwardRef('csr_array'), ForwardRef('ndarray')]:
+def mesh_edges(faces: numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray] | ForwardRef('csr_array'), return_face2edge: bool = False, return_edge2face: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray | ForwardRef('csr_array'), ForwardRef('csr_array'), ForwardRef('ndarray')]:
     """Get undirected edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
@@ -1650,7 +1659,7 @@ If `return_face2edge`, `return_edge2face`, `return_opposite_edge`, or `return_co
     utils3d.numpy.mesh.mesh_edges
 
 @overload
-def mesh_half_edges(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array')], return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, Union[numpy_.ndarray, ForwardRef('csr_array')], ForwardRef('csr_array'), numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
+def mesh_half_edges(faces: numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray] | ForwardRef('csr_array'), return_face2edge: bool = False, return_edge2face: bool = False, return_twin: bool = False, return_next: bool = False, return_prev: bool = False, return_counts: bool = False) -> Tuple[numpy_.ndarray, numpy_.ndarray | ForwardRef('csr_array'), ForwardRef('csr_array'), numpy_.ndarray, numpy_.ndarray, numpy_.ndarray, numpy_.ndarray]:
     """Get half edges of a mesh. Optionally return additional mappings.
 
 ## Parameters
@@ -1685,7 +1694,7 @@ NOTE: If the mesh is not manifold, `twin`, `next`, and `prev` can point to arbit
     utils3d.numpy.mesh.mesh_half_edges
 
 @overload
-def mesh_connected_components(faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array'), NoneType] = None, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def mesh_connected_components(faces: numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray] | ForwardRef('csr_array') | None = None, num_vertices: int | None = None) -> numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Compute connected faces of a mesh.
 
 ## Parameters
@@ -1707,7 +1716,7 @@ If `num_vertices` is None, return:
     utils3d.numpy.mesh.mesh_connected_components
 
 @overload
-def graph_connected_components(edges: numpy_.ndarray, num_vertices: Optional[int] = None) -> Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]:
+def graph_connected_components(edges: numpy_.ndarray, num_vertices: int | None = None) -> numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray]:
     """Compute connected components of an undirected graph.
 Using scipy.sparse.csgraph.connected_components as backend.
 
@@ -1725,7 +1734,7 @@ If `num_vertices` is None, return:
     utils3d.numpy.mesh.graph_connected_components
 
 @overload
-def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray], ForwardRef('csr_array'), NoneType] = None, edges: Optional[numpy_.ndarray] = None, num_vertices: Optional[int] = None, self_loop: bool = False) -> 'csr_array':
+def mesh_adjacency_graph(adjacency: Literal['vertex2edge', 'vertex2face', 'edge2vertex', 'edge2face', 'face2edge', 'face2vertex', 'vertex2edge2vertex', 'vertex2face2vertex', 'edge2vertex2edge', 'edge2face2edge', 'face2edge2face', 'face2vertex2face'], faces: numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray] | ForwardRef('csr_array') | None = None, edges: numpy_.ndarray | None = None, num_vertices: int | None = None, self_loop: bool = False) -> 'csr_array':
     """Get adjacency graph of a mesh.
 
 ## Parameters
@@ -1801,7 +1810,7 @@ def merge_meshes(meshes: List[Tuple[numpy_.ndarray, ...]]) -> Tuple[numpy_.ndarr
     utils3d.numpy.mesh.merge_meshes
 
 @overload
-def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def uv_map(*size: int | Tuple[int, int], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get image UV space coordinate map, where (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
 This is commonly used as normalized image coordinates in texture mapping (when image is not flipped vertically).
 
@@ -1826,7 +1835,7 @@ This is commonly used as normalized image coordinates in texture mapping (when i
     utils3d.numpy.maps.uv_map
 
 @overload
-def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, convention: Literal['integer-center', 'integer-corner'] = 'integer-center', dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def pixel_coord_map(*size: int | Tuple[int, int], top: int = 0, left: int = 0, convention: Literal['integer-center', 'integer-corner'] = 'integer-center', dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get image pixel coordinates map, where (0, 0) is the top-left corner of the top-left pixel, and (width, height) is the bottom-right corner of the bottom-right pixel.
 
 ## Parameters
@@ -1857,7 +1866,7 @@ def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int 
     utils3d.numpy.maps.pixel_coord_map
 
 @overload
-def screen_coord_map(*size: Union[int, Tuple[int, int]], top: float = 1.0, left: float = 0.0, bottom: float = 0.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
+def screen_coord_map(*size: int | Tuple[int, int], top: float = 1.0, left: float = 0.0, bottom: float = 0.0, right: float = 1.0, dtype: numpy_.dtype = numpy_.float32) -> numpy_.ndarray:
     """Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
 This is commonly used in graphics APIs like OpenGL.
 
@@ -1913,7 +1922,7 @@ Returns
     utils3d.numpy.maps.build_grid_mesh
 
 @overload
-def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_map(*maps: numpy_.ndarray, mask: numpy_.ndarray | None = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
 ## Parameters
@@ -1928,7 +1937,7 @@ def build_mesh_from_map(*maps: numpy_.ndarray, mask: Optional[numpy_.ndarray] = 
     utils3d.numpy.maps.build_mesh_from_map
 
 @overload
-def build_mesh_from_depth_map(depth: numpy_.ndarray, *maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: Optional[numpy_.ndarray] = None, atol: Optional[float] = None, rtol: Optional[float] = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
+def build_mesh_from_depth_map(depth: numpy_.ndarray, *maps: numpy_.ndarray, intrinsics: numpy_.ndarray, extrinsics: numpy_.ndarray | None = None, atol: float | None = None, rtol: float | None = None, domain: Literal['vertex', 'face'] = 'vertex', tri: bool = False) -> Tuple[numpy_.ndarray, ...]:
     """Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
 ## Parameters
@@ -1949,7 +1958,7 @@ def build_mesh_from_depth_map(depth: numpy_.ndarray, *maps: numpy_.ndarray, intr
     utils3d.numpy.maps.build_mesh_from_depth_map
 
 @overload
-def depth_map_edge(depth: numpy_.ndarray, atol: Optional[float] = None, rtol: Optional[float] = None, ltol: Optional[float] = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
+def depth_map_edge(depth: numpy_.ndarray, atol: float | None = None, rtol: float | None = None, ltol: float | None = None, kernel_size: int = 3, mask: numpy_.ndarray = None) -> numpy_.ndarray:
     """Compute the edge mask from depth map. The edge is defined as the pixels whose neighbors have large difference in depth.
 
 ## Parameters
@@ -2027,7 +2036,7 @@ def depth_map_to_normal_map(depth: numpy_.ndarray, intrinsics: numpy_.ndarray, m
     utils3d.numpy.maps.depth_map_to_normal_map
 
 @overload
-def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: numpy_.ndarray, color_b: numpy_.ndarray) -> numpy_.ndarray:
+def chessboard(*size: int | Tuple[int, int], grid_size: int, color_a: numpy_.ndarray, color_b: numpy_.ndarray) -> numpy_.ndarray:
     """Get a chessboard image
 
 ## Parameters
@@ -2076,7 +2085,7 @@ def masked_area_resize(*image: numpy_.ndarray, mask: numpy_.ndarray, size: Tuple
     utils3d.numpy.maps.masked_area_resize
 
 @overload
-def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near: Optional[float] = None, far: Optional[float] = None, cmap: str = 'Spectral') -> numpy_.ndarray:
+def colorize_depth_map(depth: numpy_.ndarray, mask: numpy_.ndarray = None, near: float | None = None, far: float | None = None, cmap: str = 'Spectral') -> numpy_.ndarray:
     """Colorize depth map for visualization.
 
 ## Parameters
@@ -2106,7 +2115,7 @@ def colorize_normal_map(normal: numpy_.ndarray, mask: numpy_.ndarray = None, fli
     utils3d.numpy.maps.colorize_normal_map
 
 @overload
-def colorize_segmentation_map(segmentation: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, vdim: int = 0) -> numpy_.ndarray:
+def colorize_segmentation_map(segmentation: numpy_.ndarray, mask: numpy_.ndarray | None = None, vdim: int = 0) -> numpy_.ndarray:
     """Colorize segmentation map for visualization. The same value will be assigned with the same color.
 
 Parameters
@@ -2121,7 +2130,7 @@ Returns
     utils3d.numpy.maps.colorize_segmentation_map
 
 @overload
-def colorize_probability_map(probability: numpy_.ndarray, mask: Optional[numpy_.ndarray] = None, cmap: str = 'viridis', alpha: float = 1.0, beta: float = 1.0):
+def colorize_probability_map(probability: numpy_.ndarray, mask: numpy_.ndarray | None = None, cmap: str = 'viridis', alpha: float = 1.0, beta: float = 1.0):
     """Colorize probability map for visualization.
 
 The remapping is:
@@ -2168,7 +2177,7 @@ Returns
     utils3d.numpy.maps.flood_fill
 
 @overload
-def perlin_noise(x: numpy_.ndarray, seed: Optional[int] = None) -> numpy_.ndarray:
+def perlin_noise(x: numpy_.ndarray, seed: int | None = None) -> numpy_.ndarray:
     """Generate Perlin noise for the given coordinates.
 
 Parameters
@@ -2183,7 +2192,7 @@ Returns
     utils3d.numpy.maps.perlin_noise
 
 @overload
-def perlin_noise_map(size: Tuple[int, ...], frequency: Union[float, numpy_.ndarray], seed: Optional[int] = None, dtype: Optional[numpy_.dtype] = numpy_.float32) -> numpy_.ndarray:
+def perlin_noise_map(size: Tuple[int, ...], frequency: float | numpy_.ndarray, seed: int | None = None, dtype: numpy_.dtype | None = numpy_.float32) -> numpy_.ndarray:
     """Generate Perlin noise map.
 
 Parameters
@@ -2199,7 +2208,7 @@ Returns
     utils3d.numpy.maps.perlin_noise_map
 
 @overload
-def fractal_perlin_noise_map(size: Tuple[int, ...], base_frequency: Union[float, numpy_.ndarray], octaves: int = 4, lacunarity: float = 2.0, gain: float = 0.5, seed: Optional[int] = None, dtype: Optional[numpy_.dtype] = numpy_.float32) -> numpy_.ndarray:
+def fractal_perlin_noise_map(size: Tuple[int, ...], base_frequency: float | numpy_.ndarray, octaves: int = 4, lacunarity: float = 2.0, gain: float = 0.5, seed: int | None = None, dtype: numpy_.dtype | None = numpy_.float32) -> numpy_.ndarray:
     """Generate fractal Perlin noise map. ![fractal_perlin_base_frequeny2_octaves7_gain0.7.png](doc/fractal_perlin_base_frequeny2_octaves7_gain0.7.png)
 
 Parameters
@@ -2224,7 +2233,7 @@ def RastContext(*args, **kwargs):
     utils3d.numpy.rasterization.RastContext
 
 @overload
-def rasterize_triangles(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray] = None, attributes_domain: Optional[Literal['vertex', 'face']] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_triangles(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray | None = None, attributes_domain: Literal['vertex', 'face'] | None = 'vertex', faces: numpy_.ndarray | None = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background: Dict[str, numpy_.ndarray] | None = None, ctx: utils3d.numpy.rasterization.RastContext | None = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize triangles.
 
 Parameters
@@ -2258,7 +2267,7 @@ if return_interpolation is True
     utils3d.numpy.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
+def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: numpy_.ndarray | None = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, ctx: utils3d.numpy.rasterization.RastContext | None = None) -> Iterator[Iterator[Dict[str, numpy_.ndarray]]]:
     """Rasterize triangles with depth peeling.
 
 Parameters
@@ -2313,7 +2322,7 @@ for i, layer_output in enumerate(rasterize_triangles_peeling(
     utils3d.numpy.rasterization.rasterize_triangles_peeling
 
 @overload
-def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: Optional[numpy_.ndarray], attributes_domain: Literal['vertex', 'line'] = 'vertex', lines: numpy_.ndarray | None = None, view: Optional[numpy_.ndarray] = None, projection: Optional[numpy_.ndarray] = None, extrinsics: Optional[numpy_.ndarray] = None, intrinsics: Optional[numpy_.ndarray] = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Tuple[numpy_.ndarray, ...]:
+def rasterize_lines(size: Tuple[int, int], *, vertices: numpy_.ndarray, attributes: numpy_.ndarray | None, attributes_domain: Literal['vertex', 'line'] = 'vertex', lines: numpy_.ndarray | None = None, view: numpy_.ndarray | None = None, projection: numpy_.ndarray | None = None, extrinsics: numpy_.ndarray | None = None, intrinsics: numpy_.ndarray | None = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background: Dict[str, numpy_.ndarray] | None = None, ctx: utils3d.numpy.rasterization.RastContext | None = None) -> Tuple[numpy_.ndarray, ...]:
     """Rasterize lines.
 
 Parameters
@@ -2348,7 +2357,7 @@ if return_interpolation is True
     utils3d.numpy.rasterization.rasterize_lines
 
 @overload
-def rasterize_point_cloud(size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: Union[float, numpy_.ndarray] = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: Optional[numpy_.ndarray] = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, return_depth: bool = False, return_point_id: bool = False, background: Optional[Dict[str, numpy_.ndarray]] = None, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> Dict[str, numpy_.ndarray]:
+def rasterize_point_cloud(size: Tuple[int, int], *, points: numpy_.ndarray, point_sizes: float | numpy_.ndarray = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: numpy_.ndarray | None = None, view: numpy_.ndarray = None, projection: numpy_.ndarray = None, extrinsics: numpy_.ndarray = None, intrinsics: numpy_.ndarray = None, near: float = 0.01, far: float = inf, return_depth: bool = False, return_point_id: bool = False, background: Dict[str, numpy_.ndarray] | None = None, ctx: utils3d.numpy.rasterization.RastContext | None = None) -> Dict[str, numpy_.ndarray]:
     """Rasterize point cloud.
 
 Parameters
@@ -2383,17 +2392,17 @@ if return_point_id is True
     utils3d.numpy.rasterization.rasterize_point_cloud
 
 @overload
-def sample_texture(uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: Union[int, Tuple[int, int]] = 0, repeat: Union[bool, Tuple[bool, bool]] = False, anisotropic: float = 1.0, ctx: Optional[utils3d.numpy.rasterization.RastContext] = None) -> numpy_.ndarray:
+def sample_texture(uv_map: numpy_.ndarray, texture_map: numpy_.ndarray, interpolation: Literal['linear', 'nearest'] = 'linear', mipmap_level: int | Tuple[int, int] = 0, repeat: bool | Tuple[bool, bool] = False, anisotropic: float = 1.0, ctx: utils3d.numpy.rasterization.RastContext | None = None) -> numpy_.ndarray:
     """Sample from a texture map with a UV map."""
     utils3d.numpy.rasterization.sample_texture
 
 @overload
-def test_rasterization(ctx: Optional[utils3d.numpy.rasterization.RastContext] = None):
+def test_rasterization(ctx: utils3d.numpy.rasterization.RastContext | None = None):
     """Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file."""
     utils3d.numpy.rasterization.test_rasterization
 
 @overload
-def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[numpy_.ndarray, List[int], List[str]]:
+def read_extrinsics_from_colmap(file: str | pathlib.Path) -> numpy_.ndarray | List[int] | List[str]:
     """Read extrinsics from colmap `images.txt` file. 
 ## Parameters
     file: Path to `images.txt` file.
@@ -2404,7 +2413,7 @@ def read_extrinsics_from_colmap(file: Union[str, pathlib._local.Path]) -> Union[
     utils3d.numpy.io.colmap.read_extrinsics_from_colmap
 
 @overload
-def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
+def read_intrinsics_from_colmap(file: str | pathlib.Path, normalize: bool = False) -> Tuple[List[int], numpy_.ndarray, numpy_.ndarray]:
     """Read intrinsics from colmap `cameras.txt` file.
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2416,7 +2425,7 @@ def read_intrinsics_from_colmap(file: Union[str, pathlib._local.Path], normalize
     utils3d.numpy.io.colmap.read_intrinsics_from_colmap
 
 @overload
-def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics: numpy_.ndarray, image_names: Union[str, List[str]] = 'image_{i:04d}.png', camera_ids: List[int] = None):
+def write_extrinsics_as_colmap(file: str | pathlib.Path, extrinsics: numpy_.ndarray, image_names: str | List[str] = 'image_{i:04d}.png', camera_ids: List[int] = None):
     """Write extrinsics to colmap `images.txt` file.
 ## Parameters
     file: Path to `images.txt` file.
@@ -2428,7 +2437,7 @@ def write_extrinsics_as_colmap(file: Union[str, pathlib._local.Path], extrinsics
     utils3d.numpy.io.colmap.write_extrinsics_as_colmap
 
 @overload
-def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
+def write_intrinsics_as_colmap(file: str | pathlib.Path, intrinsics: numpy_.ndarray, width: int, height: int, normalized: bool = False):
     """Write intrinsics to colmap `cameras.txt` file. Currently only support PINHOLE model (no distortion)
 ## Parameters
     file: Path to `cameras.txt` file.
@@ -2439,7 +2448,7 @@ def write_intrinsics_as_colmap(file: Union[str, pathlib._local.Path], intrinsics
     utils3d.numpy.io.colmap.write_intrinsics_as_colmap
 
 @overload
-def read_obj(file: Union[str, pathlib._local.Path, _io.TextIOWrapper], encoding: Optional[str] = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
+def read_obj(file: str | pathlib.Path | _io.TextIOWrapper, encoding: str | None = None, ignore_unknown: bool = False) -> utils3d.numpy.io.obj.WavefrontOBJDict:
     """Read wavefront .obj file.
 
 Parameters
@@ -2487,11 +2496,11 @@ Material library:
     utils3d.numpy.io.obj.read_obj
 
 @overload
-def write_obj(file: Union[str, pathlib._local.Path, os.PathLike], obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: Optional[str] = None):
+def write_obj(file: str | pathlib.Path | os.PathLike, obj: utils3d.numpy.io.obj.WavefrontOBJDict, encoding: str | None = None):
     utils3d.numpy.io.obj.write_obj
 
 @overload
-def read_ply(file: Union[str, os.PathLike, IO]) -> Dict[str, Dict[str, Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]]]:
+def read_ply(file: str | os.PathLike | IO) -> Dict[str, Dict[str, numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray]]]:
     """Read a PLY file. Supports arbitrary properties, polygonal meshes. Very fast.
 
 Parameters
@@ -2530,7 +2539,7 @@ Tested on a few binary PLY files:
     utils3d.numpy.io.ply.read_ply
 
 @overload
-def write_ply(file: Union[str, os.PathLike, IO], data: Dict[str, Dict[str, Union[numpy_.ndarray, Tuple[numpy_.ndarray, numpy_.ndarray]]]], format_: Literal['ascii', 'binary_little_endian', 'binary_big_endian'] = 'binary_little_endian') -> None:
+def write_ply(file: str | os.PathLike | IO, data: Dict[str, Dict[str, numpy_.ndarray | Tuple[numpy_.ndarray, numpy_.ndarray]]], format_: Literal['ascii', 'binary_little_endian', 'binary_big_endian'] = 'binary_little_endian') -> None:
     """Write a PLY file. Supports arbitrary properties, polygonal meshes.
 
 Parameters
@@ -2565,7 +2574,7 @@ Performance
     utils3d.numpy.io.ply.write_ply
 
 @overload
-def sliding_window(x: torch_.Tensor, window_size: Union[int, Tuple[int, ...]], stride: Union[int, Tuple[int, ...], NoneType] = None, dilation: Union[int, Tuple[int, ...], NoneType] = None, pad_size: Union[int, Tuple[int, int], Tuple[Tuple[int, int]], NoneType] = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
+def sliding_window(x: torch_.Tensor, window_size: int | Tuple[int, ...], stride: int | Tuple[int, ...] | None = None, dilation: int | Tuple[int, ...] | None = None, pad_size: int | Tuple[int, int] | Tuple[Tuple[int, int]] | None = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, dim: Tuple[int, ...] = None) -> torch_.Tensor:
     """Get a sliding window of the input array.
 This function is a wrapper of `torch.nn.functional.unfold` with additional support for padding and stride.
 
@@ -2596,13 +2605,13 @@ This function is a wrapper of `torch.nn.functional.unfold` with additional suppo
     utils3d.torch.utils.sliding_window
 
 @overload
-def masked_min(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor]]:
+def masked_min(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, keepdim: bool = False) -> torch_.Tensor | Tuple[torch_.Tensor, torch_.Tensor]:
     """Similar to torch.min, but with mask
     """
     utils3d.torch.utils.masked_min
 
 @overload
-def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, keepdim: bool = False) -> Union[torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor]]:
+def masked_max(input: torch_.Tensor, mask: torch_.BoolTensor, dim: int = None, keepdim: bool = False) -> torch_.Tensor | Tuple[torch_.Tensor, torch_.Tensor]:
     """Similar to torch.max, but with mask
     """
     utils3d.torch.utils.masked_max
@@ -2627,7 +2636,7 @@ Notes
     utils3d.torch.utils.lookup
 
 @overload
-def lookup_get(key: torch_.Tensor, value: torch_.Tensor, get_key: torch_.Tensor, default_value: Union[numbers.Number, torch_.Tensor] = 0) -> torch_.Tensor:
+def lookup_get(key: torch_.Tensor, value: torch_.Tensor, get_key: torch_.Tensor, default_value: numbers.Number | torch_.Tensor = 0) -> torch_.Tensor:
     """Dictionary-like get for arrays
 
 ## Parameters
@@ -2677,7 +2686,7 @@ def csr_eliminate_zeros(input: torch_.Tensor):
     utils3d.torch.utils.csr_eliminate_zeros
 
 @overload
-def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
+def group(labels: torch_.Tensor, data: torch_.Tensor | None = None) -> List[Tuple[torch_.Tensor, torch_.Tensor]]:
     """Split the data into groups based on the provided labels.
 
 ## Parameters
@@ -2693,7 +2702,7 @@ def group(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None) -> List[T
     utils3d.torch.utils.group
 
 @overload
-def lexsort(keys: Union[Sequence[torch_.Tensor], torch_.Tensor], dim: int = -1) -> torch_.Tensor:
+def lexsort(keys: Sequence[torch_.Tensor] | torch_.Tensor, dim: int = -1) -> torch_.Tensor:
     """Perform lexicographical sort on multiple keys. Like `numpy.lexsort`. 
 
 Given multiple sorting keys, lexsort returns an array of integer indices that describes the sort order by multiple keys. 
@@ -2714,7 +2723,7 @@ Sorting is always stable."""
     utils3d.torch.utils.lexsort
 
 @overload
-def index_reduce(input: torch_.Tensor, indices: Union[Tuple[torch_.Tensor], List[torch_.Tensor]], values: torch_.Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> torch_.Tensor:
+def index_reduce(input: torch_.Tensor, indices: Tuple[torch_.Tensor] | List[torch_.Tensor], values: torch_.Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> torch_.Tensor:
     """Put values into the input tensor at the specified indices (like `index_put`), with reduction support.
 Behaves like `numpy.ufunc.at`.
 
@@ -2731,7 +2740,7 @@ Returns
     utils3d.torch.utils.index_reduce
 
 @overload
-def index_reduce_(input: torch_.Tensor, indices: Union[Tuple[torch_.Tensor], List[torch_.Tensor]], values: torch_.Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> torch_.Tensor:
+def index_reduce_(input: torch_.Tensor, indices: Tuple[torch_.Tensor] | List[torch_.Tensor], values: torch_.Tensor, reduce: Literal['amin', 'amax', 'sum', 'prod', 'mean'], include_self: bool = True) -> torch_.Tensor:
     """In-place put values into the input tensor at the specified indices (like `index_put_`), with reduction support.
 Behaves like `numpy.ufunc.at`.
 
@@ -2818,7 +2827,7 @@ def matrix_trace(input: torch_.Tensor, dim1: int = -2, dim2: int = -1) -> torch_
     utils3d.torch.utils.matrix_trace
 
 @overload
-def vector_outer(x: torch_.Tensor, y: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+def vector_outer(x: torch_.Tensor, y: torch_.Tensor | None = None) -> torch_.Tensor:
     """Compute the outer product of two arrays.
 
 Parameters
@@ -2832,7 +2841,7 @@ Returns
     utils3d.torch.utils.vector_outer
 
 @overload
-def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None, near: Union[float, torch_.Tensor, NoneType], far: Union[float, torch_.Tensor, NoneType]) -> torch_.Tensor:
+def perspective_from_fov(*, fov_x: float | torch_.Tensor | None = None, fov_y: float | torch_.Tensor | None = None, fov_min: float | torch_.Tensor | None = None, fov_max: float | torch_.Tensor | None = None, aspect_ratio: float | torch_.Tensor | None = None, near: float | torch_.Tensor | None, far: float | torch_.Tensor | None) -> torch_.Tensor:
     """Get OpenGL perspective matrix from field of view 
 
 ## Returns
@@ -2840,7 +2849,7 @@ def perspective_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None,
     utils3d.torch.transforms.perspective_from_fov
 
 @overload
-def perspective_from_window(left: Union[float, torch_.Tensor], right: Union[float, torch_.Tensor], bottom: Union[float, torch_.Tensor], top: Union[float, torch_.Tensor], near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
+def perspective_from_window(left: float | torch_.Tensor, right: float | torch_.Tensor, bottom: float | torch_.Tensor, top: float | torch_.Tensor, near: float | torch_.Tensor, far: float | torch_.Tensor) -> torch_.Tensor:
     """Get OpenGL perspective matrix from the window of z=-1 projection plane
 
 ## Returns
@@ -2848,7 +2857,7 @@ def perspective_from_window(left: Union[float, torch_.Tensor], right: Union[floa
     utils3d.torch.transforms.perspective_from_window
 
 @overload
-def intrinsics_from_fov(*, fov_x: Union[float, torch_.Tensor, NoneType] = None, fov_y: Union[float, torch_.Tensor, NoneType] = None, fov_max: Union[float, torch_.Tensor, NoneType] = None, fov_min: Union[float, torch_.Tensor, NoneType] = None, cx: Union[float, torch_.Tensor] = 0.5, cy: Union[float, torch_.Tensor] = 0.5, aspect_ratio: Union[float, torch_.Tensor, NoneType] = None) -> torch_.Tensor:
+def intrinsics_from_fov(*, fov_x: float | torch_.Tensor | None = None, fov_y: float | torch_.Tensor | None = None, fov_max: float | torch_.Tensor | None = None, fov_min: float | torch_.Tensor | None = None, cx: float | torch_.Tensor = 0.5, cy: float | torch_.Tensor = 0.5, aspect_ratio: float | torch_.Tensor | None = None) -> torch_.Tensor:
     """Get normalized OpenCV intrinsics matrix from given field of view.
 You can provide either fov_x, fov_y, fov_max or fov_min and aspect_ratio
 
@@ -2868,7 +2877,7 @@ Returns
     utils3d.torch.transforms.intrinsics_from_fov
 
 @overload
-def intrinsics_from_focal_center(fx: Union[float, torch_.Tensor], fy: Union[float, torch_.Tensor], cx: Union[float, torch_.Tensor], cy: Union[float, torch_.Tensor]) -> torch_.Tensor:
+def intrinsics_from_focal_center(fx: float | torch_.Tensor, fy: float | torch_.Tensor, cx: float | torch_.Tensor, cy: float | torch_.Tensor) -> torch_.Tensor:
     """Get OpenCV intrinsics matrix
 
 ## Parameters
@@ -2932,7 +2941,7 @@ def perspective_to_intrinsics(perspective: torch_.Tensor) -> torch_.Tensor:
     utils3d.torch.transforms.perspective_to_intrinsics
 
 @overload
-def intrinsics_to_perspective(intrinsics: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
+def intrinsics_to_perspective(intrinsics: torch_.Tensor, near: float | torch_.Tensor, far: float | torch_.Tensor) -> torch_.Tensor:
     """OpenCV intrinsics to OpenGL perspective matrix
 NOTE: not work for tile-shifting intrinsics currently
 
@@ -2967,7 +2976,7 @@ def view_to_extrinsics(view: torch_.Tensor) -> torch_.Tensor:
     utils3d.torch.transforms.view_to_extrinsics
 
 @overload
-def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
+def normalize_intrinsics(intrinsics: torch_.Tensor, size: Tuple[numbers.Number, numbers.Number] | torch_.Tensor, pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """Normalize camera intrinsics to uv space
 
 ## Parameters
@@ -2982,7 +2991,7 @@ def normalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Nu
     utils3d.torch.transforms.normalize_intrinsics
 
 @overload
-def denormalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> torch_.Tensor:
+def denormalize_intrinsics(intrinsics: torch_.Tensor, size: Tuple[numbers.Number, numbers.Number] | torch_.Tensor, pixel_convention: Literal['integer-center', 'integer-corner'] = 'integer-center') -> torch_.Tensor:
     """Denormalize camera intrinsics(s) from uv space to pixel space
 
 ## Parameters
@@ -2997,7 +3006,7 @@ def denormalize_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.
     utils3d.torch.transforms.denormalize_intrinsics
 
 @overload
-def crop_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], cropped_top: Union[numbers.Number, torch_.Tensor], cropped_left: Union[numbers.Number, torch_.Tensor], cropped_height: Union[numbers.Number, torch_.Tensor], cropped_width: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+def crop_intrinsics(intrinsics: torch_.Tensor, size: Tuple[numbers.Number, numbers.Number] | torch_.Tensor, cropped_top: numbers.Number | torch_.Tensor, cropped_left: numbers.Number | torch_.Tensor, cropped_height: numbers.Number | torch_.Tensor, cropped_width: numbers.Number | torch_.Tensor) -> torch_.Tensor:
     """Evaluate the new intrinsics after cropping the image
 
 ## Parameters
@@ -3014,7 +3023,7 @@ def crop_intrinsics(intrinsics: torch_.Tensor, size: Union[Tuple[numbers.Number,
     utils3d.torch.transforms.crop_intrinsics
 
 @overload
-def pixel_to_uv(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
+def pixel_to_uv(pixel: torch_.Tensor, size: Tuple[numbers.Number, numbers.Number] | torch_.Tensor, pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """## Parameters
 - `pixel` (Tensor): `(..., 2)` pixel coordinrates 
 - `size` (tuple | Tensor): A tuple `(height, width)` of the image size,
@@ -3027,7 +3036,7 @@ def pixel_to_uv(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.
     utils3d.torch.transforms.pixel_to_uv
 
 @overload
-def pixel_to_ndc(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
+def pixel_to_ndc(pixel: torch_.Tensor, size: Tuple[numbers.Number, numbers.Number] | torch_.Tensor, pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """Convert pixel coordinates to NDC (Normalized Device Coordinates).
 
 ## Parameters
@@ -3042,7 +3051,7 @@ def pixel_to_ndc(pixel: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers
     utils3d.torch.transforms.pixel_to_ndc
 
 @overload
-def uv_to_pixel(uv: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Number], torch_.Tensor], pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
+def uv_to_pixel(uv: torch_.Tensor, size: Tuple[numbers.Number, numbers.Number] | torch_.Tensor, pixel_convention: Literal['integer-corner', 'integer-center'] = 'integer-center') -> torch_.Tensor:
     """Convert UV space coordinates to pixel space coordinates.
 
 ## Parameters
@@ -3057,7 +3066,7 @@ def uv_to_pixel(uv: torch_.Tensor, size: Union[Tuple[numbers.Number, numbers.Num
     utils3d.torch.transforms.uv_to_pixel
 
 @overload
-def depth_linear_to_buffer(depth: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
+def depth_linear_to_buffer(depth: torch_.Tensor, near: float | torch_.Tensor, far: float | torch_.Tensor) -> torch_.Tensor:
     """Project linear depth to depth value in screen space
 
 ## Parameters
@@ -3070,7 +3079,7 @@ def depth_linear_to_buffer(depth: torch_.Tensor, near: Union[float, torch_.Tenso
     utils3d.torch.transforms.depth_linear_to_buffer
 
 @overload
-def depth_buffer_to_linear(depth: torch_.Tensor, near: Union[float, torch_.Tensor], far: Union[float, torch_.Tensor]) -> torch_.Tensor:
+def depth_buffer_to_linear(depth: torch_.Tensor, near: float | torch_.Tensor, far: float | torch_.Tensor) -> torch_.Tensor:
     """Linearize depth value to linear depth
 
 ## Parameters
@@ -3099,7 +3108,7 @@ def project_gl(points: torch_.Tensor, projection: torch_.Tensor, view: torch_.Te
     utils3d.torch.transforms.project_gl
 
 @overload
-def project_cv(points: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def project_cv(points: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: torch_.Tensor | None = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Project 3D points to 2D following the OpenCV convention
 
 ## Parameters
@@ -3114,7 +3123,7 @@ def project_cv(points: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: Opt
     utils3d.torch.transforms.project_cv
 
 @overload
-def unproject_gl(uv: torch_.Tensor, depth: torch_.Tensor, projection: torch_.Tensor, view: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+def unproject_gl(uv: torch_.Tensor, depth: torch_.Tensor, projection: torch_.Tensor, view: torch_.Tensor | None = None) -> torch_.Tensor:
     """Unproject screen space coordinates to 3D view space following the OpenGL convention (except for row major matrices)
 
 ## Parameters
@@ -3144,7 +3153,7 @@ def unproject_cv(uv: torch_.Tensor, depth: torch_.Tensor, intrinsics: torch_.Ten
     utils3d.torch.transforms.unproject_cv
 
 @overload
-def project(points: torch_.Tensor, *, intrinsics: Optional[torch_.Tensor] = None, extrinsics: Optional[torch_.Tensor] = None, view: Optional[torch_.Tensor] = None, projection: Optional[torch_.Tensor] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def project(points: torch_.Tensor, *, intrinsics: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Calculate projection. 
 - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
 - For OpenGL convention, use `view` and `projection` matrices.
@@ -3168,7 +3177,7 @@ def project(points: torch_.Tensor, *, intrinsics: Optional[torch_.Tensor] = None
     utils3d.torch.transforms.project
 
 @overload
-def unproject(uv: torch_.Tensor, depth: Optional[torch_.Tensor], *, intrinsics: Optional[torch_.Tensor] = None, extrinsics: Optional[torch_.Tensor] = None, projection: Optional[torch_.Tensor] = None, view: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+def unproject(uv: torch_.Tensor, depth: torch_.Tensor | None, *, intrinsics: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, view: torch_.Tensor | None = None) -> torch_.Tensor:
     """Calculate inverse projection. 
 - For OpenCV convention, use `intrinsics` and `extrinsics` matrices. 
 - For OpenGL convention, use `view` and `projection` matrices.
@@ -3395,7 +3404,7 @@ def slerp(v1: torch_.Tensor, v2: torch_.Tensor, t: torch_.Tensor, eps: float = 1
     utils3d.torch.transforms.slerp
 
 @overload
-def slerp_rotation_matrix(R1: torch_.Tensor, R2: torch_.Tensor, t: Union[numbers.Number, torch_.Tensor]) -> torch_.Tensor:
+def slerp_rotation_matrix(R1: torch_.Tensor, R2: torch_.Tensor, t: numbers.Number | torch_.Tensor) -> torch_.Tensor:
     """Spherical linear interpolation between two 3D rotation matrices
 
 ## Parameters
@@ -3434,7 +3443,7 @@ def extrinsics_to_essential(extrinsics: torch_.Tensor):
     utils3d.torch.transforms.extrinsics_to_essential
 
 @overload
-def rotation_matrix_2d(theta: Union[float, torch_.Tensor]):
+def rotation_matrix_2d(theta: float | torch_.Tensor):
     """2x2 matrix for 2D rotation
 
 ## Parameters
@@ -3445,7 +3454,7 @@ def rotation_matrix_2d(theta: Union[float, torch_.Tensor]):
     utils3d.torch.transforms.rotation_matrix_2d
 
 @overload
-def rotate_2d(theta: Union[float, torch_.Tensor], center: torch_.Tensor = None):
+def rotate_2d(theta: float | torch_.Tensor, center: torch_.Tensor = None):
     """3x3 matrix for 2D rotation around a center
 ```
    [[Rxx, Rxy, tx],
@@ -3476,7 +3485,7 @@ def translate_2d(translation: torch_.Tensor):
     utils3d.torch.transforms.translate_2d
 
 @overload
-def scale_2d(scale: Union[float, torch_.Tensor], center: torch_.Tensor = None):
+def scale_2d(scale: float | torch_.Tensor, center: torch_.Tensor = None):
     """Scale matrix for 2D scaling
 ```
    [[s, 0, tx],
@@ -3549,7 +3558,7 @@ def kabsch(cov: torch_.Tensor, eps: float = 1e-12):
     utils3d.torch.pose.kabsch
 
 @overload
-def umeyama(cov_yx: torch_.Tensor, cov_xx: Optional[torch_.Tensor] = None, cov_yy: Optional[torch_.Tensor] = None, mean_x: Optional[torch_.Tensor] = None, mean_y: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+def umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor | None = None, cov_yy: torch_.Tensor | None = None, mean_x: torch_.Tensor | None = None, mean_y: torch_.Tensor | None = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Umeyama method to solve for scale `s`, rotation `R` and translation `t` such that `y_i ~= s R x_i + t`.
 
 Parameters
@@ -3580,16 +3589,18 @@ Returns
     utils3d.torch.pose.umeyama
 
 @overload
-def affine_umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def affine_umeyama(cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, lam: float = 0.01, eps: float = 1e-12, *, allow_flip: bool = True) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
 The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
 satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
-an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+an orthogonal Procrustes problem in the whitened space, where the optimal map is an orthogonal `Q`
 (so `(A^{-1})` is automatically the consistent inverse):
 
     `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
 
+When `allow_flip=False`, `Q` is instead the closest proper rotation (Kabsch), so `det(A) > 0`.
+The covariance square roots above use the regularized covariances when `lam > 0`.
 No iteration, no penalty annealing, and the result is differentiable.
 
 Parameters
@@ -3599,9 +3610,12 @@ Parameters
 - `cov_yy`: (..., 3, 3) covariance matrix of y points.
 - `mean_x`: (..., 3) mean of x points.
 - `mean_y`: (..., 3) mean of y points.
-- `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
-    toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt.
+- `lam`: isotropy regularization weight. Shrinks the whitening toward isotropic and stabilizes
+    the inverse sqrt for near-planar inputs. Independent of `allow_flip`; with `lam=0`,
+    nondegenerate input covariances are required for a well-conditioned solve.
 - `eps`: small value to clamp eigenvalues / prevent division by zero.
+- `allow_flip`: whether to allow reflections. If False, constrain `A` to preserve orientation
+    (`det(A) > 0`), while still allowing nonuniform scaling and shear.
 
 Returns
 ----
@@ -3610,7 +3624,7 @@ Returns
     utils3d.torch.pose.affine_umeyama
 
 @overload
-def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
+def solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: torch_.Tensor | None = None, sigma: torch_.Tensor | None = None, *, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
 
 Minimizes `sum_i w_i (||pose @ p_i - q_i|| / sigma_i)^2`.
@@ -3622,11 +3636,12 @@ Parameters
 - `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
 - `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
     relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 - `eps`: small value to prevent division by zero.
 
 Returns
@@ -3635,7 +3650,7 @@ Returns
     utils3d.torch.pose.solve_pose
 
 @overload
-def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', threshold: Union[float, torch_.Tensor, NoneType] = None, ratio: Optional[float] = None, num_samples: int = 32, sample_size: Optional[int] = None, lam: float = 0.01, eps: float = 1e-12, generator: Optional[torch_._C.Generator] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def solve_pose_ransac(p: torch_.Tensor, q: torch_.Tensor, w: torch_.Tensor | None = None, sigma: torch_.Tensor | None = None, *, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', threshold: float | torch_.Tensor | None = None, ratio: float | None = None, num_samples: int = 32, sample_size: int | None = None, lam: float = 0.01, eps: float = 1e-12, generator: torch_._C.Generator | None = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Robustly solve for the pose (transformation from p to q) given point correspondences using RANSAC.
 
 Hypotheses are sampled from minimal subsets, scored using either a known inlier threshold or a
@@ -3660,10 +3675,11 @@ Parameters
 - `sigma`: optional (..., N) per-point error scale. Residuals are compared as
     `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
     `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
 - `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point tensor,
     broadcastable to (..., N)). A correspondence is an inlier when
     `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
@@ -3671,8 +3687,8 @@ Parameters
     residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
     equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
 - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
-- `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
-- `lam`: regularization weight for 'affine' mode.
+- `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for both affine modes.
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 - `eps`: small value to prevent division by zero.
 - `generator`: optional random generator for reproducible sampling.
 
@@ -3683,7 +3699,7 @@ Returns
     utils3d.torch.pose.solve_pose_ransac
 
 @overload
-def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: Optional[torch_.Tensor] = None, sigma: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
+def segment_solve_pose(p: torch_.Tensor, q: torch_.Tensor, w: torch_.Tensor | None = None, sigma: torch_.Tensor | None = None, *, offsets: torch_.Tensor, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> torch_.Tensor:
     """Solve for the pose (transformation from p to q: q ≈ pose @ p) given weighted point correspondences.
 
 Minimizes `sum_i (w_i / sigma_i^2) ||pose @ p_i - q_i||^2` within each segment (see `solve_pose`).
@@ -3695,11 +3711,12 @@ Parameters
 - `w`: (N,) weights for each point correspondence
 - `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
 - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 - `eps`: small value to prevent division by zero.
 
 Returns
@@ -3708,7 +3725,7 @@ Returns
     utils3d.torch.pose.segment_solve_pose
 
 @overload
-def solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, noise_scales: Optional[torch_.Tensor] = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def solve_poses_sequential(trajectories: torch_.Tensor, weights: torch_.Tensor | None = None, noise_scales: torch_.Tensor | None = None, *, accum: Tuple[torch_.Tensor, ...] | None = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Given trajectories of points over time, sequentially solve for the poses (transformations from canonical to each frame) of each body at each frame.
 
 Parameters
@@ -3719,11 +3736,12 @@ Parameters
     `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+- `mode`: mode of transformation to apply.
     - For 'rigid', only rotation and translation are allowed.
     - For 'similar', uniform scaling, rotation and translation are allowed.
-    - For 'affine', full affine transformation is allowed. Using least squares.
-- `lam`: rigidity regularization weight for 'affine' mode.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 - `eps`: small value to prevent division by zero.
 
 Returns
@@ -3737,7 +3755,7 @@ Returns
     utils3d.torch.pose.solve_poses_sequential
 
 @overload
-def segment_solve_poses_sequential(trajectories: torch_.Tensor, weights: Optional[torch_.Tensor] = None, offsets: torch_.Tensor = None, noise_scales: Optional[torch_.Tensor] = None, *, accum: Optional[Tuple[torch_.Tensor, ...]] = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
+def segment_solve_poses_sequential(trajectories: torch_.Tensor, weights: torch_.Tensor | None = None, offsets: torch_.Tensor = None, noise_scales: torch_.Tensor | None = None, *, accum: Tuple[torch_.Tensor, ...] | None = None, min_valid_size: int = 3, mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid', lam: float = 0.01, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor], torch_.Tensor, torch_.Tensor, Tuple[torch_.Tensor, ...]]:
     """Segment array mode for `solve_poses_sequential`.
 
 Parameters
@@ -3749,8 +3767,12 @@ Parameters
     `weights / noise_scales^2`. If None, treated as 1.
 - `accum`: accumulated statistics from previous calls. If None, start fresh.
 - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-- `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
-- `lam`: rigidity regularization weight for 'affine' mode.
+- `mode`: mode of transformation to apply.
+    - For 'rigid', only rotation and translation are allowed.
+    - For 'similar', uniform scaling, rotation and translation are allowed.
+    - For 'affine', full affine transformation including reflection is allowed.
+    - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+- `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 - `eps`: small value to prevent division by zero.
 
 Returns
@@ -3764,7 +3786,7 @@ Returns
     utils3d.torch.pose.segment_solve_poses_sequential
 
 @overload
-def pose_graph_edge_moments(x: torch_.Tensor, y: torch_.Tensor, w: Optional[torch_.Tensor] = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+def pose_graph_edge_moments(x: torch_.Tensor, y: torch_.Tensor, w: torch_.Tensor | None = None, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Reduce per-edge point correspondences to centered second-moment statistics for pose graph optimization.
 
 Each edge `i -> j` carries a fixed-size set of `M` 3D point correspondences: `x` points expressed in
@@ -3798,7 +3820,7 @@ Returns
     utils3d.torch.pose.pose_graph_edge_moments
 
 @overload
-def segment_pose_graph_edge_moments(x: torch_.Tensor, y: torch_.Tensor, w: Optional[torch_.Tensor] = None, *, offsets: torch_.Tensor, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
+def segment_pose_graph_edge_moments(x: torch_.Tensor, y: torch_.Tensor, w: torch_.Tensor | None = None, *, offsets: torch_.Tensor, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor]:
     """Segment array mode for `pose_graph_edge_moments`.
 
 Each edge `i -> j` carries a set of 3D point correspondences: `x` points expressed in node `i`'s
@@ -3827,7 +3849,7 @@ Returns
     utils3d.torch.pose.segment_pose_graph_edge_moments
 
 @overload
-def pose_graph_optimization(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar'] = 'rigid', niter: int = 10, eps: float = 1e-12) -> torch_.Tensor:
+def pose_graph_optimization(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: torch_.Tensor | None = None, *, mode: Literal['rigid', 'similar'] = 'rigid', niter: int = 10, eps: float = 1e-12) -> torch_.Tensor:
     """Pose graph optimization for global poses from per-edge centered point statistics.
 
 Build the per-edge statistics with `pose_graph_edge_moments` from point correspondences (or
@@ -3841,7 +3863,12 @@ With `mode='similar'` each node additionally carries its own scale relative to t
 satisfies `s_ij = s_j / s_i`, so the global node scales are recovered by a separate weighted
 least squares in log-scale (see `_pose_graph_optimization_scale_sync`); the overall scale is a
 free gauge, fixed so the geometric mean of the node scales is 1. Rotation is scale-invariant and
-solved identically to the rigid case; translation uses the scaled relative block `s_ij R_ij`.
+solved identically to the rigid case. Given the synchronized rotations and scales, translations
+exactly minimize the weighted point-level objective, not a residual on measured edge transforms.
+Writing `L_i = s_i R_i` and camera centers `c_i = -L_i^{-1} t_i`, this subproblem is
+`min sum_ij edge_weights_ij * w_ij * s_j^2 * ||c_j - c_i - d_ij||^2`, where
+`d_ij = L_i^{-1} mean_x - L_j^{-1} mean_y`. A scalar graph Laplacian solves all three coordinates;
+its pseudoinverse fixes the mean camera center to zero within each connected component.
 
 Parameters
 ----
@@ -3873,7 +3900,7 @@ Returns
     utils3d.torch.pose.pose_graph_optimization
 
 @overload
-def pose_graph_optimization_gnc(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: Optional[torch_.Tensor] = None, *, mode: Literal['rigid', 'similar'] = 'rigid', threshold: float = 0.05, niter: int = 10, gnc_iters: int = 20, gnc_factor: float = 1.4, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def pose_graph_optimization_gnc(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: torch_.Tensor | None = None, *, mode: Literal['rigid', 'similar'] = 'rigid', threshold: float = 0.05, niter: int = 10, gnc_iters: int = 20, gnc_factor: float = 1.4, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection.
 
 Wraps `pose_graph_optimization` in an outer loop that re-weights each edge by a Truncated Least
@@ -4097,7 +4124,7 @@ Returns
     utils3d.torch.segment_ops.segment_cumsum
 
 @overload
-def group_as_segments(labels: torch_.Tensor, data: Optional[torch_.Tensor] = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[torch_.Tensor, ...]:
+def group_as_segments(labels: torch_.Tensor, data: torch_.Tensor | None = None, return_inverse: bool = False, return_group_ids: bool = False) -> Tuple[torch_.Tensor, ...]:
     """Group as segments by labels
 
 Parameters
@@ -4154,7 +4181,7 @@ Returns
     utils3d.torch.segment_ops.segment_argsort
 
 @overload
-def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: Union[int, torch_.Tensor], largest: bool = True, dim: int = -1) -> Tuple[torch_.return_types.topk, torch_.Tensor]:
+def segment_topk(input: torch_.Tensor, offsets: torch_.Tensor, k: int | torch_.Tensor, largest: bool = True, dim: int = -1) -> Tuple[torch_.return_types.topk, torch_.Tensor]:
     """Select the top-k values and indices within each segment.
 
 Parameters
@@ -4266,7 +4293,7 @@ def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, metho
     utils3d.torch.mesh.triangulate_mesh
 
 @overload
-def compute_face_corner_angles(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+def compute_face_corner_angles(vertices: torch_.Tensor, faces: torch_.Tensor | None = None) -> torch_.Tensor:
     """Compute face corner angles of a mesh
 
 ## Parameters
@@ -4278,7 +4305,7 @@ def compute_face_corner_angles(vertices: torch_.Tensor, faces: Optional[torch_.T
     utils3d.torch.mesh.compute_face_corner_angles
 
 @overload
-def compute_face_corner_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None, normalize: bool = True) -> torch_.Tensor:
+def compute_face_corner_normals(vertices: torch_.Tensor, faces: torch_.Tensor | None = None, normalize: bool = True) -> torch_.Tensor:
     """Compute the face corner normals of a mesh
 
 ## Parameters
@@ -4291,7 +4318,7 @@ def compute_face_corner_normals(vertices: torch_.Tensor, faces: Optional[torch_.
     utils3d.torch.mesh.compute_face_corner_normals
 
 @overload
-def compute_face_corner_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vertices: Optional[torch_.Tensor] = None, faces_uv: Optional[torch_.Tensor] = None, normalize: bool = True) -> torch_.Tensor:
+def compute_face_corner_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vertices: torch_.Tensor | None = None, faces_uv: torch_.Tensor | None = None, normalize: bool = True) -> torch_.Tensor:
     """    Compute the face corner tangent (and bitangent) vectors of a mesh
 
     ## Parameters
@@ -4308,7 +4335,7 @@ s
     utils3d.torch.mesh.compute_face_corner_tangents
 
 @overload
-def compute_face_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor] = None) -> torch_.Tensor:
+def compute_face_normals(vertices: torch_.Tensor, faces: torch_.Tensor | None = None) -> torch_.Tensor:
     """Compute face normals of a mesh
 
 ## Parameters
@@ -4320,7 +4347,7 @@ def compute_face_normals(vertices: torch_.Tensor, faces: Optional[torch_.Tensor]
     utils3d.torch.mesh.compute_face_normals
 
 @overload
-def compute_face_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vertices: Optional[torch_.Tensor] = None, faces_uv: Optional[torch_.Tensor] = None, normalize: bool = True) -> torch_.Tensor:
+def compute_face_tangents(vertices: torch_.Tensor, uv: torch_.Tensor, faces_vertices: torch_.Tensor | None = None, faces_uv: torch_.Tensor | None = None, normalize: bool = True) -> torch_.Tensor:
     """Compute the face corner tangent (and bitangent) vectors of a mesh
 
 ## Parameters
@@ -4403,7 +4430,7 @@ def mesh_dual_graph(faces: torch_.Tensor) -> Tuple[torch_.Tensor, torch_.Tensor]
     utils3d.torch.mesh.mesh_dual_graph
 
 @overload
-def mesh_connected_components(faces: torch_.Tensor, num_vertices: Optional[int] = None) -> List[torch_.Tensor]:
+def mesh_connected_components(faces: torch_.Tensor, num_vertices: int | None = None) -> List[torch_.Tensor]:
     """Compute connected components of a mesh.
 
 ## Parameters
@@ -4423,7 +4450,7 @@ If `num_vertices` is None, return:
     utils3d.torch.mesh.mesh_connected_components
 
 @overload
-def graph_connected_components(edges: torch_.Tensor, num_vertices: Optional[int] = None) -> Union[torch_.Tensor, Tuple[torch_.Tensor, torch_.Tensor]]:
+def graph_connected_components(edges: torch_.Tensor, num_vertices: int | None = None) -> torch_.Tensor | Tuple[torch_.Tensor, torch_.Tensor]:
     """Compute connected components of an undirected graph.
 
 ## Parameters
@@ -4570,7 +4597,7 @@ def laplacian_hc_smooth_mesh(vertices: torch_.Tensor, faces: torch_.Tensor, time
     utils3d.torch.mesh.laplacian_hc_smooth_mesh
 
 @overload
-def create_cube_mesh(tri: bool = False, device: Optional[torch_.device] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def create_cube_mesh(tri: bool = False, device: torch_.device | None = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Create a cube mesh of size 1 centered at origin.
 
 ### Parameters
@@ -4587,12 +4614,12 @@ def create_camera_frustum_mesh(extrinsics: torch_.Tensor, intrinsics: torch_.Ten
     utils3d.torch.mesh.create_camera_frustum_mesh
 
 @overload
-def create_icosahedron_mesh(device: Optional[torch_.device] = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def create_icosahedron_mesh(device: torch_.device | None = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Create an icosahedron mesh of centered at origin."""
     utils3d.torch.mesh.create_icosahedron_mesh
 
 @overload
-def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+def uv_map(*size: int | Tuple[int, int], top: float = 0.0, left: float = 0.0, bottom: float = 1.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
     """Get image UV coordinate map. By default, (0., 0.) is the top-left corner of the image, and (1., 1.) is the bottom-right corner of the image.
 
 ## Parameters
@@ -4617,7 +4644,7 @@ def uv_map(*size: Union[int, Tuple[int, int]], top: float = 0.0, left: float = 0
     utils3d.torch.maps.uv_map
 
 @overload
-def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int = 0, convention: Literal['integer-center', 'integer-corner'] = 'integer-center', dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+def pixel_coord_map(*size: int | Tuple[int, int], top: int = 0, left: int = 0, convention: Literal['integer-center', 'integer-corner'] = 'integer-center', dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
     """Get image pixel coordinates map. Support two conventions: `'integer-center'` and `'integer-corner'`.
 
 ## Parameters
@@ -4648,7 +4675,7 @@ def pixel_coord_map(*size: Union[int, Tuple[int, int]], top: int = 0, left: int 
     utils3d.torch.maps.pixel_coord_map
 
 @overload
-def screen_coord_map(*size: Union[int, Tuple[int, int]], top: float = 1.0, left: float = 0.0, bottom: float = 0.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
+def screen_coord_map(*size: int | Tuple[int, int], top: float = 1.0, left: float = 0.0, bottom: float = 0.0, right: float = 1.0, dtype: torch_.dtype = torch_.float32, device: torch_.device = None) -> torch_.Tensor:
     """Get screen space coordinate map, where (0., 0.) is the bottom-left corner of the image, and (1., 1.) is the top-right corner of the image.
 This is commonly used in graphics APIs like OpenGL.
 
@@ -4665,7 +4692,7 @@ This is commonly used in graphics APIs like OpenGL.
     utils3d.torch.maps.screen_coord_map
 
 @overload
-def build_mesh_from_map(*maps: torch_.Tensor, mask: Optional[torch_.Tensor] = None, tri: bool = False) -> Tuple[torch_.Tensor, ...]:
+def build_mesh_from_map(*maps: torch_.Tensor, mask: torch_.Tensor | None = None, tri: bool = False) -> Tuple[torch_.Tensor, ...]:
     """Get a mesh regarding image pixel uv coordinates as vertices and image grid as faces.
 
 ## Parameters
@@ -4679,7 +4706,7 @@ def build_mesh_from_map(*maps: torch_.Tensor, mask: Optional[torch_.Tensor] = No
     utils3d.torch.maps.build_mesh_from_map
 
 @overload
-def build_mesh_from_depth_map(depth: torch_.Tensor, *other_maps: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: Optional[torch_.Tensor] = None, atol: Optional[float] = None, rtol: Optional[float] = 0.05, tri: bool = False) -> Tuple[torch_.Tensor, ...]:
+def build_mesh_from_depth_map(depth: torch_.Tensor, *other_maps: torch_.Tensor, intrinsics: torch_.Tensor, extrinsics: torch_.Tensor | None = None, atol: float | None = None, rtol: float | None = 0.05, tri: bool = False) -> Tuple[torch_.Tensor, ...]:
     """Get a mesh by lifting depth map to 3D, while removing depths of large depth difference.
 
 ## Parameters
@@ -4754,7 +4781,7 @@ def depth_map_to_normal_map(depth: torch_.Tensor, intrinsics: torch_.Tensor, mas
     utils3d.torch.maps.depth_map_to_normal_map
 
 @overload
-def chessboard(*size: Union[int, Tuple[int, int]], grid_size: int, color_a: torch_.Tensor, color_b: torch_.Tensor) -> torch_.Tensor:
+def chessboard(*size: int | Tuple[int, int], grid_size: int, color_a: torch_.Tensor, color_b: torch_.Tensor) -> torch_.Tensor:
     """Get a chessboard image
 
 ## Parameters
@@ -4831,7 +4858,7 @@ Returns
     utils3d.torch.maps.flood_fill
 
 @overload
-def perlin_noise(x: torch_.Tensor, seed: Optional[int] = None) -> torch_.Tensor:
+def perlin_noise(x: torch_.Tensor, seed: int | None = None) -> torch_.Tensor:
     """Generate Perlin noise for the given coordinates.
 
 Parameters
@@ -4846,7 +4873,7 @@ Returns
     utils3d.torch.maps.perlin_noise
 
 @overload
-def perlin_noise_map(size: Tuple[int, ...], frequency: Union[float, torch_.Tensor], seed: Optional[int] = None, dtype: Optional[torch_.dtype] = None, device: Optional[torch_.device] = None) -> torch_.Tensor:
+def perlin_noise_map(size: Tuple[int, ...], frequency: float | torch_.Tensor, seed: int | None = None, dtype: torch_.dtype | None = None, device: torch_.device | None = None) -> torch_.Tensor:
     """Generate Perlin noise map.
 
 Parameters
@@ -4862,7 +4889,7 @@ Returns
     utils3d.torch.maps.perlin_noise_map
 
 @overload
-def fractal_perlin_noise_map(size: Tuple[int, ...], base_frequency: Union[float, torch_.Tensor], octaves: int = 4, lacunarity: float = 2.0, gain: float = 0.5, seed: Optional[int] = None, dtype: Optional[torch_.dtype] = None, device: Optional[torch_.device] = None) -> torch_.Tensor:
+def fractal_perlin_noise_map(size: Tuple[int, ...], base_frequency: float | torch_.Tensor, octaves: int = 4, lacunarity: float = 2.0, gain: float = 0.5, seed: int | None = None, dtype: torch_.dtype | None = None, device: torch_.device | None = None) -> torch_.Tensor:
     """Generate fractal Perlin noise map. ![fractal_perlin_base_frequeny2_octaves7_gain0.7.png](doc/fractal_perlin_base_frequeny2_octaves7_gain0.7.png)
 
 Parameters
@@ -4881,12 +4908,12 @@ Returns
     utils3d.torch.maps.fractal_perlin_noise_map
 
 @overload
-def RastContext(nvd_ctx: Union[nvdiffrast.torch.ops.RasterizeCudaContext, nvdiffrast.torch.ops.RasterizeGLContext] = None, *, backend: Literal['cuda', 'gl'] = 'cuda', device: Union[str, torch_.device] = None):
+def RastContext(nvd_ctx: nvdiffrast.torch.ops.RasterizeCudaContext | nvdiffrast.torch.ops.RasterizeGLContext = None, *, backend: Literal['cuda', 'gl'] = 'cuda', device: str | torch_.device = None):
     """Create a rasterization context. Nothing but a wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext."""
     utils3d.torch.rasterization.RastContext
 
 @overload
-def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: Optional[torch_.Tensor] = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Tuple[torch_.Tensor, torch_.Tensor, Optional[torch_.Tensor]]:
+def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: utils3d.torch.rasterization.RastContext | None = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor | None]:
     """Rasterize triangles.
 
 Parameters
@@ -4918,7 +4945,7 @@ A dictionary containing:
     utils3d.torch.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: Optional[torch_.Tensor] = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: Optional[utils3d.torch.rasterization.RastContext] = None) -> Iterator[Iterator[Dict[str, torch_.Tensor]]]:
+def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: utils3d.torch.rasterization.RastContext | None = None) -> Iterator[Iterator[Dict[str, torch_.Tensor]]]:
     """Rasterize a mesh with vertex attributes using depth peeling.
 
 Parameters

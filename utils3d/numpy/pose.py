@@ -90,17 +90,19 @@ def _sym_sqrt_and_inv_sqrt(mat: ndarray, eps: float) -> Tuple[ndarray, ndarray]:
     return mat_sqrt, mat_inv_sqrt
 
 
-def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2) -> Tuple[ndarray, ndarray]:
+def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: ndarray, mean_y: ndarray, lam: float = 1e-2, *, allow_flip: bool = True) -> Tuple[ndarray, ndarray]:
     """
     Extended Procrustes analysis to solve for affine transformation `A` and translation `t` such that `y_i ~= A x_i + t`.
 
     The inverse-consistency constraint (the inverse map `A^{-1}` should align `y` back onto `x`) is
     satisfied *exactly* in closed form by whitening both point clouds to unit covariance and solving
-    an orthogonal Procrustes problem in the whitened space, where the optimal map is a rotation `Q`
+    an orthogonal Procrustes problem in the whitened space, where the optimal map is an orthogonal `Q`
     (so `(A^{-1})` is automatically the consistent inverse):
 
         `A = cov_yy^{1/2} @ Q @ cov_xx^{-1/2}`,   `Q = polar(cov_yy^{-1/2} @ cov_yx @ cov_xx^{-1/2})`
 
+    When `allow_flip=False`, `Q` is instead the closest proper rotation (Kabsch), so `det(A) > 0`.
+    The covariance square roots above use the regularized covariances when `lam > 0`.
     No iteration and no penalty annealing.
 
     Parameters
@@ -110,9 +112,11 @@ def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: nd
     - `cov_yy`: (..., 3, 3) covariance matrix of y points.
     - `mean_x`: (..., 3) mean of x points.
     - `mean_y`: (..., 3) mean of y points.
-    - `lam`: rigidity regularization weight. Shrinks the whitening toward isotropic, biasing `A`
-        toward a similarity (rotation + uniform scale) transform and stabilizing the inverse sqrt
-        for degenerate (e.g. near-planar) inputs.
+    - `lam`: isotropy regularization weight. Shrinks the whitening toward isotropic and stabilizes
+        the inverse sqrt for near-planar inputs. Independent of `allow_flip`; with `lam=0`,
+        nondegenerate input covariances are required for a well-conditioned solve.
+    - `allow_flip`: whether to allow reflections. If False, constrain `A` to preserve orientation
+        (`det(A) > 0`), while still allowing nonuniform scaling and shear.
 
     Returns
     ----
@@ -134,8 +138,11 @@ def affine_umeyama(cov_yx: ndarray, cov_xx: ndarray, cov_yy: ndarray, mean_x: nd
     cov_yy_sqrt, cov_yy_inv_sqrt = _sym_sqrt_and_inv_sqrt(reg_yy, eps)
 
     M = cov_yy_inv_sqrt @ cov_yx @ cov_xx_inv_sqrt
-    U, _, Vh = np.linalg.svd(M)
-    Q = U @ Vh
+    if allow_flip:
+        U, _, Vh = np.linalg.svd(M)
+        Q = U @ Vh
+    else:
+        Q = kabsch(M)
 
     A = cov_yy_sqrt @ Q @ cov_xx_inv_sqrt
     t = mean_y - transform_points(mean_x, A)
@@ -148,7 +155,7 @@ def solve_pose(
     w: Optional[np.ndarray] = None, 
     sigma: Optional[np.ndarray] = None, 
     *,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2
 ) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
@@ -162,11 +169,12 @@ def solve_pose(
     - `w`: optional (..., N) per-point confidence weight. If None, uniform weights are used.
     - `sigma`: optional (..., N) per-point noise scale; contributes `1 / sigma_i^2` to the weight (only
         relative values matter). If None, treated as 1. E.g. for depth-proportional noise pass `sigma = ||p_i||`.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     
     Returns
     ----
@@ -185,7 +193,7 @@ def solve_pose(
     pw = p * w[..., None]
     qw = q * w[..., None]
     cov_qp = np.sum(vector_outer(qw, p), axis=-3) / w_sum[..., None, None]
-    if mode == 'similar' or mode == 'affine':
+    if mode in ('similar', 'affine', 'affine-no-flip'):
         cov_pp = np.sum(vector_outer(pw, p), axis=-3) / w_sum[..., None, None]
         cov_qq = np.sum(vector_outer(qw, q), axis=-3) / w_sum[..., None, None]
     
@@ -195,8 +203,8 @@ def solve_pose(
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(s[..., None, None] * R, t)
-    elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam)
+    elif mode in ('affine', 'affine-no-flip'):
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, allow_flip=mode == 'affine')
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -208,7 +216,7 @@ def solve_pose_ransac(
     w: Optional[np.ndarray] = None, 
     sigma: Optional[np.ndarray] = None, 
     *,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     threshold: Optional[Union[float, np.ndarray]] = None,
     ratio: Optional[float] = None,
     num_samples: int = 32,
@@ -240,10 +248,11 @@ def solve_pose_ransac(
     - `sigma`: optional (..., N) per-point error scale. Residuals are compared as
         `||pose @ p_i - q_i|| / sigma_i`, and fitting uses effective quadratic weight
         `w_i / sigma_i^2` (same meaning as in `solve_pose`). If None, treated as 1.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
     - `threshold`: dimensionless inlier threshold relative to `sigma` (scalar or per-point array,
         broadcastable to (..., N)). A correspondence is an inlier when
         `||pose @ p_i - q_i|| / sigma_i < threshold_i`. Mutually exclusive with `ratio`.
@@ -251,8 +260,8 @@ def solve_pose_ransac(
         residual. Must be in `(0, 1]` and is mutually exclusive with `threshold`. Thus weight 2 is
         equivalent to two copies of weight 1, and weight 0 is equivalent to an absent correspondence.
     - `num_samples`: number of RANSAC hypotheses per batch element. Compute/memory scale linearly with it.
-    - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for 'affine'.
-    - `lam`: regularization weight for 'affine' mode.
+    - `sample_size`: size of each minimal sample. If None, defaults to 3 for 'rigid'/'similar' and 4 for both affine modes.
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     - `rng`: optional random generator for reproducible sampling.
 
     Returns
@@ -266,7 +275,7 @@ def solve_pose_ransac(
         raise ValueError(f"ratio must be in (0, 1], got {ratio}.")
 
     if sample_size is None:
-        sample_size = 4 if mode == 'affine' else 3
+        sample_size = 4 if mode in ('affine', 'affine-no-flip') else 3
     if rng is None:
         rng = np.random.default_rng()
     batch_shape = p.shape[:-2]
@@ -279,8 +288,6 @@ def solve_pose_ransac(
         w_flat = np.ones((B, N), dtype=p.dtype)
     else:
         w_flat = w.reshape(B, N)
-    if np.any(w_flat < 0):
-        raise ValueError("w must be non-negative.")
 
     # Optional per-point noise scale, passed through to every solve (identical meaning to solve_pose).
     if sigma is not None:
@@ -299,12 +306,8 @@ def solve_pose_ransac(
     # more likely to seed a hypothesis. `np.random.choice` can't draw a batch of independent subsets
     # in one vectorized call, so we use the Gumbel-top-k trick (Efraimidis-Spirakis): perturbing each
     # `log(w_i)` by i.i.d. Gumbel noise and taking the top-`sample_size` keys yields exactly weighted
-    # sampling without replacement. Zero-weight correspondences receive key `-inf` and are absent.
-    positive_weight_count = np.count_nonzero(w_flat > 0, axis=-1)
-    if np.any(positive_weight_count < sample_size):
-        raise ValueError(
-            f"Each batch element must have at least {sample_size} positive-weight correspondences."
-        )
+    # sampling without replacement. Zero-weight correspondences receive key `-inf`; if there are too
+    # few positive weights, arbitrary zero-weight points fill the subset but remain excluded from fitting.
     u = np.maximum(rng.random((B, num_samples, N)).astype(p.dtype), tiny)
     log_weight = np.full_like(w_flat, -np.inf)
     np.log(w_flat, out=log_weight, where=w_flat > 0)
@@ -367,7 +370,7 @@ def segment_solve_pose(
     sigma: Optional[np.ndarray] = None, 
     *,
     offsets: np.ndarray, 
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2
 ) -> np.ndarray:
     """Solve for the pose (transformation from p to q) given weighted point correspondences.
@@ -381,11 +384,12 @@ def segment_solve_pose(
     - `w`: (N,) weights for each point correspondence
     - `sigma`: optional (N,) per-point noise scale. Effective weight is `w_i / sigma_i^2`. If None, treated as 1.
     - `offsets`: (S + 1,) segment offsets. Points in each segment belong to the same rigid / affine body.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed.
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
     
     Returns
     ----
@@ -406,7 +410,7 @@ def segment_solve_pose(
     pw = p * w[..., None]
     qw = q * w[..., None]
     cov_qp = np.add.reduceat(vector_outer(qw, p), offsets[:-1], axis=0) / w_sum[:, None, None]
-    if mode == 'similar' or mode == 'affine':
+    if mode in ('similar', 'affine', 'affine-no-flip'):
         cov_pp = np.add.reduceat(vector_outer(pw, p), offsets[:-1], axis=0) / w_sum[:, None, None]    
         cov_qq = np.add.reduceat(vector_outer(qw, q), offsets[:-1], axis=0) / w_sum[:, None, None]
     
@@ -416,8 +420,8 @@ def segment_solve_pose(
     elif mode == 'similar':
         s, R, t = umeyama(cov_qp, cov_xx=cov_pp, cov_yy=cov_qq, mean_x=p_mean, mean_y=q_mean)
         pose = make_affine_matrix(s[..., None, None] * R, t)
-    elif mode == 'affine':
-        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam)
+    elif mode in ('affine', 'affine-no-flip'):
+        A, t = affine_umeyama(cov_qp, cov_pp, cov_qq, p_mean, q_mean, lam=lam, allow_flip=mode == 'affine')
         pose = make_affine_matrix(A, t)
     
     return pose
@@ -430,7 +434,7 @@ def solve_poses_sequential(
     *,
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 3,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2
 ) -> Tuple[ndarray, Tuple[ndarray, ...], Tuple[ndarray, ndarray, ndarray, ndarray]]:
     """
@@ -444,11 +448,12 @@ def solve_poses_sequential(
         `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed. 
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: rigidity regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 
     Returns
     ----
@@ -527,7 +532,7 @@ def solve_poses_sequential(
         xc = mean_sqrtwx - center_x[..., None, :]
         yc = yi - center_y[..., None, :]
         cov_yx = np.einsum('...i,...ij,...ik->...jk', w, yc, xc) / sum_w[..., None, None]
-        if mode == 'affine' or mode == 'similar':
+        if mode in ('similar', 'affine', 'affine-no-flip'):
             cov_xx = (np.einsum('...i,...ij,...ik->...jk', w, xc, xc) + np.einsum('...i,...ijk->...jk', sqrtwi, accum_sqrtwxx)) / sum_w[..., None, None]
             cov_yy = np.einsum('...i,...ij,...ik->...jk', w, yc, yc) / sum_w[..., None, None]
         
@@ -538,8 +543,8 @@ def solve_poses_sequential(
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(s[..., None, None] * R, t)
-        elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam)
+        elif mode in ('affine', 'affine-no-flip'):
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, allow_flip=mode == 'affine')
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, safe_inv(poses[i])[..., None, :, :])
@@ -578,7 +583,7 @@ def segment_solve_poses_sequential(
     *,
     accum: Optional[Tuple[ndarray, ...]] = None,
     min_valid_size: int = 3,
-    mode: Literal['rigid', 'similar', 'affine'] = 'rigid',
+    mode: Literal['rigid', 'similar', 'affine', 'affine-no-flip'] = 'rigid',
     lam: float = 1e-2
 ) -> Tuple[ndarray, Tuple[ndarray, ...], Tuple[ndarray, ndarray, ndarray, ndarray]]:
     """
@@ -593,11 +598,12 @@ def segment_solve_poses_sequential(
         `weights / noise_scales^2`. If None, treated as 1.
     - `accum`: accumulated statistics from previous calls. If None, start fresh.
     - `min_valid_size`: minimum number of valid points in each frame to consider the segment / group valid.
-    - `mode`: mode of transformation to apply. Can be 'rigid', 'similar', or 'affine'.
+    - `mode`: mode of transformation to apply.
         - For 'rigid', only rotation and translation are allowed.
         - For 'similar', uniform scaling, rotation and translation are allowed. 
-        - For 'affine', full affine transformation is allowed. Using least squares.
-    - `lam`: rigidity regularization weight for 'affine' mode.
+        - For 'affine', full affine transformation including reflection is allowed.
+        - For 'affine-no-flip', affine transformation must preserve orientation (`det(A) > 0`).
+    - `lam`: isotropy regularization weight for both affine modes; does not control reflections.
 
     Returns
     ----
@@ -662,7 +668,7 @@ def segment_solve_poses_sequential(
         xc = mean_sqrtwx - center_x_broadcast
         yc = yi - center_y_broadcast
         cov_yx = np.add.reduceat(w[:, None, None] * vector_outer(yc, xc), offsets[:-1], axis=0) / sum_w[:, None, None]
-        if mode == 'affine' or mode == 'similar':
+        if mode in ('similar', 'affine', 'affine-no-flip'):
             cov_xx = np.add.reduceat(sqrtwi[:, None, None] * accum_sqrtwxx + w[:, None, None] * vector_outer(xc), offsets[:-1], axis=0) / sum_w[:, None, None]
             cov_yy = np.add.reduceat(w[:, None, None] * vector_outer(yc), offsets[:-1], axis=0) / sum_w[:, None, None]
         
@@ -673,8 +679,8 @@ def segment_solve_poses_sequential(
         elif mode == 'similar':
             s, R, t = umeyama(cov_yx, cov_xx=cov_xx, mean_x=center_x, mean_y=center_y)
             poses[i] = make_affine_matrix(s[..., None, None] * R, t)
-        elif mode == 'affine':
-            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam)
+        elif mode in ('affine', 'affine-no-flip'):
+            A, t = affine_umeyama(cov_yx, cov_xx, cov_yy, center_x, center_y, lam=lam, allow_flip=mode == 'affine')
             poses[i] = make_affine_matrix(A, t)
 
         xi = transform_points(yi, np.repeat(safe_inv(poses[i]), lengths, axis=0))
