@@ -1086,7 +1086,7 @@ def rotation_matrix_from_vectors(v1: ndarray, v2: ndarray):
     v = np.cross(v1, v2, axis=-1)
     c = lite_dot(v1, v2, axis=-1)
     K = skew_symmetric(v)
-    R = I + K + (1 / (1 + c)).astype(v1.dtype)[None, None] * (K @ K)    # Avoid numpy's default type casting for scalars
+    R = I + K + (1 / (1 + c)).astype(v1.dtype)[..., None, None] * (K @ K)    # Avoid numpy's default type casting for scalars
     return R
 
 
