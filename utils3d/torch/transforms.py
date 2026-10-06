@@ -1212,6 +1212,7 @@ def slerp_rotation_matrix(R1: Tensor, R2: Tensor, t: Union[Number, Tensor]) -> T
     assert R1.shape[-2:] == (3, 3) and R2.shape[-2:] == (3, 3)
     quat1 = matrix_to_quaternion(R1)
     quat2 = matrix_to_quaternion(R2)
+    quat2 = torch.where((quat1 * quat2).sum(dim=-1, keepdim=True) < 0, -quat2, quat2)
     slerped_quat = slerp(quat1, quat2, t)
     return quaternion_to_matrix(slerped_quat)
 
