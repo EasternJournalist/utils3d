@@ -989,7 +989,8 @@ def matrix_to_axis_angle(rot_mat: ndarray) -> ndarray:
 
 def extrinsics_to_essential(extrinsics: ndarray):
     """
-    extrinsics matrix `[[R, t] [0, 0, 0, 1]]` such that `x' = R (x - t)` to essential matrix such that `x' E x = 0`
+    Extrinsics matrix `[[R, t], [0, 0, 0, 1]]` mapping `x' = R x + t`
+    to the essential matrix satisfying `x'^T E x = 0`.
 
     ## Parameters
         extrinsics (np.ndaray): [..., 4, 4] extrinsics matrix
@@ -1005,7 +1006,7 @@ def extrinsics_to_essential(extrinsics: ndarray):
         zeros, -t[..., 2], t[..., 1],
         t[..., 2], zeros, -t[..., 0],
         -t[..., 1], t[..., 0], zeros
-    ]).reshape(*t.shape[:-1], 3, 3)
+    ], axis=-1).reshape(*t.shape[:-1], 3, 3)
     return t_x @ R 
 
 
