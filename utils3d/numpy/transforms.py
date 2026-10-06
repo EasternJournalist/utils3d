@@ -1326,6 +1326,7 @@ def slerp_rotation_matrix(R1: ndarray, R2: ndarray, t: ndarray) -> ndarray:
     """
     quat1 = matrix_to_quaternion(R1)
     quat2 = matrix_to_quaternion(R2)
+    quat2 = np.where(lite_dot(quat1, quat2, axis=-1)[..., None] < 0, -quat2, quat2)
     quat = slerp(quat1, quat2, t)
     return quaternion_to_matrix(quat)
 
