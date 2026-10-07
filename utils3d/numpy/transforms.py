@@ -560,7 +560,7 @@ def pixel_to_ndc(
     dtype = pixel.dtype
     if pixel_convention == 'integer-center':
         pixel = pixel + 0.5
-    ndc = pixel / (np.flip(size, axis=-1) * np.array([2, -2], dtype=dtype)) \
+    ndc = pixel / np.flip(size, axis=-1) * np.array([2, -2], dtype=dtype) \
         + np.array([-1, 1], dtype=dtype)
     return ndc
 
