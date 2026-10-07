@@ -481,7 +481,7 @@ def crop_intrinsics(
         width / cropped_width, zeros, -cropped_left / cropped_width,
         zeros, height / cropped_height, -cropped_top / cropped_height,
         zeros, zeros, ones
-    ]).reshape(*zeros.shape, 3, 3)
+    ], axis=-1).reshape(*zeros.shape, 3, 3)
     return transform @ intrinsics
 
 
