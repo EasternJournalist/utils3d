@@ -1350,6 +1350,25 @@ def interpolate_se3_matrix(T1: ndarray, T2: ndarray, t: ndarray) -> ndarray:
     return make_affine_matrix(rot, pos)
 
 
+def _piecewise_indices_and_weights(t, s, extrapolation_mode):
+    i = np.searchsorted(t, s, side='left')
+    if extrapolation_mode == 'constant':
+        prev = np.clip(i - 1, 0, len(t) - 1)
+        suc = np.clip(i, 0, len(t) - 1)
+    elif extrapolation_mode == 'linear':
+        if len(t) < 2:
+            raise ValueError('Linear extrapolation requires at least two keyframes')
+        prev = np.clip(i - 1, 0, len(t) - 2)
+        suc = np.clip(i, 1, len(t) - 1)
+    else:
+        raise ValueError(f'Invalid extrapolation_mode: {extrapolation_mode}')
+
+    same_keyframe = prev == suc
+    width = np.where(same_keyframe, 1, t[suc] - t[prev])
+    u = np.where(same_keyframe, 0, (s - t[prev]) / width)
+    return prev, suc, u
+
+
 def piecewise_lerp(x: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> ndarray:
     """
     Linear spline interpolation.
@@ -1363,20 +1382,10 @@ def piecewise_lerp(x: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Liter
     ## Returns
     - `y`: ndarray, shape (..., m, d): the interpolated values.
     """
-    i = np.searchsorted(t, s, side='left')
-    if extrapolation_mode == 'constant':
-        prev = np.clip(i - 1, 0, len(t) - 1)
-        suc = np.clip(i, 0, len(t) - 1)
-    elif extrapolation_mode == 'linear':
-        prev = np.clip(i - 1, 0, len(t) - 2)
-        suc = np.clip(i, 1, len(t) - 1)
-    else:
-        raise ValueError(f'Invalid extrapolation_mode: {extrapolation_mode}')
-    
-    u = (s - t[prev]) / np.maximum(t[suc] - t[prev], 1e-12)
-    y = lerp(x[prev], x[suc], u)
-
-    return y
+    prev, suc, u = _piecewise_indices_and_weights(t, s, extrapolation_mode)
+    # Every query has its own bracketing pair, rather than a query grid for
+    # every pair. Keep only the feature axis in the interpolation weight.
+    return x[prev] + u[..., None] * (x[suc] - x[prev])
 
 
 def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapolation_mode: Literal['constant', 'linear'] = 'constant') -> ndarray:
@@ -1392,20 +1401,10 @@ def piecewise_interpolate_se3_matrix(T: ndarray, t: ndarray, s: ndarray, extrapo
     ## Returns
     - `T_interp`: ndarray, shape (..., m, 4, 4): the interpolated SE(3) matrices.
     """
-    i = np.searchsorted(t, s, side='left')
-    if extrapolation_mode == 'constant':
-        prev = np.clip(i - 1, 0, len(t) - 1)
-        suc = np.clip(i, 0, len(t) - 1)
-    elif extrapolation_mode == 'linear':
-        prev = np.clip(i - 1, 0, len(t) - 2)
-        suc = np.clip(i, 1, len(t) - 1)
-    else:
-        raise ValueError(f'Invalid extrapolation_mode: {extrapolation_mode}')
-    
-    u = (s - t[prev]) / np.maximum(t[suc] - t[prev], 1e-12)
-    T = interpolate_se3_matrix(T[prev], T[suc], u)
-
-    return T
+    prev, suc, u = _piecewise_indices_and_weights(t, s, extrapolation_mode)
+    # The general SE(3) interpolator takes a trailing query axis. Supply
+    # exactly one query per bracketing pair and remove only that singleton.
+    return interpolate_se3_matrix(T[prev], T[suc], u[..., None]).squeeze(-3)
 
 
 def transform_points(x: ndarray, *Ts: ndarray) -> ndarray:
