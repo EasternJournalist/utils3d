@@ -543,7 +543,7 @@ def pixel_to_ndc(
         pixel = pixel.float()
     if pixel_convention == 'integer-center':
         pixel = pixel + 0.5
-    ndc = pixel / (torch.as_tensor(size, device=pixel.device).flip(-1) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device)) \
+    ndc = pixel / torch.as_tensor(size, device=pixel.device).flip(-1) * torch.tensor([2, -2], dtype=pixel.dtype, device=pixel.device) \
         + torch.tensor([-1, 1], dtype=pixel.dtype, device=pixel.device)
     return ndc
 
