@@ -1090,6 +1090,23 @@ def rotation_matrix_from_vectors(v1: ndarray, v2: ndarray):
     return R
 
 
+def _rotation_exponential_coefficients(axis_angle: ndarray):
+    # Express both exponentials without normalizing a rotation axis. The
+    # squared-angle Taylor branch is smooth through zero, including its
+    # derivatives, and the half-angle form avoids 1 - cos(theta) cancellation.
+    angle_squared = np.sum(axis_angle * axis_angle, axis=-1, keepdims=True)
+    small = angle_squared < np.sqrt(np.finfo(axis_angle.dtype).eps)
+    safe_squared = np.where(small, np.ones_like(angle_squared), angle_squared)
+    half_angle = 0.5 * np.sqrt(safe_squared)
+    real = np.where(small,
+                    1 - angle_squared / 8 + angle_squared**2 / 384 - angle_squared**3 / 46080,
+                    np.cos(half_angle))
+    vector_factor = np.where(small,
+                             0.5 - angle_squared / 48 + angle_squared**2 / 3840 - angle_squared**3 / 645120,
+                             0.5 * np.sinc(half_angle / np.pi))
+    return real, vector_factor
+
+
 def axis_angle_to_matrix(axis_angle: ndarray) -> ndarray:
     """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
 
@@ -1099,22 +1116,11 @@ def axis_angle_to_matrix(axis_angle: ndarray) -> ndarray:
     ## Returns
         ndarray: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters
     """
-    batch_shape = axis_angle.shape[:-1]
-    dtype = axis_angle.dtype
-
-    angle = lite_norm(axis_angle, axis=-1)[..., None]
-    axis = axis_angle / np.maximum(angle, np.finfo(dtype).tiny)
-
-    cos = np.cos(angle)[..., None, :]
-    sin = np.sin(angle)[..., None, :]
-
-    rx, ry, rz = np.split(axis, 3, axis=-1)
-    zeros = np.zeros((*batch_shape, 1), dtype=dtype)
-    K = np.concatenate([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], axis=-1).reshape((*batch_shape, 3, 3))
-
-    ident = np.eye(3, dtype=dtype)
-    rot_mat = ident + sin * K + (1 - cos) * (K @ K)
-    return rot_mat
+    real, vector_factor = _rotation_exponential_coefficients(axis_angle)
+    K = skew_symmetric(axis_angle)
+    return (np.eye(3, dtype=axis_angle.dtype)
+            + (2 * real * vector_factor)[..., None] * K
+            + (2 * vector_factor**2)[..., None] * (K @ K))
 
 
 def axis_angle_to_quaternion(axis_angle: ndarray) -> ndarray:
@@ -1126,10 +1132,8 @@ def axis_angle_to_quaternion(axis_angle: ndarray) -> ndarray:
     ## Returns
         ndarray: shape (..., 4) The quaternions for the given axis-angle parameters
     """
-    angle = lite_norm(axis_angle, axis=-1)[..., None]
-    axis = axis_angle / np.maximum(angle, np.finfo(axis_angle.dtype).tiny)
-    quat = np.concatenate([np.cos(angle / 2), np.sin(angle / 2) * axis], axis=-1)
-    return quat
+    real, vector_factor = _rotation_exponential_coefficients(axis_angle)
+    return np.concatenate([real, vector_factor * axis_angle], axis=-1)
 
 
 def _angle_from_tan(

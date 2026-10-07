@@ -942,6 +942,23 @@ def matrix_to_euler_angles(matrix: Tensor, convention: str) -> Tensor:
     return torch.stack([o[convention.index(c)] for c in 'XYZ'], -1)
 
 
+def _rotation_exponential_coefficients(axis_angle: Tensor, eps: float):
+    # Safe squared angles keep the unused trigonometric branch differentiable.
+    # Bound the epsilon cutoff so the Taylor approximation remains accurate.
+    angle_squared = torch.sum(axis_angle * axis_angle, dim=-1, keepdim=True)
+    cutoff = max(torch.finfo(axis_angle.dtype).eps ** 0.5, min(eps * eps, 1e-4))
+    small = angle_squared < cutoff
+    safe_squared = torch.where(small, torch.ones_like(angle_squared), angle_squared)
+    half_angle = 0.5 * torch.sqrt(safe_squared)
+    real = torch.where(small,
+                       1 - angle_squared / 8 + angle_squared**2 / 384 - angle_squared**3 / 46080,
+                       torch.cos(half_angle))
+    vector_factor = torch.where(small,
+                                0.5 - angle_squared / 48 + angle_squared**2 / 3840 - angle_squared**3 / 645120,
+                                0.5 * torch.sinc(half_angle / torch.pi))
+    return real, vector_factor
+
+
 def axis_angle_to_matrix(axis_angle: Tensor, eps: float = 1e-12) -> Tensor:
     """Convert axis-angle representation (rotation vector) to rotation matrix, whose direction is the axis of rotation and length is the angle of rotation
 
@@ -951,22 +968,11 @@ def axis_angle_to_matrix(axis_angle: Tensor, eps: float = 1e-12) -> Tensor:
     ## Returns
         Tensor: shape (..., 3, 3) The rotation matrices for the given axis-angle parameters
     """
-    batch_shape = axis_angle.shape[:-1]
-    device, dtype = axis_angle.device, axis_angle.dtype
-
-    angle = torch.norm(axis_angle + eps, dim=-1, keepdim=True)
-    axis = axis_angle / angle
-
-    cos = torch.cos(angle)[..., None, :]
-    sin = torch.sin(angle)[..., None, :]
-
-    rx, ry, rz = axis.unbind(dim=-1)
-    zeros = torch.zeros(batch_shape, dtype=dtype, device=device)
-    K = torch.stack([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=-1).view((*batch_shape, 3, 3))
-
-    ident = torch.eye(3, dtype=dtype, device=device)
-    rot_mat = ident + sin * K + (1 - cos) * torch.matmul(K, K)
-    return rot_mat
+    real, vector_factor = _rotation_exponential_coefficients(axis_angle, eps)
+    K = skew_symmetric(axis_angle)
+    return (torch.eye(3, dtype=axis_angle.dtype, device=axis_angle.device)
+            + (2 * real * vector_factor)[..., None] * K
+            + (2 * vector_factor**2)[..., None] * torch.matmul(K, K))
 
 
 def matrix_to_axis_angle(rot_mat: Tensor, eps: float = 1e-12) -> Tensor:
@@ -1008,10 +1014,8 @@ def axis_angle_to_quaternion(axis_angle: Tensor, eps: float = 1e-12) -> Tensor:
     ## Returns
         Tensor: shape (..., 4) The quaternions for the given axis-angle parameters
     """
-    axis = F.normalize(axis_angle, dim=-1, eps=eps)
-    angle = torch.norm(axis_angle, dim=-1, keepdim=True)
-    quat = torch.cat([torch.cos(angle / 2), torch.sin(angle / 2) * axis], dim=-1)
-    return quat
+    real, vector_factor = _rotation_exponential_coefficients(axis_angle, eps)
+    return torch.cat([real, vector_factor * axis_angle], dim=-1)
 
 
 def matrix_to_quaternion(rot_mat: Tensor, eps: float = 1e-12) -> Tensor:
