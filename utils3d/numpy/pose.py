@@ -4,7 +4,6 @@ import numpy as np
 from numpy import ndarray
 from typing import *
 from numbers import Number
-from ..helpers import no_warnings
 
 from .transforms import make_affine_matrix, transform_points
 from .utils import safe_inv, vector_outer

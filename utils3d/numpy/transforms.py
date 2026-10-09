@@ -5,7 +5,6 @@ import itertools
 from numbers import Number
 
 from .helpers import toarray, batched
-from ..helpers import no_warnings
 from .utils import lite_dot, lite_norm, lite_sum
 
 
@@ -634,7 +633,7 @@ def project_gl(
     return scr_coord[..., :2], linear_depth
 
 
-@no_warnings()
+@np.errstate(divide='ignore', invalid='ignore')
 def project_cv(
     points: ndarray,
     intrinsics: ndarray,
