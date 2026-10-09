@@ -1235,15 +1235,24 @@ def ray_intersection(p1: ndarray, d1: ndarray, p2: ndarray, d2: ndarray):
     p1, d1, p2, d2 = np.broadcast_arrays(p1, d1, p2, d2)
     dtype = p1.dtype
     dim = p1.shape[-1]
-    d = np.stack([d1, d2], axis=-2)     # (..., 2, D)
-    p = np.stack([p1, p2], axis=-2)     # (..., 2, D)
+    d = np.stack([d1, d2], axis=-2)
+    direction_lengths = lite_norm(d, axis=-1)
+    if np.any(direction_lengths == 0):
+        raise ValueError("Ray directions must be nonzero")
+    # Direction magnitude only changes the returned ray parameters. Removing
+    # that arbitrary scale also keeps the least-squares system well scaled.
+    d = d / direction_lengths[..., None]
+    p = np.stack([p1, p2], axis=-2)
     A = np.concatenate([
-        (np.eye(dim, dtype=dtype) * np.ones((*p.shape[:-2], 2, 1, 1))).reshape(*d.shape[:-2], 2 * dim, dim),         # (..., 2 * D, D)
-        -(np.eye(2, dtype=dtype)[..., None] * d[..., None, :]).swapaxes(-2, -1).reshape(*d.shape[:-2], 2 * dim, 2)    # (..., 2 * D, 2)
-    ], axis=-1)                             # (..., 2 * D, D + 2)
-    b = p.reshape(*p.shape[:-2], 2 * dim)   # (..., 2 * D)
-    x = np.linalg.solve(A.swapaxes(-1, -2) @ A + 1e-12 * np.eye(dim + 2, dtype=dtype), (A.swapaxes(-1, -2) @ b[..., :, None]))[..., 0]
-    return x[..., :dim], (x[..., dim], x[..., dim + 1])
+        (np.eye(dim, dtype=dtype) * np.ones((*p.shape[:-2], 2, 1, 1))).reshape(*d.shape[:-2], 2 * dim, dim),
+        -(np.eye(2, dtype=dtype)[..., None] * d[..., None, :]).swapaxes(-2, -1).reshape(*d.shape[:-2], 2 * dim, 2)
+    ], axis=-1)
+    b = p.reshape(*p.shape[:-2], 2 * dim)
+    # Direct SVD least squares avoids squaring the condition number and adding
+    # an origin-dependent ridge penalty to the intersection coordinates.
+    x = (np.linalg.pinv(A) @ b[..., :, None])[..., 0]
+    parameters = x[..., dim:] / direction_lengths
+    return x[..., :dim], (parameters[..., 0], parameters[..., 1])
 
 
 @batched(2, 1)
