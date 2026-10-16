@@ -5101,7 +5101,7 @@ Returns
     utils3d.torch.maps.fractal_perlin_noise_map
 
 @overload
-def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Dict[str, torch_.Tensor]:
+def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False, background: Dict[str, torch_.Tensor] | None = None) -> Dict[str, torch_.Tensor]:
     """Rasterize triangles with Triton and interpolate attributes with PyTorch.
 
 Parameters
@@ -5127,6 +5127,12 @@ Parameters
 - `cull_backface`: discard clockwise triangles in NDC. Defaults to False.
 - `return_depth`: include camera-space depth (-view z / view w).
 - `return_interpolation`: include original triangle IDs and barycentrics.
+- `background`: optional dictionary of image, depth, mask, interpolation_id
+    and interpolation_uv tensors. Spatial shapes match the outputs; leading
+    batch dimensions broadcast with the inputs. All tensors share the input
+    GPU. Image dtype/channels must match attributes when supplied; depth and
+    UV are float32, mask is bool, and IDs are int32. Depth is camera-space
+    -z/w (finite values or +inf), not NDC or Euclidean distance.
 
 Returns
 ----
@@ -5138,11 +5144,13 @@ A dictionary, with broadcast batch dimensions `...`:
     requested; background is -1.
 - `interpolation_uv`: `(..., H, W, 2)` float32 first two perspective-correct
     barycentric weights, present when requested; background is zero.
-Images use a top-left origin. Background attributes are zero.
+Images use a top-left origin. Supplied background values replace the default
+background values above. An image is also returned for background-only images;
+foreground pixels without attributes are zero.
 
 Notes
 ----
-Only attributes are differentiable. Geometry, cameras, depth, and barycentrics
+Only attributes and background images are differentiable. Geometry and metadata
 are detached. Rendering is point-sampled, with six-plane homogeneous clipping,
 eight-bit subpixel coverage and a top-left shared-edge rule. NDC depth uses
 a strict less-than test against a far-plane clear value of 1; exact depth ties
@@ -5153,7 +5161,17 @@ an image must have fewer than 2**31 pixels.
 Triton is imported on first use. No custom CUDA/C++ extension is built.
 Input validation synchronizes once to check finite transformed coordinates
 and index bounds. Work is proportional to triangle bounding-box areas;
-heavily overlapping or long, thin triangles are not optimized."""
+heavily overlapping or long, thin triangles are not optimized.
+
+Background compositing uses native PyTorch operations after rendering.
+Foreground wins only where covered and strictly closer than background depth;
+equal depth keeps the background. Without background depth, covered foreground
+always wins. This test applies even when return_depth is False. Missing
+background fields default to zero image/UV, false mask, inf depth and -1 IDs.
+Background mask is independent of the depth test: it is not inferred from
+image/depth and does not disable occlusion. Only attributes and background
+image receive gradients. Inputs are not modified; this is selection, not
+alpha blending. Peeling does not accept backgrounds."""
     utils3d.torch.rasterization.rasterize_triangles
 
 @overload
@@ -5202,7 +5220,7 @@ with utils3d.pt.rasterize_triangles_peeling(
     utils3d.torch.rasterization.rasterize_triangles_peeling
 
 @overload
-def rasterize_lines(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'line'] = 'vertex', lines: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False) -> Dict[str, torch_.Tensor]:
+def rasterize_lines(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'line'] = 'vertex', lines: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False, background: Dict[str, torch_.Tensor] | None = None) -> Dict[str, torch_.Tensor]:
     """Rasterize constant-pixel-width line segments with Triton.
 
 Parameters
@@ -5223,6 +5241,9 @@ Parameters
 - `line_width`: finite, positive width in pixels, perpendicular to the segment.
 - `return_depth`: include camera-space depth (-view z / view w).
 - `return_interpolation`: include original line IDs and endpoint weights.
+- `background`: optional image, camera-space depth, mask, interpolation_id
+    and interpolation_uv tensors. Same validation, broadcasting and depth
+    compositing rules as `rasterize_triangles`; UV contains endpoint weights.
 
 Returns
 ----
@@ -5242,11 +5263,13 @@ produce no fragments. Width is not rounded to an integer. This is geometric
 rectangle coverage, not OpenGL's implementation-dependent aliased line rule.
 The triangle rasterizer supplies subpixel coverage and deterministic depth
 testing. All inputs must share a GPU; batches broadcast. Only attributes
-receive gradients. No context, antialiasing, or background compositing is used."""
+and background image receive gradients. Background values replace defaults
+above; an image can be supplied without attributes (foreground is then zero).
+No context or antialiasing is used."""
     utils3d.torch.rasterization.rasterize_lines
 
 @overload
-def rasterize_point_cloud(size: Tuple[int, int], *, points: torch_.Tensor, point_sizes: float | torch_.Tensor = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, return_depth: bool = False, return_point_id: bool = False) -> Dict[str, torch_.Tensor]:
+def rasterize_point_cloud(size: Tuple[int, int], *, points: torch_.Tensor, point_sizes: float | torch_.Tensor = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, return_depth: bool = False, return_point_id: bool = False, background: Dict[str, torch_.Tensor] | None = None) -> Dict[str, torch_.Tensor]:
     """Rasterize point-cloud billboards with Triton.
 
 Parameters
@@ -5269,6 +5292,9 @@ Parameters
 - `near`, `far`: clipping distances used only with intrinsics; 0 < near < far.
 - `return_depth`: include the point center's camera-space depth (-z/w).
 - `return_point_id`: include original point IDs.
+- `background`: optional image, camera-space depth, mask and point_id tensors.
+    Same validation, broadcasting and compositing rules as
+    `rasterize_triangles`; occlusion uses the point center's camera depth.
 
 Returns
 ----
@@ -5286,6 +5312,8 @@ before depth testing, so their bounding squares do not occlude other points.
 2D billboards keep the center's NDC depth; 3D billboards are camera-facing
 planes and can project to ellipses or skewed polygons. Only attributes receive
 gradients, not positions, sizes, or cameras. All tensors must share a GPU.
-No context, antialiasing, or background compositing is used."""
+Background images also receive gradients. Supplied background values replace
+the defaults above; background-only images use zero foreground attributes.
+No context or antialiasing is used."""
     utils3d.torch.rasterization.rasterize_point_cloud
 

@@ -34,6 +34,7 @@ def rasterize_triangles(
     cull_backface: bool = False,
     return_depth: bool = False,
     return_interpolation: bool = False,
+    background: Optional[Dict[str, Tensor]] = None,
 ) -> Dict[str, Tensor]:
     """Rasterize triangles with Triton and interpolate attributes with PyTorch.
 
@@ -60,6 +61,12 @@ def rasterize_triangles(
     - `cull_backface`: discard clockwise triangles in NDC. Defaults to False.
     - `return_depth`: include camera-space depth (-view z / view w).
     - `return_interpolation`: include original triangle IDs and barycentrics.
+    - `background`: optional dictionary of image, depth, mask, interpolation_id
+        and interpolation_uv tensors. Spatial shapes match the outputs; leading
+        batch dimensions broadcast with the inputs. All tensors share the input
+        GPU. Image dtype/channels must match attributes when supplied; depth and
+        UV are float32, mask is bool, and IDs are int32. Depth is camera-space
+        -z/w (finite values or +inf), not NDC or Euclidean distance.
 
     Returns
     ----
@@ -71,11 +78,13 @@ def rasterize_triangles(
         requested; background is -1.
     - `interpolation_uv`: `(..., H, W, 2)` float32 first two perspective-correct
         barycentric weights, present when requested; background is zero.
-    Images use a top-left origin. Background attributes are zero.
+    Images use a top-left origin. Supplied background values replace the default
+    background values above. An image is also returned for background-only images;
+    foreground pixels without attributes are zero.
 
     Notes
     ----
-    Only attributes are differentiable. Geometry, cameras, depth, and barycentrics
+    Only attributes and background images are differentiable. Geometry and metadata
     are detached. Rendering is point-sampled, with six-plane homogeneous clipping,
     eight-bit subpixel coverage and a top-left shared-edge rule. NDC depth uses
     a strict less-than test against a far-plane clear value of 1; exact depth ties
@@ -87,23 +96,36 @@ def rasterize_triangles(
     Input validation synchronizes once to check finite transformed coordinates
     and index bounds. Work is proportional to triangle bounding-box areas;
     heavily overlapping or long, thin triangles are not optimized.
+
+    Background compositing uses native PyTorch operations after rendering.
+    Foreground wins only where covered and strictly closer than background depth;
+    equal depth keeps the background. Without background depth, covered foreground
+    always wins. This test applies even when return_depth is False. Missing
+    background fields default to zero image/UV, false mask, inf depth and -1 IDs.
+    Background mask is independent of the depth test: it is not inferred from
+    image/depth and does not disable occlusion. Only attributes and background
+    image receive gradients. Inputs are not modified; this is selection, not
+    alpha blending. Peeling does not accept backgrounds.
     """
     if attributes_domain not in ('vertex', 'face'):
         raise ValueError("attributes_domain must be 'vertex' or 'face'.")
     size, batch_shape, positions, view_positions, faces, _, attributes = _prepare_inputs(
         size, vertices, attributes, faces, 3, attributes_domain == 'vertex',
-        view, projection, extrinsics, intrinsics, near, far,
+        view, projection, extrinsics, intrinsics, near, far, background=background,
     )
     assert faces is not None
-    _validate_geometry(positions, faces, positions.shape[1])
+    background_depth = background.get('depth') if background else None
+    need_depth = return_depth or background_depth is not None
+    _validate_geometry(positions, faces, positions.shape[1], background_depth=background_depth)
     faces = faces.to(torch.int32).contiguous()
     with torch.no_grad():
         ids, uv, depth = _load_rasterization_kernels().rasterize_triangles_triton(
             positions, view_positions, faces, size, cull_backface,
             return_interpolation or (attributes is not None and attributes_domain == 'vertex'),
-            return_depth,
+            need_depth,
         )
-    return _triangle_output(ids, uv, depth, faces, attributes, attributes_domain, batch_shape, return_depth, return_interpolation)
+    output = _triangle_output(ids, uv, depth, faces, attributes, attributes_domain, batch_shape, need_depth, return_interpolation)
+    return _composite_background(output, background, return_depth)
 
 
 def rasterize_triangles_peeling(
@@ -221,6 +243,7 @@ def rasterize_lines(
     line_width: float = 1.0,
     return_depth: bool = False,
     return_interpolation: bool = False,
+    background: Optional[Dict[str, Tensor]] = None,
 ) -> Dict[str, Tensor]:
     """Rasterize constant-pixel-width line segments with Triton.
 
@@ -242,6 +265,9 @@ def rasterize_lines(
     - `line_width`: finite, positive width in pixels, perpendicular to the segment.
     - `return_depth`: include camera-space depth (-view z / view w).
     - `return_interpolation`: include original line IDs and endpoint weights.
+    - `background`: optional image, camera-space depth, mask, interpolation_id
+        and interpolation_uv tensors. Same validation, broadcasting and depth
+        compositing rules as `rasterize_triangles`; UV contains endpoint weights.
 
     Returns
     ----
@@ -261,7 +287,9 @@ def rasterize_lines(
     rectangle coverage, not OpenGL's implementation-dependent aliased line rule.
     The triangle rasterizer supplies subpixel coverage and deterministic depth
     testing. All inputs must share a GPU; batches broadcast. Only attributes
-    receive gradients. No context, antialiasing, or background compositing is used.
+    and background image receive gradients. Background values replace defaults
+    above; an image can be supplied without attributes (foreground is then zero).
+    No context or antialiasing is used.
     """
     if attributes_domain not in ('vertex', 'line'):
         raise ValueError("attributes_domain must be 'vertex' or 'line'.")
@@ -271,19 +299,21 @@ def rasterize_lines(
         raise ValueError("line_width must be finite, positive, and representable in float32.")
     size, batch_shape, positions, view_positions, lines, _, attributes = _prepare_inputs(
         size, vertices, attributes, lines, 2, attributes_domain == 'vertex',
-        view, projection, extrinsics, intrinsics, near, far,
+        view, projection, extrinsics, intrinsics, near, far, background=background,
     )
     assert lines is not None
-    _validate_geometry(positions, lines, positions.shape[1])
+    background_depth = background.get('depth') if background else None
+    need_depth = return_depth or background_depth is not None
+    _validate_geometry(positions, lines, positions.shape[1], background_depth=background_depth)
     lines = lines.to(torch.int32).contiguous()
     need_uv = return_interpolation or (attributes is not None and attributes_domain == 'vertex')
     kernels = _load_rasterization_kernels()
     with torch.no_grad():
         expanded, view_expanded, faces, intervals = kernels.expand_lines_triton(
-            positions, view_positions, lines, size, float(line_width), need_uv, return_depth,
+            positions, view_positions, lines, size, float(line_width), need_uv, need_depth,
         )
         triangle_ids, uv, depth = kernels.rasterize_triangles_triton(
-            expanded, view_expanded, faces, size, False, need_uv, return_depth,
+            expanded, view_expanded, faces, size, False, need_uv, need_depth,
         )
         ids = torch.div(triangle_ids, 2, rounding_mode='floor')
         mask = ids >= 0
@@ -304,14 +334,14 @@ def rasterize_lines(
             output['image'] = _interpolate_attributes(attributes, ids, lines, weights)
         else:
             output['image'] = _interpolate_attributes(attributes, ids)
-    if return_depth:
+    if need_depth:
         assert depth is not None
         output['depth'] = depth
     if return_interpolation:
         assert weights is not None
         output['interpolation_id'] = ids
         output['interpolation_uv'] = weights
-    return _restore_batch(output, batch_shape)
+    return _composite_background(_restore_batch(output, batch_shape), background, return_depth)
 
 
 def rasterize_point_cloud(
@@ -330,6 +360,7 @@ def rasterize_point_cloud(
     far: float = float('inf'),
     return_depth: bool = False,
     return_point_id: bool = False,
+    background: Optional[Dict[str, Tensor]] = None,
 ) -> Dict[str, Tensor]:
     """Rasterize point-cloud billboards with Triton.
 
@@ -353,6 +384,9 @@ def rasterize_point_cloud(
     - `near`, `far`: clipping distances used only with intrinsics; 0 < near < far.
     - `return_depth`: include the point center's camera-space depth (-z/w).
     - `return_point_id`: include original point IDs.
+    - `background`: optional image, camera-space depth, mask and point_id tensors.
+        Same validation, broadcasting and compositing rules as
+        `rasterize_triangles`; occlusion uses the point center's camera depth.
 
     Returns
     ----
@@ -370,7 +404,9 @@ def rasterize_point_cloud(
     2D billboards keep the center's NDC depth; 3D billboards are camera-facing
     planes and can project to ellipses or skewed polygons. Only attributes receive
     gradients, not positions, sizes, or cameras. All tensors must share a GPU.
-    No context, antialiasing, or background compositing is used.
+    Background images also receive gradients. Supplied background values replace
+    the defaults above; background-only images use zero foreground attributes.
+    No context or antialiasing is used.
     """
     if point_shape not in ('triangle', 'square', 'pentagon', 'hexagon', 'circle'):
         raise ValueError("Unknown point_shape.")
@@ -393,10 +429,12 @@ def rasterize_point_cloud(
             raise ValueError("point_sizes must be finite, nonnegative, and representable in float32.")
     size, batch_shape, positions, view_positions, _, projection, attributes = _prepare_inputs(
         size, points, attributes, None, 1, False,
-        view, projection, extrinsics, intrinsics, near, far, size_batch_shape,
+        view, projection, extrinsics, intrinsics, near, far, size_batch_shape, background,
     )
     kernels = _load_rasterization_kernels()
     batch, num_points = positions.shape[:2]
+    background_depth = background.get('depth') if background else None
+    need_depth = return_depth or background_depth is not None
     depth = None
     with torch.no_grad():
         raw_sizes = torch.as_tensor(point_sizes, dtype=torch.float32, device=positions.device).detach()
@@ -404,14 +442,14 @@ def rasterize_point_cloud(
         expanded, faces = kernels.expand_points_triton(
             positions, view_positions, projection, sizes, size, point_size_in == '3d', point_shape,
         )
-        _validate_geometry(expanded, None, 0, raw_sizes)
+        _validate_geometry(expanded, None, 0, raw_sizes, background_depth)
         triangle_ids, _, _ = kernels.rasterize_triangles_triton(
             expanded, expanded, faces, size, False, False, False, circle=point_shape == 'circle',
         )
         triangles_per_point = {'triangle': 1, 'square': 2, 'pentagon': 3, 'hexagon': 4, 'circle': 2}[point_shape]
         ids = torch.div(triangle_ids, triangles_per_point, rounding_mode='floor')
         mask = ids >= 0
-        if return_depth:
+        if need_depth:
             center_depth = -view_positions[..., 2] / view_positions[..., 3]
             center_depth = F.pad(center_depth, (0, 1), value=float('inf'))
             index = torch.where(mask, ids, num_points).long()
@@ -420,12 +458,12 @@ def rasterize_point_cloud(
     output = {'mask': mask}
     if attributes is not None:
         output['image'] = _interpolate_attributes(attributes, ids)
-    if return_depth:
+    if need_depth:
         assert depth is not None
         output['depth'] = depth
     if return_point_id:
         output['point_id'] = ids
-    return _restore_batch(output, batch_shape)
+    return _composite_background(_restore_batch(output, batch_shape), background, return_depth)
 
 
 def _prepare_inputs(
@@ -434,6 +472,7 @@ def _prepare_inputs(
     view: Optional[Tensor], projection: Optional[Tensor], extrinsics: Optional[Tensor],
     intrinsics: Optional[Tensor], near: float, far: float,
     extra_batch_shape: Tuple[int, ...] = (),
+    background: Optional[Dict[str, Tensor]] = None,
 ) -> Tuple[Tuple[int, int], Tuple[int, ...], Tensor, Tensor, Optional[Tensor], Optional[Tensor], Optional[Tensor]]:
     if not isinstance(size, (tuple, list)) or len(size) != 2:
         raise ValueError("size must be a (height, width) pair.")
@@ -504,6 +543,8 @@ def _prepare_inputs(
             raise ValueError("Clipping distances must satisfy 0 < near < far.")
 
     # The batching decorator does not handle dictionaries or unindexed primitives.
+    if background is not None:
+        batch_shapes.append(_background_batch_shape(background, (height, width), device, attributes, corners == 1))
     batch_shape = torch.broadcast_shapes(*batch_shapes)
     batch = math.prod(batch_shape)
     with torch.no_grad(), torch.autocast(device_type='cuda', enabled=False):
@@ -535,6 +576,7 @@ def _prepare_inputs(
 
 def _validate_geometry(
     positions: Tensor, indices: Optional[Tensor], num_vertices: int, point_sizes: Optional[Tensor] = None,
+    background_depth: Optional[Tensor] = None,
 ) -> None:
     checks = [torch.isfinite(positions).all()]
     errors = ["Transformed vertices must contain only finite float32 coordinates."]
@@ -545,9 +587,72 @@ def _validate_geometry(
     if point_sizes is not None:
         checks.append(torch.isfinite(point_sizes).all() & (point_sizes >= 0).all())
         errors.append("point_sizes must contain only finite, nonnegative float32 values.")
+    if background_depth is not None:
+        checks.append((torch.isfinite(background_depth) | (background_depth == torch.inf)).all())
+        errors.append("background depth must contain finite values or +inf, not NaN or -inf.")
     for valid, error in zip(torch.stack(checks).tolist(), errors):
         if not valid:
             raise ValueError(error)
+
+
+def _background_batch_shape(
+    background: Dict[str, Tensor], size: Tuple[int, int], device: torch.device,
+    attributes: Optional[Tensor], points: bool,
+) -> Tuple[int, ...]:
+    if not isinstance(background, dict):
+        raise TypeError("background must be a dictionary of tensors.")
+    allowed = {'image', 'depth', 'mask', 'point_id'} if points else {
+        'image', 'depth', 'mask', 'interpolation_id', 'interpolation_uv',
+    }
+    if background.keys() - allowed:
+        raise ValueError(f"Unsupported background fields: {background.keys() - allowed}.")
+    batch_shapes = [()]
+    for name, value in background.items():
+        if not isinstance(value, Tensor):
+            raise TypeError(f"background[{name!r}] must be a tensor.")
+        if value.device != device:
+            raise ValueError(f"background[{name!r}] must be on the same GPU as geometry.")
+        ndim = 3 if name in ('image', 'interpolation_uv') else 2
+        if value.ndim < ndim or value.shape[-ndim:][:2] != size:
+            raise ValueError(f"background[{name!r}] must have spatial shape {size}.")
+        if name == 'image':
+            if not value.is_floating_point():
+                raise TypeError("background image must have a floating-point dtype.")
+            if attributes is not None and (value.dtype != attributes.dtype or value.shape[-1] != attributes.shape[-1]):
+                raise ValueError("background image channels and dtype must match attributes.")
+        else:
+            dtype = torch.bool if name == 'mask' else torch.int32 if name.endswith('_id') else torch.float32
+            if value.dtype != dtype:
+                raise TypeError(f"background[{name!r}] must have dtype {dtype}.")
+            if name == 'interpolation_uv' and value.shape[-1] != 2:
+                raise ValueError("background interpolation_uv must end in two weights.")
+        batch_shapes.append(value.shape[:-ndim])
+    return torch.broadcast_shapes(*batch_shapes)
+
+
+def _composite_background(
+    output: Dict[str, Tensor], background: Optional[Dict[str, Tensor]], return_depth: bool,
+) -> Dict[str, Tensor]:
+    if background:
+        foreground = output['mask']
+        if 'depth' in background:
+            foreground = foreground & (output['depth'] < background['depth'].detach())
+        defaults = {'image': 0., 'depth': torch.inf, 'mask': False,
+                    'interpolation_id': -1, 'interpolation_uv': 0., 'point_id': -1}
+        if 'image' in background and 'image' not in output:
+            output['image'] = torch.zeros(
+                (*foreground.shape, background['image'].shape[-1]),
+                dtype=background['image'].dtype, device=foreground.device,
+            )
+        for name, value in output.items():
+            back = background.get(name, defaults[name])
+            if isinstance(back, Tensor) and name != 'image':
+                back = back.detach()
+            select = foreground[..., None] if name in ('image', 'interpolation_uv') else foreground
+            output[name] = torch.where(select, value, back)
+    if not return_depth:
+        output.pop('depth', None)
+    return output
 
 
 def _interpolate_attributes(
