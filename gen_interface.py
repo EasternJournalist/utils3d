@@ -73,11 +73,10 @@ if __name__ == "__main__":
         f.write(inspect.cleandoc(
             f"""
             # Auto-generated interface file
-            from typing import List, Tuple, Dict, Union, Optional, Any, overload, Literal, Callable
+            from typing import List, Tuple, Dict, Union, Optional, Any, overload, Literal, Callable, ContextManager, Iterator
             from typing_extensions import Unpack
             import numpy as numpy_
             import torch as torch_
-            import nvdiffrast.torch
             import numbers
             from . import numpy, torch
             import utils3d.numpy, utils3d.torch

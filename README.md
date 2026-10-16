@@ -32,12 +32,270 @@ A pure-Python collection of useful functions for 3D computer vision and graphics
 
 The links below will take you to the source code of each function with detailed documentation and type hints.
 
+### Pose-graph numerical precision
+
+The PyTorch-only `pose_graph_optimization` and `pose_graph_optimization_gnc`
+promote compact edge moments and weights to **float64 before graph assembly**.
+Rotation synchronization, scale synchronization and translation solves run in
+float64, including under autocast; GNC also keeps residuals and reweighting in
+float64 between iterations. This avoids discarding weak nonzero graph modes
+through float32 pseudoinverse rank thresholds. Results retain the input
+cross-covariance's dtype and device. Raw point-map reduction, index dtypes,
+solver objectives and robust-rejection settings are unchanged.
+
+Run the precision regression checks from the repository root with
+`PYTHONPATH=. python test/test_pose_graph_precision.py`.
+
+#### Harmonic-range Huber PGO
+
+`utils3d.pt.pose_graph_optimization_huber` (also available through automatic
+dispatch) provides the harmonic-distance Huber IRLS solver. Like the other
+PGO implementations it is PyTorch-only; no NumPy PGO backend exists.
+
+```python
+moments = utils3d.pt.pose_graph_edge_moments(x, y, q)
+Q = moments[-1]
+harmonic_ranges = torch.stack((Q / (q / range_source).sum(-1), Q / (q / range_target).sum(-1)), dim=-1)
+poses, weights, info = utils3d.pt.pose_graph_optimization_huber(
+    num_nodes, edges, *moments, harmonic_ranges=harmonic_ranges,
+    mode="similar", threshold=0.3,
+)
+```
+
+Use positive, guarded ranges from actual observer origins and the same point
+weights as the original moments. Only the outer score is normalized by
+`s_ij * H_source * H_target`; inner point moments/information remain unchanged.
+Opposite queries share one Huber weight, clamped below by `1e-3`. Defaults are
+128 outer updates, weight-change tolerance `1e-4`, and ten inner rotation
+refinement steps. All compact calculations use FP64, preserving input dtype
+and device at the output boundary. `info` reports iterations and convergence;
+nonconvergence emits a `RuntimeWarning`. This solver does not add graph edges
+or repair initially disconnected graphs. Pixel weight totals and optional
+edge priors remain coefficients of the inner solver, not the percentage score.
+
+No per-iteration CPU graph diagnostics or raw point decoding are performed.
+The ordinary PGO and existing GNC APIs retain their behavior.
+
+#### Separate robust-scoring moments
+
+`pose_graph_edge_moments` already returns the total point weight as its sixth
+tensor, so two calls can supply all statistics needed by a relative RMS score:
+
+```python
+inner = utils3d.pt.pose_graph_edge_moments(x, y, q)
+scoring = utils3d.pt.pose_graph_edge_moments(x, y, q / range_source / range_target)
+poses, weights = utils3d.pt.pose_graph_optimization_gnc(
+    num_nodes, edges, *inner, mode="similar", threshold=0.05,
+    residual_moments=scoring, residual_scale="geometric_mean",
+)
+```
+
+Here ranges are fixed distances to the actual camera origins (include any
+calibration shifts), with positive, unit-consistent near-zero guards. Both calls
+must use the same point correspondences and validity mask. The inner PGO always
+uses `inner`; only the outer residual uses `scoring`. If the weight sums are
+`Q=sum(q)` and `A=sum(q/(range_source*range_target))`, the squared outer score is
+`A/Q` times the scoring-moment mean squared residual, additionally divided by
+relative Sim(3) scale in `"geometric_mean"` mode. The resulting RMS is invariant
+to source/target exchange of the same correspondences and independent local
+unit changes; `0.05` means 5%. Omitting both new keywords preserves the previous
+metric and GNC behavior. This change does not alter the continuation schedule,
+pair directional weights, or add connectivity safeguards.
+
+No point-count output is needed for this weighted metric: its denominator is
+`Q`, not the sample count. Callers may separately retain point counts for
+diagnostics. The cached moments remain valid while point predictions, weights,
+calibration shifts and range guards stay fixed.
+
+
+### Point-cloud sampling
+
+Both backends return **original point indices**, so the same selection can be
+applied to coordinates, colors, normals, or other attributes:
+
+```python
+indices = utils3d.voxel_grid_sampling(points, voxel_size=0.01)
+indices = utils3d.hierarchical_voxel_sampling(points, num_samples=100_000)
+sampled_points = points[indices]
+```
+
+Inputs are finite floating-point arrays/tensors of shape `(N, 3)`; outputs are
+one-dimensional int64 indices, on the input device for PyTorch.
+
+- `voxel_grid_sampling` keeps the first input point in each occupied cubic
+  voxel. The grid is anchored at the coordinate-wise minimum. Every input point
+  is within `sqrt(3) * voxel_size` of a selected point, up to numerical rounding.
+- `hierarchical_voxel_sampling` sorts 21-bit-per-axis Morton codes once, chooses
+  an octree level, and refines a spatially dispersed subset of its cells.
+  Final cells differ by at most one level. Each is represented by the first
+  point in Morton order, with original index breaking ties. For
+  `0 < num_samples < N`, if `U` finest-grid cells are occupied and
+  `T = min(num_samples, U)`, the output count is between `max(1, T - 6)` and `T`.
+  Duplicate coordinates or finest-grid quantization can reduce `U`; outliers
+  can limit effective resolution. A zero target gives empty indices, and a
+  target at least `N` returns all indices, including coincident points.
+
+These are grid-based coverage samplers, **not FPS or Poisson-disk sampling**:
+there is no minimum point-separation guarantee, no progressive FPS ordering,
+and selections need not be nested across targets. Both use float64 grid
+arithmetic, O(N) workspace, and sorting (O(N log N) in the comparison model),
+without loops over input points or output samples. PyTorch selection runs
+without autograd; gathering the returned indices can still propagate gradients.
+The PyTorch implementations require a device supporting float64, read bounds
+and (for the hierarchical sampler) at most five level counts on the CPU, and
+otherwise keep point data on the input device.
+
+Invalid shapes, dtypes, parameters, nonfinite coordinates, and unrepresentable
+coordinate ranges raise errors. Single-scale voxel coordinates must fit int64;
+if only the packed key would overflow, lexicographic sorting preserves distinct
+voxels instead of allowing collisions.
+
+Run the NumPy / PyTorch CPU and available-CUDA regression checks with
+`PYTHONPATH=. python test/test_sampling.py`.
+
+### JIT GPU rasterization
+
+`utils3d.pt.rasterize_triangles`, `utils3d.pt.rasterize_lines`, and
+`utils3d.pt.rasterize_point_cloud` share a small, point-sampled Triton rasterizer.
+It implements homogeneous view-frustum clipping, backface culling, a top-left
+shared-edge rule with eight subpixel bits, and perspective-correct interpolation.
+Unsigned 64-bit atomic depth/face keys select the visible triangle; equal depths
+choose the lowest face ID. It scans triangle bounding boxes, without a scene
+graph, binning queues, or cached graphics contexts. Large overlapping or thin
+triangles can be slow; this is a reference implementation, not a replacement for
+a full graphics engine.
+
+Install compatible GPU builds of **PyTorch and Triton** separately
+(`pip install torch triton`). No nvdiffrast, OpenGL context, or custom CUDA/C++
+extension is needed for the Torch path. NVIDIA execution still requires a GPU
+driver and the PyTorch/Triton runtime; it does not require compiling `.cu` sources
+or configuring a CUDA toolkit. Triton is loaded only when rendering is requested.
+The NumPy/ModernGL backend is unchanged.
+
+```python
+import torch
+import utils3d
+
+vertices = torch.tensor([
+    [-0.8, -0.8, 0.0], [0.8, -0.8, 0.0], [0.0, 0.8, 0.0],
+], device="cuda")
+faces = torch.tensor([[0, 1, 2]], device="cuda")
+colors = torch.eye(3, device="cuda", requires_grad=True)
+result = utils3d.pt.rasterize_triangles(
+    (256, 256), vertices=vertices, faces=faces, attributes=colors,
+    return_interpolation=True,
+)
+result["image"].sum().backward()  # Gradients flow to colors, not geometry.
+```
+
+Coordinates and camera matrices are float32 GPU tensors. Faces are shared
+`(T, 3)` int32/int64 indices; omit them for `(..., T, 3, D)` triangle soup.
+Vertex coordinates may have 2, 3, or 4 components. Vertex, camera and attribute
+batch dimensions broadcast. Attribute tensors support any number of channels
+and retain their floating-point dtype. Use `attributes_domain="face"` for
+constant per-face attributes.
+
+Outputs follow NumPy's top-left image convention: `image` has shape
+`(..., H, W, C)`, and `mask` has shape `(..., H, W)`. Optional `depth` is
+camera-space `-z/w`, with `inf` for background; with identity transforms this
+is simply negative input z. Optional `interpolation_id` contains original face
+IDs (`-1` for background), and `interpolation_uv` contains the first two
+perspective-correct barycentric weights (zero for background). NDC depth uses
+strict `< 1` far-plane testing. Geometry outputs are detached; only attributes
+receive gradients through native PyTorch indexing and weighted sums. Validation
+checks finite transformed coordinates and index bounds with one GPU-to-CPU
+synchronization. Background attributes are zero.
+
+#### Points and lines
+
+Point billboards and line rectangles are expanded on the GPU and reuse the
+triangle coverage/depth core, rather than maintaining separate depth algorithms.
+Attribute lookup and interpolation remain native PyTorch operations.
+
+```python
+point_result = utils3d.pt.rasterize_point_cloud(
+    (256, 256), points=vertices, attributes=colors,
+    point_sizes=12, point_shape="circle", return_point_id=True,
+)
+line_result = utils3d.pt.rasterize_lines(
+    (256, 256), vertices=vertices, attributes=colors,
+    lines=torch.tensor([[0, 1], [1, 2], [2, 0]], device="cuda"),
+    line_width=2.5, return_interpolation=True,
+)
+```
+
+- **Points:** all five NumPy shapes are supported: triangle, square, pentagon,
+  hexagon and circle. Sizes can be a scalar or a broadcasting `(..., N)` /
+  `(..., 1)` GPU tensor. `point_size_in="2d"` uses pixels;
+  `"3d"` uses camera-plane units, matching NumPy's billboard convention.
+  Square size is its side length; circle size is its diameter; other polygons
+  use the circumcircle diameter. Zero sizes are invisible. The full billboard
+  is clipped, so centers outside the image can still contribute. Circles discard
+  outside fragments **before** depth testing. Optional `point_id` stores original
+  IDs with background -1; depth is the point center's camera-space depth.
+- **Lines:** supply shared `(L, 2)` indices or unindexed `(..., L, 2, D)`
+  endpoints. `attributes_domain="line"` selects constant per-line attributes;
+  the default interpolates endpoint attributes perspective-correctly.
+  Centerlines are clipped against all six frustum planes, then expanded to
+  **flat-capped rectangles** with the requested perpendicular width in pixels.
+  Widths need not be integers. Projected zero-length lines are invisible.
+  `interpolation_id` stores original line IDs, while `interpolation_uv` stores
+  the two original endpoint weights, including after clipping.
+- **Coverage is intentionally not bit-identical to OpenGL lines:** the Torch
+  implementation uses geometric rectangles, not driver-specific aliased
+  line/diamond-exit rules. Diagonal edges and endpoints may cover different
+  pixels. There is no antialiasing or automatic joining of adjacent segments.
+
+Positions, cameras and point sizes are detached; only attributes receive
+gradients. The same batching, dtype, background, and optional-dependency rules
+apply to all three renderers. Expanded primitives require O(N) geometry storage,
+not an image-by-primitive tensor.
+
+#### Triangle depth peeling
+
+`utils3d.pt.rasterize_triangles_peeling` returns a context-managed layer iterator.
+It accepts the same geometry, camera, attribute-domain and output options as
+triangle rendering, without a graphics context:
+
+```python
+with utils3d.pt.rasterize_triangles_peeling(
+    (256, 256), vertices=vertices, faces=faces, attributes=colors,
+    return_depth=True, return_interpolation=True,
+) as layers:
+    for i, layer in enumerate(layers):
+        image = layer["image"]  # (..., H, W, C), including the final empty layer.
+        if i == 3:
+            break
+```
+
+The first layer matches ordinary rendering. Each next layer selects the closest
+fragment at strictly greater float32 NDC depth per pixel. Equal-depth fragments
+are skipped together; face ID breaks ties within a layer. Exhausted pixels stay
+empty, and iteration ends after yielding one entirely empty layer across the
+batch. Geometry is prepared once, then rerasterized per layer, with one CPU
+coverage check per layer. There is no fixed layer limit; leaving the `with` block
+closes the iterator. Outputs can be retained, and attribute losses can be summed
+over layers before backward. Do not mutate inputs while iterating.
+
+**Migration from the nvdiffrast wrapper:** the Torch `RastContext`,
+`sample_texture`, and `texture_composite` APIs
+have been removed, as have the `ctx`, `antialiasing`, and
+`return_image_derivatives` rendering parameters. There is no geometry gradient,
+screen-space derivative, mipmap, antialiasing, or background-depth compositing
+path. Texture sampling can be composed separately with PyTorch operations.
+Triangle peeling is now available through the Triton layer iterator above.
+NumPy-only functions remain available through `utils3d.np` and automatic dispatch.
+
+Run the GPU, independent CPU-reference, optional NumPy/OpenGL, attribute-gradient
+and lazy-import regression checks with
+`PYTHONPATH=. python test/test_rasterization.py`.
 
 ### Contents
 - [Camera & Projection & Coordinate Transforms](#camera--projection--coordinate-transforms) 
 - [Pose Solver](#pose-solver)
 - [Image & Maps](#image--maps)
 - [Mesh](#mesh)
+- [Point Sampling](#point-sampling)
 - [Rasterization](#rasterization)
 - [Array Utils](#array-utils)
 - [Segment Array Operations](#segment-array-operations) 
@@ -117,7 +375,8 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.kabsch`<br>Backward gradients friendly Kabsch method (compute rotation from input covarience matrix). | [`utils3d.np.kabsch(cov)`](utils3d/numpy/pose.py#L25) | [`utils3d.pt.kabsch(cov, eps)`](utils3d/torch/pose.py#L65) | 
 | `utils3d.pose_graph_edge_moments`<br>Reduce per-edge point correspondences to centered second-moment statistics for pose graph optimization. | - | [`utils3d.pt.pose_graph_edge_moments(x, y, w, eps)`](utils3d/torch/pose.py#L910) | 
 | `utils3d.pose_graph_optimization`<br>Pose graph optimization for global poses from per-edge centered point statistics. | - | [`utils3d.pt.pose_graph_optimization(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights, mode, niter, eps)`](utils3d/torch/pose.py#L1010) | 
-| `utils3d.pose_graph_optimization_gnc`<br>Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection. | - | [`utils3d.pt.pose_graph_optimization_gnc(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights, mode, threshold, niter, gnc_iters, gnc_factor, eps)`](utils3d/torch/pose.py#L1152) | 
+| `utils3d.pose_graph_optimization_gnc`<br>Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection. | - | [`utils3d.pt.pose_graph_optimization_gnc(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights, mode, threshold, niter, gnc_iters, gnc_factor, eps, residual_moments, residual_scale)`](utils3d/torch/pose.py#L1284) |
+| `utils3d.pose_graph_optimization_huber`<br>Reweight pose-graph edges with Huber on harmonic-range-normalized point RMS. | - | [`utils3d.pt.pose_graph_optimization_huber(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights, harmonic_ranges, mode, threshold, niter, max_iterations, tolerance, weight_floor)`](utils3d/torch/pose.py#L1173) |
 | `utils3d.segment_pose_graph_edge_moments`<br>Segment array mode for `pose_graph_edge_moments`. | - | [`utils3d.pt.segment_pose_graph_edge_moments(x, y, w, offsets, eps)`](utils3d/torch/pose.py#L961) | 
 | `utils3d.segment_solve_pose`<br>Solve for the pose (transformation from p to q) given weighted point correspondences. | [`utils3d.np.segment_solve_pose(p, q, w, sigma, offsets, mode, lam)`](utils3d/numpy/pose.py#L366) | [`utils3d.pt.segment_solve_pose(p, q, w, sigma, offsets, mode, lam, eps)`](utils3d/torch/pose.py#L482) | 
 | `utils3d.segment_solve_poses_sequential`<br>Segment array mode for `solve_poses_sequential`. | [`utils3d.np.segment_solve_poses_sequential(trajectories, weights, offsets, noise_scales, accum, min_valid_size, mode, lam)`](utils3d/numpy/pose.py#L578) | [`utils3d.pt.segment_solve_poses_sequential(trajectories, weights, offsets, noise_scales, accum, min_valid_size, mode, lam, eps)`](utils3d/torch/pose.py#L665) | 
@@ -192,18 +451,25 @@ The links below will take you to the source code of each function with detailed 
 | `utils3d.triangulate_mesh`<br>Triangulate a polygonal mesh. | [`utils3d.np.triangulate_mesh(faces, vertices, method, return_face_indices)`](utils3d/numpy/mesh.py#L46) | [`utils3d.pt.triangulate_mesh(faces, vertices, method)`](utils3d/torch/mesh.py#L38) | 
 
 
+### Point Sampling
+
+| Function | Numpy | Pytorch |
+| ---- | ---- | ---- |
+| `utils3d.hierarchical_voxel_sampling`<br>Select approximately a target number of spatially distributed original points. | [`utils3d.np.hierarchical_voxel_sampling(points, num_samples)`](utils3d/numpy/sampling.py#L116) | [`utils3d.pt.hierarchical_voxel_sampling(points, num_samples)`](utils3d/torch/sampling.py#L120) |
+| `utils3d.voxel_grid_sampling`<br>Select one original point per occupied cubic voxel. | [`utils3d.np.voxel_grid_sampling(points, voxel_size)`](utils3d/numpy/sampling.py#L50) | [`utils3d.pt.voxel_grid_sampling(points, voxel_size)`](utils3d/torch/sampling.py#L52) |
+
+
 ### Rasterization
 
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
-| `utils3d.RastContext`<br>Context for numpy-side rasterization. Based on moderngl. | [`utils3d.np.RastContext(args, kwargs)`](utils3d/numpy/rasterization.py#L257) | [`utils3d.pt.RastContext(nvd_ctx, backend, device)`](utils3d/torch/rasterization.py#L25) | 
-| `utils3d.rasterize_lines`<br>Rasterize lines. | [`utils3d.np.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L942) | - | 
-| `utils3d.rasterize_point_cloud`<br>Rasterize point cloud. | [`utils3d.np.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id, background, ctx)`](utils3d/numpy/rasterization.py#L1195) | - | 
-| `utils3d.rasterize_triangles`<br>Rasterize triangles. | [`utils3d.np.rasterize_triangles(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L418) | [`utils3d.pt.rasterize_triangles(size, vertices, attributes, faces, view, projection, extrinsics, intrinsics, near, far, return_image_derivatives, return_depth, return_interpolation, antialiasing, ctx)`](utils3d/torch/rasterization.py#L58) | 
-| `utils3d.rasterize_triangles_peeling`<br>Rasterize triangles with depth peeling. | [`utils3d.np.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, ctx)`](utils3d/numpy/rasterization.py#L671) | [`utils3d.pt.rasterize_triangles_peeling(size, vertices, attributes, faces, view, projection, extrinsics, intrinsics, near, far, return_image_derivatives, return_depth, return_interpolation, antialiasing, ctx)`](utils3d/torch/rasterization.py#L194) | 
-| `utils3d.sample_texture`<br>Sample from a texture map with a UV map. | [`utils3d.np.sample_texture(uv_map, texture_map, interpolation, mipmap_level, repeat, anisotropic, ctx)`](utils3d/numpy/rasterization.py#L1423) | [`utils3d.pt.sample_texture(texture, uv, uv_dr)`](utils3d/torch/rasterization.py#L352) | 
+| `utils3d.RastContext`<br>Context for numpy-side rasterization. Based on moderngl. | [`utils3d.np.RastContext(args, kwargs)`](utils3d/numpy/rasterization.py#L257) | - |
+| `utils3d.rasterize_lines`<br>Rasterize lines. | [`utils3d.np.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L942) | [`utils3d.pt.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation)`](utils3d/torch/rasterization.py#L208) |
+| `utils3d.rasterize_point_cloud`<br>Rasterize point cloud. | [`utils3d.np.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id, background, ctx)`](utils3d/numpy/rasterization.py#L1195) | [`utils3d.pt.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id)`](utils3d/torch/rasterization.py#L317) |
+| `utils3d.rasterize_triangles`<br>Rasterize triangles. | [`utils3d.np.rasterize_triangles(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L418) | [`utils3d.pt.rasterize_triangles(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation)`](utils3d/torch/rasterization.py#L21) |
+| `utils3d.rasterize_triangles_peeling`<br>Rasterize triangles with depth peeling. | [`utils3d.np.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, ctx)`](utils3d/numpy/rasterization.py#L671) | [`utils3d.pt.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation)`](utils3d/torch/rasterization.py#L109) |
+| `utils3d.sample_texture`<br>Sample from a texture map with a UV map. | [`utils3d.np.sample_texture(uv_map, texture_map, interpolation, mipmap_level, repeat, anisotropic, ctx)`](utils3d/numpy/rasterization.py#L1423) | - |
 | `utils3d.test_rasterization`<br>Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file. | [`utils3d.np.test_rasterization(ctx)`](utils3d/numpy/rasterization.py#L1588) | - | 
-| `utils3d.texture_composite`<br>Composite textures with depth peeling output. | - | [`utils3d.pt.texture_composite(texture, uv, uv_da, background)`](utils3d/torch/rasterization.py#L372) | 
 
 
 ### Array Utils

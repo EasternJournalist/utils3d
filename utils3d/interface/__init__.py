@@ -85,6 +85,8 @@ __all__ = ["sliding_window",
 "segment_concat", 
 "segment_chain", 
 "group_as_segments", 
+"voxel_grid_sampling", 
+"hierarchical_voxel_sampling", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -163,6 +165,7 @@ __all__ = ["sliding_window",
 "segment_pose_graph_edge_moments", 
 "pose_graph_optimization", 
 "pose_graph_optimization_gnc", 
+"pose_graph_optimization_huber", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -180,8 +183,7 @@ __all__ = ["sliding_window",
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
-"bounding_rect_from_mask", 
-"texture_composite"]
+"bounding_rect_from_mask"]
 
 def _contains_tensor(obj):
     if isinstance(obj, (list, tuple)):
@@ -694,6 +696,18 @@ def group_as_segments(*args, **kwargs):
     return _call_based_on_args('group_as_segments', args, kwargs)
 
 @suppress_traceback
+def voxel_grid_sampling(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.voxel_grid_sampling, utils3d.torch.voxel_grid_sampling
+    return _call_based_on_args('voxel_grid_sampling', args, kwargs)
+
+@suppress_traceback
+def hierarchical_voxel_sampling(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        utils3d.numpy.hierarchical_voxel_sampling, utils3d.torch.hierarchical_voxel_sampling
+    return _call_based_on_args('hierarchical_voxel_sampling', args, kwargs)
+
+@suppress_traceback
 def triangulate_mesh(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         utils3d.numpy.triangulate_mesh, utils3d.torch.triangulate_mesh
@@ -966,7 +980,7 @@ def fractal_perlin_noise_map(*args, **kwargs):
 @suppress_traceback
 def RastContext(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.RastContext, utils3d.torch.RastContext
+        utils3d.numpy.RastContext, None
     return _call_based_on_args('RastContext', args, kwargs)
 
 @suppress_traceback
@@ -984,19 +998,19 @@ def rasterize_triangles_peeling(*args, **kwargs):
 @suppress_traceback
 def rasterize_lines(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.rasterize_lines, None
+        utils3d.numpy.rasterize_lines, utils3d.torch.rasterize_lines
     return _call_based_on_args('rasterize_lines', args, kwargs)
 
 @suppress_traceback
 def rasterize_point_cloud(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.rasterize_point_cloud, None
+        utils3d.numpy.rasterize_point_cloud, utils3d.torch.rasterize_point_cloud
     return _call_based_on_args('rasterize_point_cloud', args, kwargs)
 
 @suppress_traceback
 def sample_texture(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
-        utils3d.numpy.sample_texture, utils3d.torch.sample_texture
+        utils3d.numpy.sample_texture, None
     return _call_based_on_args('sample_texture', args, kwargs)
 
 @suppress_traceback
@@ -1162,6 +1176,12 @@ def pose_graph_optimization_gnc(*args, **kwargs):
     return _call_based_on_args('pose_graph_optimization_gnc', args, kwargs)
 
 @suppress_traceback
+def pose_graph_optimization_huber(*args, **kwargs):
+    if TYPE_CHECKING:  # redirected to:
+        None, utils3d.torch.pose_graph_optimization_huber
+    return _call_based_on_args('pose_graph_optimization_huber', args, kwargs)
+
+@suppress_traceback
 def segment_median(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.segment_median
@@ -1268,10 +1288,4 @@ def bounding_rect_from_mask(*args, **kwargs):
     if TYPE_CHECKING:  # redirected to:
         None, utils3d.torch.bounding_rect_from_mask
     return _call_based_on_args('bounding_rect_from_mask', args, kwargs)
-
-@suppress_traceback
-def texture_composite(*args, **kwargs):
-    if TYPE_CHECKING:  # redirected to:
-        None, utils3d.torch.texture_composite
-    return _call_based_on_args('texture_composite', args, kwargs)
 

@@ -60,6 +60,7 @@ if __name__ == "__main__":
         "pose": "Pose Solver",
         "maps": "Image & Maps",
         "mesh": "Mesh",
+        "sampling": "Point Sampling",
         "rasterization": "Rasterization",
         "utils": "Array Utils",
         "segment_ops": "Segment Array Operations",

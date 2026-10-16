@@ -12,4 +12,5 @@ __all__ = [
     'segment_pose_graph_edge_moments',
     'pose_graph_optimization',
     'pose_graph_optimization_gnc',
+    'pose_graph_optimization_huber',
 ]

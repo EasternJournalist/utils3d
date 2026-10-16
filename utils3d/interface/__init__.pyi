@@ -1,9 +1,8 @@
 # Auto-generated interface file
-from typing import List, Tuple, Dict, Union, Optional, Any, overload, Literal, Callable
+from typing import List, Tuple, Dict, Union, Optional, Any, overload, Literal, Callable, ContextManager, Iterator
 from typing_extensions import Unpack
 import numpy as numpy_
 import torch as torch_
-import nvdiffrast.torch
 import numbers
 from . import numpy, torch
 import utils3d.numpy, utils3d.torch
@@ -89,6 +88,8 @@ __all__ = ["sliding_window",
 "segment_concat", 
 "segment_chain", 
 "group_as_segments", 
+"voxel_grid_sampling", 
+"hierarchical_voxel_sampling", 
 "triangulate_mesh", 
 "compute_face_corner_angles", 
 "compute_face_corner_normals", 
@@ -167,6 +168,7 @@ __all__ = ["sliding_window",
 "segment_pose_graph_edge_moments", 
 "pose_graph_optimization", 
 "pose_graph_optimization_gnc", 
+"pose_graph_optimization_huber", 
 "segment_median", 
 "segment_sum", 
 "segment_cumsum", 
@@ -184,8 +186,7 @@ __all__ = ["sliding_window",
 "laplacian_smooth_mesh", 
 "taubin_smooth_mesh", 
 "laplacian_hc_smooth_mesh", 
-"bounding_rect_from_mask", 
-"texture_composite"]
+"bounding_rect_from_mask"]
 
 @overload
 def sliding_window(x: numpy_.ndarray, window_size: int | Tuple[int, ...], stride: int | Tuple[int, ...] | None = None, dilation: int | Tuple[int, ...] | None = None, pad_size: int | Tuple[int, int] | Tuple[Tuple[int, int]] | None = None, pad_mode: str = 'constant', pad_value: numbers.Number = 0, axis: Tuple[int, ...] | None = None) -> numpy_.ndarray:
@@ -1476,6 +1477,72 @@ Assuming there are `M` difference labels:
 
 `rearranged_data[offsets[i]:offsets[i + 1]]` corresponding to the i-th segment whose label is `segment_labels[i]`"""
     utils3d.numpy.segment_ops.group_as_segments
+
+@overload
+def voxel_grid_sampling(points: numpy_.ndarray, voxel_size: float) -> numpy_.ndarray:
+    """Select one original point per occupied cubic voxel.
+
+Parameters
+----
+- `points`: (ndarray) floating-point array of shape `(N, 3)`, with finite coordinates.
+- `voxel_size`: (float) finite, positive voxel side length.
+
+Returns
+-------
+- `indices`: (ndarray) int64 array of shape `(M,)`. The smallest original index
+    in each occupied voxel, ordered lexicographically by voxel coordinates.
+
+Notes
+-----
+The grid origin is the coordinate-wise minimum of `points`. Grid arithmetic
+uses float64. Every input point is within `sqrt(3) * voxel_size` of a selected
+point, up to floating-point rounding; there is no minimum separation guarantee.
+This is voxel sampling, not FPS or Poisson-disk sampling.
+
+Sorting requires O(N log N) time in the comparison model and O(N) workspace.
+Empty input returns empty indices. Duplicate coordinates share a voxel.
+Nonfinite inputs, an overflowing coordinate range, or a coordinate span
+divided by `voxel_size` reaching 2**63 raise ValueError. When a packed voxel
+key would overflow, a collision-free lexicographic sort is used instead."""
+    utils3d.numpy.sampling.voxel_grid_sampling
+
+@overload
+def hierarchical_voxel_sampling(points: numpy_.ndarray, num_samples: int) -> numpy_.ndarray:
+    """Select approximately a target number of spatially distributed original points.
+
+Parameters
+----
+- `points`: (ndarray) floating-point array of shape `(N, 3)`, with finite coordinates.
+- `num_samples`: (int) nonnegative target number of samples.
+
+Returns
+-------
+- `indices`: (ndarray) int64 array of shape `(M,)`, containing distinct original
+    indices. Output order is spatial, not a progressive FPS ordering.
+
+Notes
+-----
+An implicit octree uses a cube anchored at the coordinate-wise minimum, with
+side length equal to the largest coordinate span. Coordinates are quantized
+in float64 to 21 bits per axis; the upper cube face belongs to the last cell.
+A single stable Morton sort is followed by a search over grid levels. Only
+some cells of the last level are refined, using deterministic hashed cell
+priorities. Final cells differ by at most one level, and each is represented
+by its first point in the sorted Morton order (original index breaks ties).
+
+For 0 < num_samples < N, let U be the number of occupied finest-grid cells
+and T = min(num_samples, U). Then max(1, T - 6) <= M <= T. Coincident points
+and points closer than the finest resolution can share a cell. A zero target
+or empty input returns empty indices; a target >= N returns all input indices
+in their original order, including coincident points.
+
+This is approximate uniform coverage, not FPS or Poisson-disk sampling.
+There is no minimum separation guarantee; results depend on grid orientation
+and are not nested across targets. Outliers can reduce the effective spatial
+resolution. Time is O(N log N) in the comparison model, with O(N) workspace
+and no loop over points or samples. Nonfinite inputs or an overflowing
+coordinate range raise ValueError."""
+    utils3d.numpy.sampling.hierarchical_voxel_sampling
 
 @overload
 def triangulate_mesh(faces: numpy_.ndarray, vertices: numpy_.ndarray = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan', return_face_indices: bool = False) -> numpy_.ndarray:
@@ -3870,6 +3937,11 @@ Writing `L_i = s_i R_i` and camera centers `c_i = -L_i^{-1} t_i`, this subproble
 `d_ij = L_i^{-1} mean_x - L_j^{-1} mean_y`. A scalar graph Laplacian solves all three coordinates;
 its pseudoinverse fixes the mean camera center to zero within each connected component.
 
+The compact moments and edge weights are promoted to float64 before constructing any graph
+systems, including under autocast. This preserves weak nonzero Laplacian modes that float32
+rank thresholds can discard. Returned poses use `cov_yx`'s input dtype and device; raw point
+reduction is unchanged, and index tensors are not converted.
+
 Parameters
 ----
 - `num_nodes`: number of nodes `N` in the pose graph.
@@ -3900,7 +3972,7 @@ Returns
     utils3d.torch.pose.pose_graph_optimization
 
 @overload
-def pose_graph_optimization_gnc(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: torch_.Tensor | None = None, *, mode: Literal['rigid', 'similar'] = 'rigid', threshold: float = 0.05, niter: int = 10, gnc_iters: int = 20, gnc_factor: float = 1.4, eps: float = 1e-12) -> Tuple[torch_.Tensor, torch_.Tensor]:
+def pose_graph_optimization_gnc(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: torch_.Tensor | None = None, *, mode: Literal['rigid', 'similar'] = 'rigid', threshold: float = 0.05, niter: int = 10, gnc_iters: int = 20, gnc_factor: float = 1.4, eps: float = 1e-12, residual_moments: Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor, torch_.Tensor] | None = None, residual_scale: Literal['target', 'geometric_mean'] = 'target') -> Tuple[torch_.Tensor, torch_.Tensor]:
     """Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection.
 
 Wraps `pose_graph_optimization` in an outer loop that re-weights each edge by a Truncated Least
@@ -3909,7 +3981,7 @@ truncated cost via the control parameter `mu` (Yang et al., "Graduated Non-Conve
 Spatial Perception", RA-L 2020). Bad edges (wrong loop closures / outlier constraints) converge
 to weight 0 and are effectively removed.
 
-The outlier test uses the *exact* per-edge mean squared point residual (see
+By default, the outlier test uses the *exact* per-edge mean squared point residual (see
 `_pose_graph_optimization_moment_residual`), so `threshold` is a plain point distance in the units of
 your correspondences — no rotation/translation scale to juggle. Each GNC iteration solves the
 weighted graph, evaluates the residual, then updates each edge's weight in closed form:
@@ -3920,6 +3992,9 @@ weighted graph, evaluates the residual, then updates each edge's weight in close
 
 where `c = threshold`. `mu` starts small (near-convex) and is multiplied by `gnc_factor` each
 iteration to recover the truncated cost.
+
+Moments, graph solves, residuals and continuation weights remain float64 throughout the outer
+loop, including under autocast. Both returned tensors use `cov_yx`'s input dtype and device.
 
 Parameters
 ----
@@ -3933,13 +4008,24 @@ Parameters
 - `w`: (E,) total correspondence weight per edge (translation information).
 - `edge_weights`: optional (E,) per-edge confidence prior, multiplied with the GNC weight. If None, uniform.
 - `mode`: `'rigid'` for `(R, t)` poses (default), or `'similar'` to additionally solve a per-node scale
-    (see `pose_graph_optimization`). The residual threshold stays a plain point distance either way.
-- `threshold`: inlier point distance `c`. An edge is treated as an inlier when its RMS point
-    residual is roughly below `threshold`; set it to your expected correspondence noise.
+    (see `pose_graph_optimization`).
+- `threshold`: inlier RMS cutoff `c`, in the selected scoring metric. With default moments this
+    is a point distance; with inverse-range-product moments and geometric-mean scale it is a
+    dimensionless relative error. Set it to the expected correspondence noise in that metric.
 - `niter`: inner Procrustes iterations per `pose_graph_optimization` solve.
 - `gnc_iters`: maximum number of outer GNC iterations.
 - `gnc_factor`: `mu` growth factor per outer iteration (`> 1` for GNC-TLS).
 - `eps`: small value to prevent division by zero.
+- `residual_moments`: optional six-tensor output of `pose_graph_edge_moments`, in exactly the same
+    edge order, computed with alternative point weights `a`. Used only for robust scoring.
+    All inner solves still use the positional input moments and weight sum `Q = w`.
+    Scoring is `sum_k a_k ||T_ij x_k - y_k||^2 / Q`, not divided by `sum_k a_k`.
+    Both moment sets must describe the same correspondences and validity mask.
+- `residual_scale`: `'target'` preserves target-coordinate squared errors. `'geometric_mean'`
+    additionally divides each squared error by relative Sim(3) scale `s_ij` (1 for rigid).
+    With `a_k = q_k / (||x_k + shift_i|| * ||y_k + shift_j||)`, this yields the squared,
+    dimensionless symmetric RMS relative point error. `threshold=0.05` then means 5%.
+    The shifts and any range guards must be fixed before accumulating these moments.
 
 Returns
 ----
@@ -3950,6 +4036,43 @@ Returns
     confident inlier, 0 an edge rejected as an outlier; intermediate values are still in the
     ambiguous band. Threshold this to classify edges."""
     utils3d.torch.pose.pose_graph_optimization_gnc
+
+@overload
+def pose_graph_optimization_huber(num_nodes: int, edges: torch_.Tensor, cov_yx: torch_.Tensor, cov_xx: torch_.Tensor, cov_yy: torch_.Tensor, mean_x: torch_.Tensor, mean_y: torch_.Tensor, w: torch_.Tensor, edge_weights: torch_.Tensor | None = None, *, harmonic_ranges: torch_.Tensor, mode: Literal['rigid', 'similar'] = 'similar', threshold: float = 0.3, niter: int = 10, max_iterations: int = 128, tolerance: float = 0.0001, weight_floor: float = 0.001) -> Tuple[torch_.Tensor, torch_.Tensor, dict]:
+    """Reweight pose-graph edges with Huber on harmonic-range-normalized point RMS.
+
+Inner solves use the original point moments unchanged. The outer squared residual is the
+original weighted mean squared point error divided by `s_ij * H_i * H_j`, where `s_ij`
+is the current relative similarity scale (1 in rigid mode). Compute the fixed endpoint
+harmonic ranges using the original pixel weights q: `H = sum(q) / sum(q / range)`.
+Ranges must be measured from camera origins, including any fixed calibration shifts.
+Point validity and positive near-zero range guards are the caller's responsibility.
+
+Both directions of an undirected edge share the mean squared residual and one Huber weight.
+No GT, raw point maps or alternate covariance statistics enter this solver. A positive weight
+floor preserves existing nonzero links but cannot connect an originally disconnected graph.
+All solves and residuals use float64; outputs retain the cov_yx input dtype and device.
+
+Parameters
+----
+- `num_nodes`, `edges`, `cov_yx`, `cov_xx`, `cov_yy`, `mean_x`, `mean_y`, `w`, `edge_weights`:
+    as in `pose_graph_optimization`. Index tensors are not changed. Priors multiply the Huber
+    weights in the inner solves; they do not rescale the percentage residual.
+- `harmonic_ranges`: (E, 2), positive fixed source/target harmonic ranges in local point units.
+- `mode`: inner solver mode, `'rigid'` or `'similar'`.
+- `threshold`: dimensionless RMS cutoff, e.g. 0.3 means 30%.
+- `niter`: inner rotation refinement count.
+- `max_iterations`: maximum outer weight updates, excluding the initial ordinary PGO.
+- `tolerance`: stop when maximum undirected weight change is below this value.
+- `weight_floor`: minimum Huber multiplier, in (0, 1].
+
+Returns
+----
+- `poses`: (N, 4, 4) world-to-node poses.
+- `weights`: (E,) robust multipliers, independent of any supplied edge prior.
+- `info`: dict with `iterations`, `converged`, `max_weight_change`. Emits RuntimeWarning if
+    the iteration cap is reached before convergence."""
+    utils3d.torch.pose.pose_graph_optimization_huber
 
 @overload
 def segment_roll(data: torch_.Tensor, offsets: torch_.Tensor, shift: int, dim: int = 0) -> torch_.Tensor:
@@ -4276,6 +4399,76 @@ Parameters
 Returns
 - `indices: Tensor` of shape (..., Q), the insertion indices for each value in `input` within its corresponding segment in `sorted_sequence`."""
     utils3d.torch.segment_ops.segment_searchsorted
+
+@overload
+def voxel_grid_sampling(points: torch_.Tensor, voxel_size: float) -> torch_.Tensor:
+    """Select one original point per occupied cubic voxel.
+
+Parameters
+----
+- `points`: (Tensor) floating-point tensor of shape `(N, 3)`, with finite coordinates.
+- `voxel_size`: (float) finite, positive voxel side length.
+
+Returns
+-------
+- `indices`: (Tensor) int64 tensor of shape `(M,)`, on the input device. The smallest
+    original index in each occupied voxel, ordered lexicographically by voxel coordinates.
+
+Notes
+-----
+The grid origin is the coordinate-wise minimum of `points`. Grid arithmetic
+uses float64. Every input point is within `sqrt(3) * voxel_size` of a selected
+point, up to floating-point rounding; there is no minimum separation guarantee.
+This is voxel sampling, not FPS or Poisson-disk sampling.
+
+Sorting requires O(N log N) time in the comparison model and O(N) workspace.
+Empty input returns empty indices. Duplicate coordinates share a voxel.
+Nonfinite inputs, an overflowing coordinate range, or a coordinate span
+divided by `voxel_size` reaching 2**63 raise ValueError. When a packed voxel
+key would overflow, a collision-free lexicographic sort is used instead.
+Bounds are read on the CPU once; point data and sorting stay on the input
+device. Index selection does not build an autograd graph."""
+    utils3d.torch.sampling.voxel_grid_sampling
+
+@overload
+def hierarchical_voxel_sampling(points: torch_.Tensor, num_samples: int) -> torch_.Tensor:
+    """Select approximately a target number of spatially distributed original points.
+
+Parameters
+----
+- `points`: (Tensor) floating-point tensor of shape `(N, 3)`, with finite coordinates.
+- `num_samples`: (int) nonnegative target number of samples.
+
+Returns
+-------
+- `indices`: (Tensor) int64 tensor of shape `(M,)`, on the input device, containing
+    distinct original indices. Output order is spatial, not a progressive FPS ordering.
+
+Notes
+-----
+An implicit octree uses a cube anchored at the coordinate-wise minimum, with
+side length equal to the largest coordinate span. Coordinates are quantized
+in float64 to 21 bits per axis; the upper cube face belongs to the last cell.
+A single stable Morton sort is followed by a search over grid levels. Only
+some cells of the last level are refined, using deterministic hashed cell
+priorities. Final cells differ by at most one level, and each is represented
+by its first point in the sorted Morton order (original index breaks ties).
+
+For 0 < num_samples < N, let U be the number of occupied finest-grid cells
+and T = min(num_samples, U). Then max(1, T - 6) <= M <= T. Coincident points
+and points closer than the finest resolution can share a cell. A zero target
+or empty input returns empty indices; a target >= N returns all input indices
+in their original order, including coincident points.
+
+This is approximate uniform coverage, not FPS or Poisson-disk sampling.
+There is no minimum separation guarantee; results depend on grid orientation
+and are not nested across targets. Outliers can reduce the effective spatial
+resolution. Time is O(N log N) in the comparison model, with O(N) workspace
+and no loop over points or samples. Nonfinite inputs or an overflowing
+coordinate range raise ValueError. Bounds and at most five level counts are
+read on the CPU; point data and sorting stay on the input device. Index
+selection does not build an autograd graph."""
+    utils3d.torch.sampling.hierarchical_voxel_sampling
 
 @overload
 def triangulate_mesh(faces: torch_.Tensor, vertices: torch_.Tensor = None, method: Literal['fan', 'strip', 'diagonal'] = 'fan') -> torch_.Tensor:
@@ -4908,120 +5101,191 @@ Returns
     utils3d.torch.maps.fractal_perlin_noise_map
 
 @overload
-def RastContext(nvd_ctx: nvdiffrast.torch.ops.RasterizeCudaContext | nvdiffrast.torch.ops.RasterizeGLContext = None, *, backend: Literal['cuda', 'gl'] = 'cuda', device: str | torch_.device = None):
-    """Create a rasterization context. Nothing but a wrapper of nvdiffrast.torch.RasterizeCudaContext or nvdiffrast.torch.RasterizeGLContext."""
-    utils3d.torch.rasterization.RastContext
-
-@overload
-def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: utils3d.torch.rasterization.RastContext | None = None) -> Tuple[torch_.Tensor, torch_.Tensor, torch_.Tensor | None]:
-    """Rasterize triangles.
+def rasterize_triangles(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> Dict[str, torch_.Tensor]:
+    """Rasterize triangles with Triton and interpolate attributes with PyTorch.
 
 Parameters
 ----
-    size (Tuple[int, int]): (height, width) of the output image
-    vertices (np.ndarray): (B, N, 2 or 3 or 4)
-    faces (Tensor): (T, 3)
-    attributes (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
-    texture (Tensor, optional): (B, C, H, W) texture. Defaults to None.
-    view | extrinsics (Tensor, optional): ([B,] 4, 4) view matrix or extrinsics matrix. Provide either one of them. Defaults to identity.
-    projection | intrinsics (Tensor, optional): ([B,] 4, 4) projection matrix or ([B,] 3, 3) intrinsics matrix. Provide either one of them. Defaults to identity.
-    near (float, optional): near plane. Defaults to 0.01. Only used for intrinsics. Ignored if projection matrix is provided.
-    far (float, optional): far plane. Defaults to inf. Only used for intrinsics. Ignored if projection matrix is provided.
-    return_image_derivatives (bool, optional): whether to return screen space derivatives of the attributes. Defaults to False.
-    return_depth (bool, optional): whether to return depth map. Defaults to False.
-    return_interpolation (bool, optional): whether to return triangle interpolation maps. Defaults to False.
-    antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
-    ctx (RastContext): rasterization context. Defaults to the thread-local default context. If custom context is needed, provide one with utils3d.pt.RastContext().
+- `size`: (height, width), positive integers.
+- `vertices`: float32 GPU tensor of shape `(..., N, D)` with indexed faces,
+    or `(..., T, 3, D)` when `faces` is None. D is 2, 3, or 4; missing z/w
+    components default to 0/1. Coordinates must be finite.
+- `attributes`: optional floating-point tensor of shape `(..., N, C)`,
+    `(..., T, 3, C)` for unindexed vertex attributes, or `(..., T, C)` for
+    face attributes. Any channel count is supported; dtype is preserved.
+- `attributes_domain`: 'vertex' for perspective-correct interpolation,
+    or 'face' for constant per-triangle attributes.
+- `faces`: optional int32/int64 tensor of shape `(T, 3)`, shared across
+    batches. Indices must be in `[0, N)`. All tensors must be on one GPU.
+- `view` | `extrinsics`: optional `(..., 4, 4)` float32 OpenGL view or
+    OpenCV extrinsics matrix. Mutually exclusive; defaults to identity.
+- `projection` | `intrinsics`: optional `(..., 4, 4)` float32 OpenGL
+    projection or `(..., 3, 3)` normalized OpenCV intrinsics matrix.
+    Mutually exclusive; defaults to identity.
+- `near`, `far`: clipping distances used only with intrinsics; 0 < near < far.
+    Infinite far is supported.
+- `cull_backface`: discard clockwise triangles in NDC. Defaults to False.
+- `return_depth`: include camera-space depth (-view z / view w).
+- `return_interpolation`: include original triangle IDs and barycentrics.
 
 Returns
 ----
-A dictionary containing:
-    - image: (Tensor): (B, H, W, C)
-    - image_dr: (Tensor): (B, H, W, C * 2) screen space derivatives of the attributes
-    - depth: (Tensor): (B, H, W) Linear depth. Empty pixels have depth inf.
-    - mask: (torch.BoolTensor): (B, H, W) mask of valid pixels
-    - interpolation_id: (Tensor): (B, H, W) triangle ID map. For empty pixels, the value is -1.
-    - interpolation_uv: (Tensor): (B, H, W, 2) triangle UV (first two channels of barycentric coordinates)"""
+A dictionary, with broadcast batch dimensions `...`:
+- `mask`: `(..., H, W)` bool coverage mask.
+- `image`: `(..., H, W, C)`, present only when attributes are supplied.
+- `depth`: `(..., H, W)` float32, present when requested; background is inf.
+- `interpolation_id`: `(..., H, W)` int32 original face ID, present when
+    requested; background is -1.
+- `interpolation_uv`: `(..., H, W, 2)` float32 first two perspective-correct
+    barycentric weights, present when requested; background is zero.
+Images use a top-left origin. Background attributes are zero.
+
+Notes
+----
+Only attributes are differentiable. Geometry, cameras, depth, and barycentrics
+are detached. Rendering is point-sampled, with six-plane homogeneous clipping,
+eight-bit subpixel coverage and a top-left shared-edge rule. NDC depth uses
+a strict less-than test against a far-plane clear value of 1; exact depth ties
+choose the lowest face ID. No antialiasing, derivatives, textures, or context
+are required. Faces and vertices must each fit in signed 32-bit indices;
+an image must have fewer than 2**31 pixels.
+
+Triton is imported on first use. No custom CUDA/C++ extension is built.
+Input validation synchronizes once to check finite transformed coordinates
+and index bounds. Work is proportional to triangle bounding-box areas;
+heavily overlapping or long, thin triangles are not optimized."""
     utils3d.torch.rasterization.rasterize_triangles
 
 @overload
-def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, faces: torch_.Tensor, view: torch_.Tensor = None, projection: torch_.Tensor = None, extrinsics: torch_.Tensor = None, intrinsics: torch_.Tensor = None, near: float = 0.01, far: float = inf, return_image_derivatives: bool = False, return_depth: bool = False, return_interpolation: bool = False, antialiasing: bool = False, ctx: utils3d.torch.rasterization.RastContext | None = None) -> Iterator[Iterator[Dict[str, torch_.Tensor]]]:
-    """Rasterize a mesh with vertex attributes using depth peeling.
+def rasterize_triangles_peeling(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'face'] = 'vertex', faces: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, cull_backface: bool = False, return_depth: bool = False, return_interpolation: bool = False) -> ContextManager[Iterator[Dict[str, torch_.Tensor]], bool | None]:
+    """Rasterize successive visible triangle layers with Triton depth peeling.
 
 Parameters
 ----
-    size (Tuple[int, int]): (height, width) of the output image
-    vertices (np.ndarray): (B, N, 2 or 3 or 4)
-    faces (Tensor): (T, 3)
-    attributes (Tensor, optional): (B, N, C) vertex attributes. Defaults to None.
-    texture (Tensor, optional): (B, C, H, W) texture. Defaults to None.
-    view | extrinsics (Tensor, optional): ([B,] 4, 4) view matrix or extrinsics matrix. Provide either one of them. Defaults to identity.
-    projection | intrinsics (Tensor, optional): ([B,] 4, 4) projection matrix or ([B,] 3, 3) intrinsics matrix. Provide either one of them. Defaults to identity.
-    near (float, optional): near plane. Defaults to 0.01. Only used for intrinsics. Ignored if projection matrix is provided.
-    far (float, optional): far plane. Defaults to inf. Only used for intrinsics. Ignored if projection matrix is provided.
-    return_image_derivatives (bool, optional): whether to return screen space derivatives of the attributes. Defaults to False.
-    return_depth (bool, optional): whether to return depth map. Defaults to False.
-    return_interpolation (bool, optional): whether to return triangle interpolation maps. Defaults to False.
-    antialiasing (Union[bool, List[int]], optional): whether to perform antialiasing. Defaults to True. If a list of indices is provided, only those channels will be antialiased.
-    ctx (RastContext): rasterization context. Defaults to the thread-local default context. If custom context is needed, provide one with utils3d.pt.RastContext().
+Parameters, broadcasting, camera conventions and attribute domains match
+`rasterize_triangles`. All tensors must share a GPU. Only attributes receive
+gradients; geometry and camera parameters are detached.
 
 Returns
 ----
-A generator of dictionaries for each layer containing:
-    - mask: (List[torch.BoolTensor]): (B, H, W) mask of valid pixels in this layer
-    - image: (List[Tensor]): (B, C, H, W) rendered images
-    - image_dr: (List[Tensor]): (B, *, H, W) screen space derivatives of the attributes
-    - depth: (List[Tensor]): (B, H, W) linear depth. Empty pixels have depth inf.
-    - interpolation_id: (List[Tensor]): (B, H, W) triangle ID map. For empty pixels, the value is -1.
-    - interpolation_uv: (List[Tensor]): (B, H, W, 2) triangle UV (first two channels of barycentric coordinates)
+A context manager yielding an iterator of dictionaries with the same keys,
+layouts and background values as `rasterize_triangles`. The first layer is
+identical to ordinary rendering. Subsequent layers select the closest fragment
+with strictly greater float32 NDC depth at each pixel. Equal-depth fragments
+are skipped together; the smallest face ID wins within a layer.
 
-The last layer yielded will be empty, then the generator will stop.
+A final empty layer is yielded, including for empty meshes. Batched images
+continue together until all are empty. Pixels already exhausted stay empty.
+Layers own their output tensors and can be retained for attribute backprop.
+Accumulate layer losses before backward when sharing an input autograd graph.
+
+Notes
+----
+Geometry preparation and validation run once. Each layer rerasterizes the
+mesh and reads a single coverage flag on the CPU for termination. There is no
+layer cap; break the iterator to limit work. Exit closes the iterator even on
+early termination. Do not mutate inputs during iteration. Layer ordering uses
+the same NDC depth test as ordinary rendering, not a camera-distance sort.
 
 Example
 ----
 ```
-for i, layer_output in enumerate(rasterize_triangles_peeling(
-    (512, 512), 
-    vertices=vertices, 
-    faces=faces, 
-    attributes=attributes,
-    view=view,
-    projection=projection
-)):
-    print(f"Layer {i}:")
-    for key, value in layer_output.items():
-        print(f"  {key}: {value.shape}")
-    if i >= 4:  # Stop after 5 layers at most
-        break
+with utils3d.pt.rasterize_triangles_peeling(
+    (512, 512), vertices=vertices, faces=faces, attributes=colors,
+    return_depth=True,
+) as layers:
+    for i, layer in enumerate(layers):
+        image = layer['image']
+        if i == 3:
+            break
 ```"""
     utils3d.torch.rasterization.rasterize_triangles_peeling
 
 @overload
-def sample_texture(texture: torch_.Tensor, uv: torch_.Tensor, uv_dr: torch_.Tensor) -> torch_.Tensor:
-    """Interpolate texture using uv coordinates.
+def rasterize_lines(size: Tuple[int, int], *, vertices: torch_.Tensor, attributes: torch_.Tensor | None = None, attributes_domain: Literal['vertex', 'line'] = 'vertex', lines: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, line_width: float = 1.0, return_depth: bool = False, return_interpolation: bool = False) -> Dict[str, torch_.Tensor]:
+    """Rasterize constant-pixel-width line segments with Triton.
 
-## Parameters
-    texture (Tensor): (B, H, W, C) texture
-    uv (Tensor): (B, H, W, 2) uv coordinates
-    uv_dr (Tensor): (B, H, W, 4) uv derivatives
-    
-## Returns
-    Tensor: (B, H, W, C) interpolated texture"""
-    utils3d.torch.rasterization.sample_texture
+Parameters
+----
+- `size`: (height, width), positive integers.
+- `vertices`: float32 GPU tensor `(..., N, D)`, or `(..., L, 2, D)` when
+    lines is None. D is 2, 3, or 4; missing z/w components default to 0/1.
+- `attributes`: floating-point `(..., N, C)`, `(..., L, 2, C)` for unindexed
+    vertex attributes, or `(..., L, C)` for constant line attributes.
+- `attributes_domain`: 'vertex' for perspective-correct endpoint interpolation,
+    or 'line' for one attribute vector per segment.
+- `lines`: optional `(L, 2)` int32/int64 indices, shared across batches.
+- `view` | `extrinsics`: optional float32 `(..., 4, 4)` OpenGL view or OpenCV
+    extrinsics matrix. Mutually exclusive; defaults to identity.
+- `projection` | `intrinsics`: optional float32 `(..., 4, 4)` OpenGL projection
+    or `(..., 3, 3)` normalized OpenCV intrinsics. Mutually exclusive.
+- `near`, `far`: clipping distances used only with intrinsics; 0 < near < far.
+- `line_width`: finite, positive width in pixels, perpendicular to the segment.
+- `return_depth`: include camera-space depth (-view z / view w).
+- `return_interpolation`: include original line IDs and endpoint weights.
+
+Returns
+----
+A dictionary with broadcast batch dimensions `...` and a top-left origin:
+- `mask`: `(..., H, W)` bool.
+- `image`: `(..., H, W, C)`, when attributes are supplied; background is zero.
+- `depth`: `(..., H, W)` float32, when requested; background is inf.
+- `interpolation_id`: `(..., H, W)` int32 line ID, when requested; background -1.
+- `interpolation_uv`: `(..., H, W, 2)` perspective-correct weights of the
+    original first and second endpoints, when requested; background is zero.
+
+Notes
+----
+Centerlines are clipped against all six homogeneous frustum planes before
+expansion to rectangles with flat (butt) caps. Projected zero-length segments
+produce no fragments. Width is not rounded to an integer. This is geometric
+rectangle coverage, not OpenGL's implementation-dependent aliased line rule.
+The triangle rasterizer supplies subpixel coverage and deterministic depth
+testing. All inputs must share a GPU; batches broadcast. Only attributes
+receive gradients. No context, antialiasing, or background compositing is used."""
+    utils3d.torch.rasterization.rasterize_lines
 
 @overload
-def texture_composite(texture: torch_.Tensor, uv: List[torch_.Tensor], uv_da: List[torch_.Tensor], background: torch_.Tensor = None) -> Tuple[torch_.Tensor, torch_.Tensor]:
-    """Composite textures with depth peeling output.
+def rasterize_point_cloud(size: Tuple[int, int], *, points: torch_.Tensor, point_sizes: float | torch_.Tensor = 10, point_size_in: Literal['2d', '3d'] = '2d', point_shape: Literal['triangle', 'square', 'pentagon', 'hexagon', 'circle'] = 'square', attributes: torch_.Tensor | None = None, view: torch_.Tensor | None = None, projection: torch_.Tensor | None = None, extrinsics: torch_.Tensor | None = None, intrinsics: torch_.Tensor | None = None, near: float = 0.01, far: float = inf, return_depth: bool = False, return_point_id: bool = False) -> Dict[str, torch_.Tensor]:
+    """Rasterize point-cloud billboards with Triton.
 
-## Parameters
-    texture (Tensor): (B, C+1, H, W) texture
-        NOTE: the last channel is alpha channel
-    uv (List[Tensor]): list of (B, H, W, 2) uv coordinates
-    uv_da (List[Tensor]): list of (B, H, W, 4) uv derivatives
-    background (Optional[Tensor], optional): (B, C, H, W) background image. Defaults to None (black).
-    
-## Returns
-    image: (Tensor): (B, C, H, W) rendered image
-    alpha: (Tensor): (B, H, W) alpha channel"""
-    utils3d.torch.rasterization.texture_composite
+Parameters
+----
+- `size`: (height, width), positive integers.
+- `points`: float32 GPU tensor `(..., N, D)`. D is 2, 3, or 4; missing z/w
+    components default to 0/1.
+- `point_sizes`: finite, nonnegative scalar or floating-point GPU tensor
+    `(..., N)` / `(..., 1)`. Zero-sized points are invisible.
+- `point_size_in`: '2d' for pixel sizes, or '3d' for sizes in the camera's
+    XY plane (NumPy's world-unit billboard convention).
+- `point_shape`: 'triangle', 'square', 'pentagon', 'hexagon', or 'circle'.
+    Shapes match NumPy: squares have side length point_sizes, circles have
+    that diameter, and other polygons have that circumcircle diameter.
+- `attributes`: optional floating-point `(..., N, C)` point attributes.
+- `view` | `extrinsics`: optional float32 `(..., 4, 4)` OpenGL view or OpenCV
+    extrinsics matrix. Mutually exclusive; defaults to identity.
+- `projection` | `intrinsics`: optional float32 `(..., 4, 4)` OpenGL projection
+    or `(..., 3, 3)` normalized OpenCV intrinsics. Mutually exclusive.
+- `near`, `far`: clipping distances used only with intrinsics; 0 < near < far.
+- `return_depth`: include the point center's camera-space depth (-z/w).
+- `return_point_id`: include original point IDs.
+
+Returns
+----
+A dictionary with broadcast batch dimensions `...` and a top-left origin:
+- `mask`: `(..., H, W)` bool.
+- `image`: `(..., H, W, C)`, when attributes are supplied; background is zero.
+- `depth`: `(..., H, W)` float32, when requested; background is inf.
+- `point_id`: `(..., H, W)` int32, when requested; background is -1.
+
+Notes
+----
+Billboards, not just centers, are clipped to the frustum. A center outside
+the image can still contribute pixels. Circles reject outside fragments
+before depth testing, so their bounding squares do not occlude other points.
+2D billboards keep the center's NDC depth; 3D billboards are camera-facing
+planes and can project to ellipses or skewed polygons. Only attributes receive
+gradients, not positions, sizes, or cameras. All tensors must share a GPU.
+No context, antialiasing, or background compositing is used."""
+    utils3d.torch.rasterization.rasterize_point_cloud
 

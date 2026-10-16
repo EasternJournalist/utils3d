@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import torch
 from torch import Tensor
@@ -8,7 +9,7 @@ from .transforms import transform_points, make_affine_matrix
 from .utils import matrix_trace, vector_outer, safe_inv
 
 
-__all__ = ['kabsch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_edge_moments', 'segment_pose_graph_edge_moments', 'pose_graph_optimization', 'pose_graph_optimization_gnc']
+__all__ = ['kabsch', 'umeyama', 'affine_umeyama', 'solve_pose', 'solve_pose_ransac', 'segment_solve_pose', 'solve_poses_sequential', 'segment_solve_poses_sequential', 'pose_graph_edge_moments', 'segment_pose_graph_edge_moments', 'pose_graph_optimization', 'pose_graph_optimization_gnc', 'pose_graph_optimization_huber']
 
 
 import torch
@@ -1042,6 +1043,11 @@ def pose_graph_optimization(
     `d_ij = L_i^{-1} mean_x - L_j^{-1} mean_y`. A scalar graph Laplacian solves all three coordinates;
     its pseudoinverse fixes the mean camera center to zero within each connected component.
 
+    The compact moments and edge weights are promoted to float64 before constructing any graph
+    systems, including under autocast. This preserves weak nonzero Laplacian modes that float32
+    rank thresholds can discard. Returned poses use `cov_yx`'s input dtype and device; raw point
+    reduction is unchanged, and index tensors are not converted.
+
     Parameters
     ----
     - `num_nodes`: number of nodes `N` in the pose graph.
@@ -1070,8 +1076,10 @@ def pose_graph_optimization(
         `polar(cov_yx)`, scale `sqrt(tr(cov_yy) / tr(cov_xx))` (similar mode) and translation
         `mean_y - s_ij R_ij @ mean_x`.
     """
-    if edge_weights is None:
-        edge_weights = torch.ones(edges.shape[0], device=cov_yx.device, dtype=cov_yx.dtype)
+    # Promote compact statistics before graph assembly so weak modes survive the pseudoinverse cutoff.
+    output_dtype = cov_yx.dtype
+    cov_yx, cov_xx, cov_yy, mean_x, mean_y, w = (value.to(dtype=torch.float64) for value in (cov_yx, cov_xx, cov_yy, mean_x, mean_y, w))
+    edge_weights = torch.ones(edges.shape[0], device=cov_yx.device, dtype=torch.float64) if edge_weights is None else edge_weights.to(dtype=torch.float64)
     # Rotation information is the total point spread (un-normalized scatter); translation information is
     # the total correspondence weight.
     tr_xx = matrix_trace(cov_xx, dim1=-2, dim2=-1)
@@ -1111,12 +1119,14 @@ def pose_graph_optimization(
 
     centers = _pose_graph_optimization_solve_laplacian(laplacian, rhs)
     t_global = -(linear @ centers[..., None]).squeeze(-1)
-    return make_affine_matrix(linear, t_global)
+    return make_affine_matrix(linear, t_global).to(dtype=output_dtype)
 
 
 def _pose_graph_optimization_moment_residual(
     poses_global: Tensor, edges: Tensor, cov_yx: Tensor, cov_xx: Tensor, cov_yy: Tensor, mean_x: Tensor, mean_y: Tensor,
     mode: Literal['rigid', 'similar'] = 'rigid',
+    *,
+    residual_scale: Literal['target', 'geometric_mean'] = 'target',
 ) -> Tensor:
     """Per-edge mean squared point residual — the exact point-level cost, normalized by edge weight.
 
@@ -1129,7 +1139,11 @@ def _pose_graph_optimization_moment_residual(
 
     i.e. the weighted-mean squared point error (`tr(M^T M cov_xx) = tr(cov_xx)` when `M` is a rotation),
     so `threshold` is a plain point distance, independent of point count / weight magnitude.
+    `residual_scale='geometric_mean'` additionally divides by the relative similarity scale;
+    the caller supplies any ratio of scoring/original weight sums separately.
     """
+    if residual_scale not in ('target', 'geometric_mean'):
+        raise ValueError(f"Unsupported residual scale: {residual_scale!r}")
     A_global, t_global = poses_global[:, :3, :3], poses_global[:, :3, 3]
     A_i = A_global.index_select(0, edges[:, 0])
     A_j = A_global.index_select(0, edges[:, 1])
@@ -1146,7 +1160,125 @@ def _pose_graph_optimization_moment_residual(
     # cov_yx is the (weight-normalized) centered cross-covariance, so <M_pred, cov_yx> is the rotation term.
     cross = (M_pred * cov_yx).sum(dim=(-2, -1))
     res2 = a.square().sum(dim=-1) + quad + matrix_trace(cov_yy, dim1=-2, dim2=-1) - 2.0 * cross
-    return res2.clamp_min(0.0)
+    res2 = res2.clamp_min(0.0)
+    if residual_scale == 'geometric_mean' and mode == 'similar':
+        # Convert target-frame squared errors to the geometric mean of source/target coordinate units.
+        relative_scale = torch.linalg.vector_norm(M_pred, dim=(-2, -1)) / math.sqrt(3)
+        if not torch.isfinite(relative_scale).all() or (relative_scale <= 0).any():
+            raise ValueError("Geometric-mean residuals require finite positive relative scales")
+        res2 = res2 / relative_scale
+    return res2
+
+
+def pose_graph_optimization_huber(
+    num_nodes: int,
+    edges: Tensor,
+    cov_yx: Tensor,
+    cov_xx: Tensor,
+    cov_yy: Tensor,
+    mean_x: Tensor,
+    mean_y: Tensor,
+    w: Tensor,
+    edge_weights: Optional[Tensor] = None,
+    *,
+    harmonic_ranges: Tensor,
+    mode: Literal['rigid', 'similar'] = 'similar',
+    threshold: float = 0.3,
+    niter: int = 10,
+    max_iterations: int = 128,
+    tolerance: float = 1e-4,
+    weight_floor: float = 1e-3,
+) -> Tuple[Tensor, Tensor, dict]:
+    """Reweight pose-graph edges with Huber on harmonic-range-normalized point RMS.
+
+    Inner solves use the original point moments unchanged. The outer squared residual is the
+    original weighted mean squared point error divided by `s_ij * H_i * H_j`, where `s_ij`
+    is the current relative similarity scale (1 in rigid mode). Compute the fixed endpoint
+    harmonic ranges using the original pixel weights q: `H = sum(q) / sum(q / range)`.
+    Ranges must be measured from camera origins, including any fixed calibration shifts.
+    Point validity and positive near-zero range guards are the caller's responsibility.
+
+    Both directions of an undirected edge share the mean squared residual and one Huber weight.
+    No GT, raw point maps or alternate covariance statistics enter this solver. A positive weight
+    floor preserves existing nonzero links but cannot connect an originally disconnected graph.
+    All solves and residuals use float64; outputs retain the cov_yx input dtype and device.
+
+    Parameters
+    ----
+    - `num_nodes`, `edges`, `cov_yx`, `cov_xx`, `cov_yy`, `mean_x`, `mean_y`, `w`, `edge_weights`:
+        as in `pose_graph_optimization`. Index tensors are not changed. Priors multiply the Huber
+        weights in the inner solves; they do not rescale the percentage residual.
+    - `harmonic_ranges`: (E, 2), positive fixed source/target harmonic ranges in local point units.
+    - `mode`: inner solver mode, `'rigid'` or `'similar'`.
+    - `threshold`: dimensionless RMS cutoff, e.g. 0.3 means 30%.
+    - `niter`: inner rotation refinement count.
+    - `max_iterations`: maximum outer weight updates, excluding the initial ordinary PGO.
+    - `tolerance`: stop when maximum undirected weight change is below this value.
+    - `weight_floor`: minimum Huber multiplier, in (0, 1].
+
+    Returns
+    ----
+    - `poses`: (N, 4, 4) world-to-node poses.
+    - `weights`: (E,) robust multipliers, independent of any supplied edge prior.
+    - `info`: dict with `iterations`, `converged`, `max_weight_change`. Emits RuntimeWarning if
+        the iteration cap is reached before convergence.
+    """
+    if type(num_nodes) is not int or num_nodes < 1 or edges.ndim != 2 or edges.shape[1] != 2 or edges.dtype not in (torch.int32, torch.int64):
+        raise ValueError("Expected positive num_nodes and integer edges of shape (E, 2)")
+    if mode not in ('rigid', 'similar') or type(niter) is not int or niter < 0 or type(max_iterations) is not int or max_iterations < 1:
+        raise ValueError("Invalid PGO mode or iteration counts")
+    if not all(math.isfinite(value) for value in (threshold, tolerance, weight_floor)) or threshold <= 0 or tolerance <= 0 or not 0 < weight_floor <= 1:
+        raise ValueError("Expected positive finite cutoff/tolerance and weight_floor in (0, 1]")
+    count = edges.shape[0]
+    shapes = ((count, 3, 3),) * 3 + ((count, 3),) * 2 + ((count,),)
+    moments = (cov_yx, cov_xx, cov_yy, mean_x, mean_y, w)
+    if any(value.shape != shape or value.device != cov_yx.device or not value.is_floating_point() for value, shape in zip(moments, shapes)):
+        raise ValueError("Moment shapes/devices must match the edge list and be floating point")
+    if edges.device != cov_yx.device or harmonic_ranges.shape != (count, 2) or harmonic_ranges.device != cov_yx.device:
+        raise ValueError("Edges and harmonic ranges must be on the moments' device, with ranges shaped (E, 2)")
+    if any(not value.isfinite().all() for value in moments) or (w <= 0).any() or not harmonic_ranges.isfinite().all() or (harmonic_ranges <= 0).any():
+        raise ValueError("Expected finite moments and positive point-weight sums and harmonic ranges")
+    if ((edges < 0) | (edges >= num_nodes)).any() or (edges[:, 0] == edges[:, 1]).any():
+        raise ValueError("Invalid pose-graph node index or self edge")
+    if edge_weights is not None and (edge_weights.shape != (count,) or edge_weights.device != cov_yx.device or not edge_weights.isfinite().all() or (edge_weights < 0).any()):
+        raise ValueError("Edge priors must be finite nonnegative (E,) weights on the moments' device")
+    if count == 0:
+        if num_nodes != 1:
+            raise ValueError("A multi-node graph requires edges")
+        return torch.eye(4, dtype=cov_yx.dtype, device=cov_yx.device)[None], w.clone(), {"iterations": 0, "converged": True, "max_weight_change": 0.0}
+
+    output_dtype = cov_yx.dtype
+    moments = tuple(value.to(dtype=torch.float64) for value in moments)
+    prior = torch.ones(count, device=cov_yx.device, dtype=torch.float64) if edge_weights is None else edge_weights.to(dtype=torch.float64)
+    normalization = harmonic_ranges.to(dtype=torch.float64).prod(-1).reciprocal()
+    # Group reversed queries once; only compact per-edge tensors participate in subsequent updates.
+    pairs, inverse, counts = torch.unique(edges.sort(dim=-1).values, dim=0, return_inverse=True, return_counts=True)
+    inverse = inverse.to(dtype=torch.int32)
+    counts = counts.to(dtype=torch.float64)
+    pair_weights = torch.ones(len(pairs), dtype=torch.float64, device=cov_yx.device)
+    poses = pose_graph_optimization(num_nodes, edges, *moments, edge_weights=prior, mode=mode, niter=niter)
+
+    def residual(poses: Tensor) -> Tensor:
+        squared = _pose_graph_optimization_moment_residual(poses, edges, *moments[:5], mode=mode, residual_scale='geometric_mean') * normalization
+        if not squared.isfinite().all():
+            raise ValueError("Nonfinite relative point residual during robust PGO")
+        return torch.zeros_like(pair_weights).index_add_(0, inverse, squared) / counts
+
+    res2 = residual(poses)
+    converged = False
+    for iteration in range(max_iterations):
+        updated = (threshold / res2.clamp_min(1e-30).sqrt()).clamp(min=weight_floor, max=1)
+        change = (updated - pair_weights).abs().max().item()
+        pair_weights = updated
+        weights = pair_weights[inverse]
+        poses = pose_graph_optimization(num_nodes, edges, *moments, edge_weights=prior * weights, mode=mode, niter=niter)
+        res2 = residual(poses)
+        if change < tolerance:
+            converged = True
+            break
+    if not converged:
+        warnings.warn(f"Huber pose graph did not converge after {max_iterations} iterations (max weight change {change:.6g})", RuntimeWarning, stacklevel=2)
+    return poses.to(dtype=output_dtype), weights.to(dtype=output_dtype), {"iterations": iteration + 1, "converged": converged, "max_weight_change": change}
 
 
 def pose_graph_optimization_gnc(
@@ -1166,6 +1298,8 @@ def pose_graph_optimization_gnc(
     gnc_iters: int = 20,
     gnc_factor: float = 1.4,
     eps: float = 1e-12,
+    residual_moments: Optional[Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]] = None,
+    residual_scale: Literal['target', 'geometric_mean'] = 'target',
 ) -> Tuple[Tensor, Tensor]:
     """Robust pose graph optimization with Graduated Non-Convexity (GNC-TLS) for outlier edge rejection.
 
@@ -1175,7 +1309,7 @@ def pose_graph_optimization_gnc(
     Spatial Perception", RA-L 2020). Bad edges (wrong loop closures / outlier constraints) converge
     to weight 0 and are effectively removed.
 
-    The outlier test uses the *exact* per-edge mean squared point residual (see
+    By default, the outlier test uses the *exact* per-edge mean squared point residual (see
     `_pose_graph_optimization_moment_residual`), so `threshold` is a plain point distance in the units of
     your correspondences — no rotation/translation scale to juggle. Each GNC iteration solves the
     weighted graph, evaluates the residual, then updates each edge's weight in closed form:
@@ -1186,6 +1320,9 @@ def pose_graph_optimization_gnc(
 
     where `c = threshold`. `mu` starts small (near-convex) and is multiplied by `gnc_factor` each
     iteration to recover the truncated cost.
+
+    Moments, graph solves, residuals and continuation weights remain float64 throughout the outer
+    loop, including under autocast. Both returned tensors use `cov_yx`'s input dtype and device.
 
     Parameters
     ----
@@ -1199,13 +1336,24 @@ def pose_graph_optimization_gnc(
     - `w`: (E,) total correspondence weight per edge (translation information).
     - `edge_weights`: optional (E,) per-edge confidence prior, multiplied with the GNC weight. If None, uniform.
     - `mode`: `'rigid'` for `(R, t)` poses (default), or `'similar'` to additionally solve a per-node scale
-        (see `pose_graph_optimization`). The residual threshold stays a plain point distance either way.
-    - `threshold`: inlier point distance `c`. An edge is treated as an inlier when its RMS point
-        residual is roughly below `threshold`; set it to your expected correspondence noise.
+        (see `pose_graph_optimization`).
+    - `threshold`: inlier RMS cutoff `c`, in the selected scoring metric. With default moments this
+        is a point distance; with inverse-range-product moments and geometric-mean scale it is a
+        dimensionless relative error. Set it to the expected correspondence noise in that metric.
     - `niter`: inner Procrustes iterations per `pose_graph_optimization` solve.
     - `gnc_iters`: maximum number of outer GNC iterations.
     - `gnc_factor`: `mu` growth factor per outer iteration (`> 1` for GNC-TLS).
     - `eps`: small value to prevent division by zero.
+    - `residual_moments`: optional six-tensor output of `pose_graph_edge_moments`, in exactly the same
+        edge order, computed with alternative point weights `a`. Used only for robust scoring.
+        All inner solves still use the positional input moments and weight sum `Q = w`.
+        Scoring is `sum_k a_k ||T_ij x_k - y_k||^2 / Q`, not divided by `sum_k a_k`.
+        Both moment sets must describe the same correspondences and validity mask.
+    - `residual_scale`: `'target'` preserves target-coordinate squared errors. `'geometric_mean'`
+        additionally divides each squared error by relative Sim(3) scale `s_ij` (1 for rigid).
+        With `a_k = q_k / (||x_k + shift_i|| * ||y_k + shift_j||)`, this yields the squared,
+        dimensionless symmetric RMS relative point error. `threshold=0.05` then means 5%.
+        The shifts and any range guards must be fixed before accumulating these moments.
 
     Returns
     ----
@@ -1216,21 +1364,41 @@ def pose_graph_optimization_gnc(
         confident inlier, 0 an edge rejected as an outlier; intermediate values are still in the
         ambiguous band. Threshold this to classify edges.
     """
-    if edge_weights is None:
-        edge_weights = torch.ones(edges.shape[0], device=cov_yx.device, dtype=cov_yx.dtype)
+    # Keep the full continuation in float64 without rounding poses between weighted solves.
+    output_dtype = cov_yx.dtype
+    cov_yx, cov_xx, cov_yy, mean_x, mean_y, w = (value.to(dtype=torch.float64) for value in (cov_yx, cov_xx, cov_yy, mean_x, mean_y, w))
+    edge_weights = torch.ones(edges.shape[0], device=cov_yx.device, dtype=torch.float64) if edge_weights is None else edge_weights.to(dtype=torch.float64)
+
+    if residual_scale not in ('target', 'geometric_mean'):
+        raise ValueError(f"Unsupported residual scale: {residual_scale!r}")
+    score_moments = (cov_yx, cov_xx, cov_yy, mean_x, mean_y)
+    residual_multiplier = None
+    if residual_moments is not None:
+        expected_shapes = ((edges.shape[0], 3, 3),) * 3 + ((edges.shape[0], 3),) * 2 + ((edges.shape[0],),)
+        if len(residual_moments) != 6 or any(value.shape != shape or value.device != cov_yx.device for value, shape in zip(residual_moments, expected_shapes)):
+            raise ValueError("Residual moments must contain six tensors with matching edge shapes and device")
+        residual_moments = tuple(value.to(dtype=torch.float64) for value in residual_moments)
+        if any(not value.isfinite().all() for value in residual_moments) or not w.isfinite().all() or (w <= 0).any() or (residual_moments[-1] <= 0).any():
+            raise ValueError("Alternative scoring requires finite moments and positive original/scoring weight sums")
+        score_moments = residual_moments[:5]
+        residual_multiplier = residual_moments[-1] / w
+
+    def residual(poses: Tensor) -> Tensor:
+        value = _pose_graph_optimization_moment_residual(poses, edges, *score_moments, mode=mode, residual_scale=residual_scale)
+        return value if residual_multiplier is None else value * residual_multiplier
 
     barc2 = threshold ** 2
 
     # Non-robust initialization, used both as the starting estimate and to initialize mu.
     poses_global = pose_graph_optimization(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights=edge_weights, mode=mode, niter=niter, eps=eps)
-    res2 = _pose_graph_optimization_moment_residual(poses_global, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, mode=mode)
+    res2 = residual(poses_global)
 
     # GNC-TLS mu initialization. If every residual is already within the inlier band there is no
     # outlier to reject and the surrogate is degenerate, so return the plain estimate directly.
     max_res2 = res2.max()
     denom = 2.0 * max_res2 - barc2
     if denom <= 0:
-        return poses_global, torch.ones_like(edge_weights)
+        return poses_global.to(dtype=output_dtype), torch.ones_like(edge_weights, dtype=output_dtype)
 
     mu = (barc2 / denom).clamp_min(eps)
     w_gnc = torch.ones_like(edge_weights)
@@ -1246,7 +1414,7 @@ def pose_graph_optimization_gnc(
         w_gnc = w_gnc_new
 
         poses_global = pose_graph_optimization(num_nodes, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, w, edge_weights=edge_weights * w_gnc, mode=mode, niter=niter, eps=eps)
-        res2 = _pose_graph_optimization_moment_residual(poses_global, edges, cov_yx, cov_xx, cov_yy, mean_x, mean_y, mode=mode)
+        res2 = residual(poses_global)
         mu = mu * gnc_factor
 
-    return poses_global, w_gnc
+    return poses_global.to(dtype=output_dtype), w_gnc.to(dtype=output_dtype)

@@ -83,5 +83,10 @@ pip install -e .
 ```
 
 Dependencies (from [pyproject.toml](pyproject.toml)): `numpy`, `scipy`,
-`moderngl`. Torch and `nvdiffrast` are **not** installed automatically but are
-required for `utils3d.torch.*` and the rasterization paths respectively.
+`moderngl`. Torch and Triton are **not** installed automatically. Torch is
+required for `utils3d.torch.*`; Triton is loaded on demand for GPU triangle,
+line, and point-cloud rasterization. Lines and point billboards reuse the
+triangle coverage/depth core. The Torch rasterizer has no nvdiffrast or custom CUDA extension
+dependency and differentiates attributes only. NumPy rasterization still uses
+ModernGL. Run its focused regression checks with
+`PYTHONPATH=. python test/test_rasterization.py`.
