@@ -5152,8 +5152,8 @@ Notes
 ----
 Only attributes and background images are differentiable. Geometry and metadata
 are detached. Rendering is point-sampled, with six-plane homogeneous clipping,
-eight-bit subpixel coverage and a top-left shared-edge rule. NDC depth uses
-a strict less-than test against a far-plane clear value of 1; exact depth ties
+eight-bit subpixel coverage and a top-left shared-edge rule. Visibility uses
+float32 camera-space linear depth (-view z / view w); exact depth ties
 choose the lowest face ID. No antialiasing, derivatives, textures, or context
 are required. Faces and vertices must each fit in signed 32-bit indices;
 an image must have fewer than 2**31 pixels.
@@ -5162,6 +5162,10 @@ Triton is imported on first use. No custom CUDA/C++ extension is built.
 Input validation synchronizes once to check finite transformed coordinates
 and index bounds. Work is proportional to triangle bounding-box areas;
 heavily overlapping or long, thin triangles are not optimized.
+NDC is used only for clipping, including the near/far boundary planes.
+Signed depths are supported, with smaller values winning even for identity
+or custom projections. Returned depth is the exact winning buffer value;
+no NDC or logarithmic conversion is applied.
 
 Background compositing uses native PyTorch operations after rendering.
 Foreground wins only where covered and strictly closer than background depth;
@@ -5189,7 +5193,7 @@ Returns
 A context manager yielding an iterator of dictionaries with the same keys,
 layouts and background values as `rasterize_triangles`. The first layer is
 identical to ordinary rendering. Subsequent layers select the closest fragment
-with strictly greater float32 NDC depth at each pixel. Equal-depth fragments
+with strictly greater float32 camera-space linear depth at each pixel. Equal-depth fragments
 are skipped together; the smallest face ID wins within a layer.
 
 A final empty layer is yielded, including for empty meshes. Batched images
@@ -5203,7 +5207,7 @@ Geometry preparation and validation run once. Each layer rerasterizes the
 mesh and reads a single coverage flag on the CPU for termination. There is no
 layer cap; break the iterator to limit work. Exit closes the iterator even on
 early termination. Do not mutate inputs during iteration. Layer ordering uses
-the same NDC depth test as ordinary rendering, not a camera-distance sort.
+the same linear -view z / view w test as ordinary rendering, not ray distance.
 
 Example
 ----
@@ -5309,7 +5313,8 @@ Notes
 Billboards, not just centers, are clipped to the frustum. A center outside
 the image can still contribute pixels. Circles reject outside fragments
 before depth testing, so their bounding squares do not occlude other points.
-2D billboards keep the center's NDC depth; 3D billboards are camera-facing
+Visibility uses the center's float32 camera-space linear depth for both
+2D and 3D billboards. 3D billboards are camera-facing
 planes and can project to ellipses or skewed polygons. Only attributes receive
 gradients, not positions, sizes, or cameras. All tensors must share a GPU.
 Background images also receive gradients. Supplied background values replace

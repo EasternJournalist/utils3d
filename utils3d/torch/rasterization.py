@@ -86,8 +86,8 @@ def rasterize_triangles(
     ----
     Only attributes and background images are differentiable. Geometry and metadata
     are detached. Rendering is point-sampled, with six-plane homogeneous clipping,
-    eight-bit subpixel coverage and a top-left shared-edge rule. NDC depth uses
-    a strict less-than test against a far-plane clear value of 1; exact depth ties
+    eight-bit subpixel coverage and a top-left shared-edge rule. Visibility uses
+    float32 camera-space linear depth (-view z / view w); exact depth ties
     choose the lowest face ID. No antialiasing, derivatives, textures, or context
     are required. Faces and vertices must each fit in signed 32-bit indices;
     an image must have fewer than 2**31 pixels.
@@ -96,6 +96,10 @@ def rasterize_triangles(
     Input validation synchronizes once to check finite transformed coordinates
     and index bounds. Work is proportional to triangle bounding-box areas;
     heavily overlapping or long, thin triangles are not optimized.
+    NDC is used only for clipping, including the near/far boundary planes.
+    Signed depths are supported, with smaller values winning even for identity
+    or custom projections. Returned depth is the exact winning buffer value;
+    no NDC or logarithmic conversion is applied.
 
     Background compositing uses native PyTorch operations after rendering.
     Foreground wins only where covered and strictly closer than background depth;
@@ -158,7 +162,7 @@ def rasterize_triangles_peeling(
     A context manager yielding an iterator of dictionaries with the same keys,
     layouts and background values as `rasterize_triangles`. The first layer is
     identical to ordinary rendering. Subsequent layers select the closest fragment
-    with strictly greater float32 NDC depth at each pixel. Equal-depth fragments
+    with strictly greater float32 camera-space linear depth at each pixel. Equal-depth fragments
     are skipped together; the smallest face ID wins within a layer.
 
     A final empty layer is yielded, including for empty meshes. Batched images
@@ -172,7 +176,7 @@ def rasterize_triangles_peeling(
     mesh and reads a single coverage flag on the CPU for termination. There is no
     layer cap; break the iterator to limit work. Exit closes the iterator even on
     early termination. Do not mutate inputs during iteration. Layer ordering uses
-    the same NDC depth test as ordinary rendering, not a camera-distance sort.
+    the same linear -view z / view w test as ordinary rendering, not ray distance.
 
     Example
     ----
@@ -310,7 +314,7 @@ def rasterize_lines(
     kernels = _load_rasterization_kernels()
     with torch.no_grad():
         expanded, view_expanded, faces, intervals = kernels.expand_lines_triton(
-            positions, view_positions, lines, size, float(line_width), need_uv, need_depth,
+            positions, view_positions, lines, size, float(line_width), need_uv,
         )
         triangle_ids, uv, depth = kernels.rasterize_triangles_triton(
             expanded, view_expanded, faces, size, False, need_uv, need_depth,
@@ -401,7 +405,8 @@ def rasterize_point_cloud(
     Billboards, not just centers, are clipped to the frustum. A center outside
     the image can still contribute pixels. Circles reject outside fragments
     before depth testing, so their bounding squares do not occlude other points.
-    2D billboards keep the center's NDC depth; 3D billboards are camera-facing
+    Visibility uses the center's float32 camera-space linear depth for both
+    2D and 3D billboards. 3D billboards are camera-facing
     planes and can project to ellipses or skewed polygons. Only attributes receive
     gradients, not positions, sizes, or cameras. All tensors must share a GPU.
     Background images also receive gradients. Supplied background values replace
@@ -443,18 +448,15 @@ def rasterize_point_cloud(
             positions, view_positions, projection, sizes, size, point_size_in == '3d', point_shape,
         )
         _validate_geometry(expanded, None, 0, raw_sizes, background_depth)
-        triangle_ids, _, _ = kernels.rasterize_triangles_triton(
-            expanded, expanded, faces, size, False, False, False, circle=point_shape == 'circle',
+        corners = {
+            'triangle': 3, 'square': 4, 'pentagon': 5, 'hexagon': 6, 'circle': 4,
+        }[point_shape]
+        triangle_ids, _, depth = kernels.rasterize_triangles_triton(
+            expanded, view_positions, faces, size, False, False, need_depth,
+            circle=point_shape == 'circle', view_vertex_divisor=corners,
         )
-        triangles_per_point = {'triangle': 1, 'square': 2, 'pentagon': 3, 'hexagon': 4, 'circle': 2}[point_shape]
-        ids = torch.div(triangle_ids, triangles_per_point, rounding_mode='floor')
+        ids = torch.div(triangle_ids, corners - 2, rounding_mode='floor')
         mask = ids >= 0
-        if need_depth:
-            center_depth = -view_positions[..., 2] / view_positions[..., 3]
-            center_depth = F.pad(center_depth, (0, 1), value=float('inf'))
-            index = torch.where(mask, ids, num_points).long()
-            batch_index = torch.arange(batch, device=positions.device)[:, None, None]
-            depth = center_depth[batch_index, index]
     output = {'mask': mask}
     if attributes is not None:
         output['image'] = _interpolate_attributes(attributes, ids)

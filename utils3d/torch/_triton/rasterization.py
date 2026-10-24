@@ -98,12 +98,13 @@ def _covered_edge(ax, ay, bx, by, px, py, orientation):
     return (edge > 0) | ((edge == 0) & top_left)
 
 
-@triton.jit
+@triton.jit(do_not_specialize=['HEIGHT', 'WIDTH'])
 def _rasterize_kernel(
-    Positions, Faces, Keys, PreviousKeys,
+    Positions, ViewPositions, Faces, Keys, PreviousKeys,
     NUM_VERTICES, NUM_FACES,
-    HEIGHT: tl.constexpr, WIDTH: tl.constexpr,
-    CULL_BACKFACE: tl.constexpr, CIRCLE: tl.constexpr, PEEL: tl.constexpr, BLOCK: tl.constexpr,
+    HEIGHT, WIDTH,
+    CULL_BACKFACE: tl.constexpr, CIRCLE: tl.constexpr, PEEL: tl.constexpr,
+    VIEW_VERTEX_DIVISOR: tl.constexpr, BLOCK: tl.constexpr,
 ):
     face = tl.program_id(0) % NUM_FACES
     batch = tl.program_id(0) // NUM_FACES
@@ -114,6 +115,15 @@ def _rasterize_kernel(
     y = tl.load(Positions + offset + 1, index < 3, other=0.0)
     z = tl.load(Positions + offset + 2, index < 3, other=0.0)
     w = tl.load(Positions + offset + 3, index < 3, other=0.0)
+    view_offset = ((batch.to(tl.int64) * NUM_VERTICES + vertex) // VIEW_VERTEX_DIVISOR) * 4
+    view_z = tl.load(ViewPositions + view_offset + 2, index < 3, other=0.0)
+    view_w = tl.load(ViewPositions + view_offset + 3, index < 3, other=0.0)
+    vz0 = tl.sum(tl.where(index == 0, view_z, 0.), 0)
+    vz1 = tl.sum(tl.where(index == 1, view_z, 0.), 0)
+    vz2 = tl.sum(tl.where(index == 2, view_z, 0.), 0)
+    vw0 = tl.sum(tl.where(index == 0, view_w, 0.), 0)
+    vw1 = tl.sum(tl.where(index == 1, view_w, 0.), 0)
+    vw2 = tl.sum(tl.where(index == 2, view_w, 0.), 0)
     scale = _power_of_two_scale(tl.max(tl.maximum(
         tl.maximum(tl.abs(x), tl.abs(y)), tl.maximum(tl.abs(z), tl.abs(w)),
     ), 0))
@@ -121,23 +131,20 @@ def _rasterize_kernel(
     x0, y0 = tl.sum(tl.where(index == 0, x, 0.0), 0), tl.sum(tl.where(index == 0, y, 0.0), 0)
     x1, y1 = tl.sum(tl.where(index == 1, x, 0.0), 0), tl.sum(tl.where(index == 1, y, 0.0), 0)
     x2, y2 = tl.sum(tl.where(index == 2, x, 0.0), 0), tl.sum(tl.where(index == 2, y, 0.0), 0)
-    z0, w0 = tl.sum(tl.where(index == 0, z, 0.0), 0), tl.sum(tl.where(index == 0, w, 0.0), 0)
-    z1, w1 = tl.sum(tl.where(index == 1, z, 0.0), 0), tl.sum(tl.where(index == 1, w, 0.0), 0)
-    z2, w2 = tl.sum(tl.where(index == 2, z, 0.0), 0), tl.sum(tl.where(index == 2, w, 0.0), 0)
+    w0 = tl.sum(tl.where(index == 0, w, 0.0), 0)
+    w1 = tl.sum(tl.where(index == 1, w, 0.0), 0)
+    w2 = tl.sum(tl.where(index == 2, w, 0.0), 0)
     a0, b0, c0 = _edge_coefficients(x1, y1, w1, x2, y2, w2)
     a1, b1, c1 = _edge_coefficients(x2, y2, w2, x0, y0, w0)
     a2, b2, c2 = _edge_coefficients(x0, y0, w0, x1, y1, w1)
     determinant = w0 * c0 + w1 * c1 + w2 * c2
 
     if determinant != 0:
-        depth_x = tl.div_rn(z0 * a0 + z1 * a1 + z2 * a2, determinant)
-        depth_y = tl.div_rn(z0 * b0 + z1 * b1 + z2 * b2, determinant)
-        depth_c = tl.div_rn(z0 * c0 + z1 * c1 + z2 * c2, determinant)
         x, y, z, w, count = _clip_polygon(x, y, z, w)
         divisor = tl.where(w > 0, w, 1.0)
         # Eight subpixel bits and integer edge tests give watertight shared edges.
-        sx = tl.floor((tl.div_rn(x, divisor) * 0.5 + 0.5) * (WIDTH * 256) + 0.5).to(tl.int64)
-        sy = tl.floor((0.5 - tl.div_rn(y, divisor) * 0.5) * (HEIGHT * 256) + 0.5).to(tl.int64)
+        sx = tl.floor((tl.div_rn(x, divisor) * 0.5 + 0.5) * (WIDTH.to(tl.float32) * 256) + 0.5).to(tl.int64)
+        sy = tl.floor((0.5 - tl.div_rn(y, divisor) * 0.5) * (HEIGHT.to(tl.float32) * 256) + 0.5).to(tl.int64)
         sx0 = tl.sum(tl.where(index == 0, sx, 0), 0)
         sy0 = tl.sum(tl.where(index == 0, sy, 0), 0)
         sw0 = tl.sum(tl.where(index == 0, w, 0.0), 0)
@@ -175,19 +182,25 @@ def _rasterize_kernel(
                     covered &= _covered_edge(sx2, sy2, sx0, sy0, fx, fy, orientation)
                     nx = (px.to(tl.float32) + 0.5) * (2.0 / WIDTH) - 1.0
                     ny = 1.0 - (py.to(tl.float32) + 0.5) * (2.0 / HEIGHT)
-                    if CIRCLE:
+                    if VIEW_VERTEX_DIVISOR == 1 or CIRCLE:
                         t0 = a0 * nx + b0 * ny + c0
                         t1 = a1 * nx + b1 * ny + c1
                         t2 = a2 * nx + b2 * ny + c2
                         total = t0 + t1 + t2
                         u, v = tl.div_rn(t0, total), tl.div_rn(t1, total)
+                    if CIRCLE:
                         # Fan triangles of the canonical square, before depth selection.
                         local_x = tl.where(face % 2 == 0, 0.5 - u, v - 0.5)
                         local_y = tl.where(face % 2 == 0, 0.5 - u - v, 0.5 - u)
                         covered &= local_x * local_x + local_y * local_y <= 0.25
-                    depth = depth_x * nx + depth_y * ny + depth_c
-                    depth = tl.maximum(depth, -1.0)
-                    covered &= depth < 1.0
+                    if VIEW_VERTEX_DIVISOR == 1:
+                        # Difference form preserves constant-depth planes exactly.
+                        camera_z = vz2 + u * (vz0 - vz2) + v * (vz1 - vz2)
+                        camera_w = vw2 + u * (vw0 - vw2) + v * (vw1 - vw2)
+                        depth = tl.div_rn(-camera_z, camera_w)
+                    else:
+                        depth = tl.div_rn(-vz0, vw0)
+                    covered &= tl.abs(depth) < float('inf')
                     depth = tl.where(depth == 0.0, 0.0, depth)
                     bits = depth.to(tl.uint32, bitcast=True)
                     ordered = tl.where((bits & 0x80000000) != 0, ~bits, bits ^ 0x80000000)
@@ -205,11 +218,11 @@ def _rasterize_kernel(
                     start += tl.num_programs(1) * BLOCK
 
 
-@triton.jit
+@triton.jit(do_not_specialize=['HEIGHT', 'WIDTH', 'NUM_PIXELS'])
 def _resolve_kernel(
-    Positions, ViewPositions, Faces, Keys, Ids, UV, Depth,
+    Positions, Faces, Keys, Ids, UV, Depth,
     NUM_VERTICES, NUM_PIXELS,
-    HEIGHT: tl.constexpr, WIDTH: tl.constexpr,
+    HEIGHT, WIDTH,
     RETURN_UV: tl.constexpr, RETURN_DEPTH: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
@@ -219,7 +232,12 @@ def _resolve_kernel(
     valid = active & (key != 0xFFFFFFFFFFFFFFFF)
     face = key.to(tl.uint32).to(tl.int32)
     tl.store(Ids + pixel, tl.where(valid, face, -1), active)
-    if RETURN_UV or RETURN_DEPTH:
+    if RETURN_DEPTH:
+        ordered = (key >> 32).to(tl.uint32)
+        bits = tl.where((ordered & 0x80000000) != 0, ordered ^ 0x80000000, ~ordered)
+        depth = bits.to(tl.float32, bitcast=True)
+        tl.store(Depth + pixel, tl.where(valid, depth, float("inf")), active)
+    if RETURN_UV:
         batch = pixel // (HEIGHT * WIDTH)
         face_offset = face.to(tl.int64) * 3
         v0 = tl.load(Faces + face_offset, valid, other=0).to(tl.int64) + batch * NUM_VERTICES
@@ -255,17 +273,6 @@ def _resolve_kernel(
         if RETURN_UV:
             tl.store(UV + pixel * 2, tl.where(valid, u, 0.0), active)
             tl.store(UV + pixel * 2 + 1, tl.where(valid, v, 0.0), active)
-        if RETURN_DEPTH:
-            z0 = tl.load(ViewPositions + v0 * 4 + 2, valid, other=0.0)
-            z1 = tl.load(ViewPositions + v1 * 4 + 2, valid, other=0.0)
-            z2 = tl.load(ViewPositions + v2 * 4 + 2, valid, other=0.0)
-            vw0 = tl.load(ViewPositions + v0 * 4 + 3, valid, other=1.0)
-            vw1 = tl.load(ViewPositions + v1 * 4 + 3, valid, other=1.0)
-            vw2 = tl.load(ViewPositions + v2 * 4 + 3, valid, other=1.0)
-            z = u * z0 + v * z1 + (1.0 - u - v) * z2
-            w = u * vw0 + v * vw1 + (1.0 - u - v) * vw2
-            depth = tl.div_rn(-z, w)
-            tl.store(Depth + pixel, tl.where(valid, depth, float("inf")), active)
 
 
 def rasterize_triangles_triton(
@@ -280,6 +287,7 @@ def rasterize_triangles_triton(
     circle: bool = False,
     previous_keys: Optional[Tensor] = None,
     depth_keys: Optional[Tensor] = None,
+    view_vertex_divisor: int = 1,
 ) -> Tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
     batch, num_vertices = positions.shape[:2]
     num_faces = faces.shape[0]
@@ -295,14 +303,14 @@ def rasterize_triangles_triton(
             # Split small meshes across programs without constructing a work queue.
             partitions = min(triton.cdiv(height * width, block), triton.cdiv(256, batch * num_faces))
             _rasterize_kernel[(batch * num_faces, partitions)](
-                positions, faces, keys, previous_keys if previous_keys is not None else keys,
+                positions, view_positions, faces, keys, previous_keys if previous_keys is not None else keys,
                 num_vertices, num_faces,
-                height, width, cull_backface, circle, previous_keys is not None, block,
+                height, width, cull_backface, circle, previous_keys is not None, view_vertex_divisor, block,
                 enable_fp_fusion=False,
             )
         if batch:
             _resolve_kernel[(triton.cdiv(ids.numel(), 256),)](
-                positions, view_positions, faces, keys, ids,
+                positions, faces, keys, ids,
                 uv if uv is not None else ids, depth if depth is not None else ids,
                 num_vertices, ids.numel(), height, width, return_uv, return_depth, 256,
                 enable_fp_fusion=False,
@@ -310,11 +318,11 @@ def rasterize_triangles_triton(
     return ids, uv, depth
 
 
-@triton.jit
+@triton.jit(do_not_specialize=['HEIGHT', 'WIDTH'])
 def _point_setup_kernel(
     Positions, ViewPositions, Projection, Sizes, Output,
     NUM_POINTS, NUM_INSTANCES, SIZE_BATCH_STRIDE, SIZE_POINT_STRIDE,
-    HEIGHT: tl.constexpr, WIDTH: tl.constexpr,
+    HEIGHT, WIDTH,
     CORNERS: tl.constexpr, SIZE_3D: tl.constexpr, HAS_PROJECTION: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
@@ -347,12 +355,12 @@ def _point_setup_kernel(
         tl.store(Output + offset + 3, w + ow, active)
 
 
-@triton.jit
+@triton.jit(do_not_specialize=['HEIGHT', 'WIDTH'])
 def _line_setup_kernel(
     Positions, ViewPositions, Lines, Output, ViewOutput, Intervals,
     NUM_VERTICES, NUM_LINES, NUM_INSTANCES, LINE_WIDTH,
-    HEIGHT: tl.constexpr, WIDTH: tl.constexpr,
-    RETURN_DEPTH: tl.constexpr, RETURN_UV: tl.constexpr, BLOCK: tl.constexpr,
+    HEIGHT, WIDTH,
+    RETURN_UV: tl.constexpr, BLOCK: tl.constexpr,
 ):
     index = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     active = index < NUM_INSTANCES
@@ -409,7 +417,8 @@ def _line_setup_kernel(
     visible &= (w0 > 0) & (w1 > 0) & (t1 > t0) & (length_squared > 0)
     inverse_length = tl.rsqrt(tl.where(visible, length_squared, 1.))
     # Beyond this width every viewport sample is already inside the side edges.
-    width = tl.minimum(LINE_WIDTH, 2.0 * tl.sqrt(float(WIDTH * WIDTH + HEIGHT * HEIGHT)))
+    diagonal = tl.sqrt(WIDTH.to(tl.float32) * WIDTH + HEIGHT.to(tl.float32) * HEIGHT)
+    width = tl.minimum(LINE_WIDTH, 2.0 * diagonal)
     ox, oy = -dy * inverse_length * (width / WIDTH), dx * inverse_length * (width / HEIGHT)
     for corner in tl.static_range(4):
         if corner < 2:
@@ -422,11 +431,10 @@ def _line_setup_kernel(
         tl.store(Output + offset + 1, tl.where(visible, y + sign * oy * w, 0.), active)
         tl.store(Output + offset + 2, tl.where(visible, z, 0.), active)
         tl.store(Output + offset + 3, tl.where(visible, w, 0.), active)
-        if RETURN_DEPTH:
-            for component in tl.static_range(4):
-                a = tl.load(ViewPositions + v0 * 4 + component, active, other=0.)
-                b = tl.load(ViewPositions + v1 * 4 + component, active, other=0.)
-                tl.store(ViewOutput + offset + component, (1. - t) * a + t * b, active)
+        for component in tl.static_range(4):
+            a = tl.load(ViewPositions + v0 * 4 + component, active, other=0.)
+            b = tl.load(ViewPositions + v1 * 4 + component, active, other=0.)
+            tl.store(ViewOutput + offset + component, a + t * (b - a), active)
     if RETURN_UV:
         tl.store(Intervals + index * 2, t0, active)
         tl.store(Intervals + index * 2 + 1, t1, active)
@@ -470,20 +478,19 @@ def expand_lines_triton(
     size: Tuple[int, int],
     line_width: float,
     return_uv: bool,
-    return_depth: bool,
 ) -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor]]:
     batch, num_vertices = positions.shape[:2]
     num_lines = lines.shape[0]
     faces = _polygon_faces(num_lines, 4, positions.device)
     expanded = torch.empty((batch, num_lines * 4, 4), dtype=positions.dtype, device=positions.device)
-    view_expanded = torch.empty_like(expanded) if return_depth else expanded
+    view_expanded = torch.empty_like(expanded)
     intervals = torch.empty((batch, num_lines, 2), dtype=positions.dtype, device=positions.device) if return_uv else None
     if batch and num_lines:
         with torch.cuda.device(positions.device):
             _line_setup_kernel[(triton.cdiv(batch * num_lines, 128),)](
                 positions, view_positions, lines, expanded, view_expanded,
                 intervals if intervals is not None else expanded,
-                num_vertices, num_lines, batch * num_lines, line_width, *size, return_depth, return_uv, 128,
+                num_vertices, num_lines, batch * num_lines, line_width, *size, return_uv, 128,
                 enable_fp_fusion=False,
             )
     return expanded, view_expanded, faces, intervals

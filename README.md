@@ -172,6 +172,13 @@ driver and the PyTorch/Triton runtime; it does not require compiling `.cu` sourc
 or configuring a CUDA toolkit. Triton is loaded only when rendering is requested.
 The NumPy/ModernGL backend is unchanged.
 
+Image height and width are runtime kernel parameters, not `tl.constexpr`.
+Their automatic value specializations (and that of the derived pixel count)
+are disabled, so changing only resolution reuses the same compiled kernels.
+Shape/mode switches such as point shape, culling, peeling and requested outputs
+can still select different variants, as can argument types, other specialization
+categories or GPU targets. The first use of a new variant still incurs JIT cost.
+
 ```python
 import torch
 import utils3d
@@ -200,8 +207,26 @@ Outputs follow NumPy's top-left image convention: `image` has shape
 camera-space `-z/w`, with `inf` for background; with identity transforms this
 is simply negative input z. Optional `interpolation_id` contains original face
 IDs (`-1` for background), and `interpolation_uv` contains the first two
-perspective-correct barycentric weights (zero for background). NDC depth uses
-strict `< 1` far-plane testing. Geometry outputs are detached; only attributes
+perspective-correct barycentric weights (zero for background). Visibility uses
+**float32 camera-space linear depth**, computed directly from view-space vertices
+with perspective-correct interpolation, not reconstructed from NDC depth. The
+64-bit atomic key packs the losslessly ordered float32 depth bits and a face ID;
+it is not a float64 depth buffer. Returned depth is decoded from the winning key,
+so visibility, peeling, and background comparisons use the same values.
+Point billboards use their center's camera-space depth. There is no logarithmic
+encoding in the Torch backend; NumPy's logarithmic depth buffer is unchanged.
+
+NDC is used only for clipping, with the near/far planes included. Unlike the old
+NDC depth test, fragments on the far boundary (or whose float32 projection rounds
+to that boundary with an infinite far plane) are not discarded just because their
+NDC depth equals 1. Signed linear depths are supported: with identity or custom
+projections, the smallest `-view_z / view_w` wins, not necessarily the smallest
+NDC z. This intentionally fixes the former inconsistency with background
+compositing. Floating-point input/transform/interpolation error and genuinely
+coplanar surfaces still limit precision; linear depth does not remove all causes
+of z-fighting.
+
+Geometry outputs are detached; only attributes
 receive gradients through native PyTorch indexing and weighted sums. Validation
 checks finite transformed coordinates and index bounds with one GPU-to-CPU
 synchronization. Background attributes are zero unless supplied explicitly.
@@ -313,7 +338,7 @@ with utils3d.pt.rasterize_triangles_peeling(
 ```
 
 The first layer matches ordinary rendering. Each next layer selects the closest
-fragment at strictly greater float32 NDC depth per pixel. Equal-depth fragments
+fragment at strictly greater float32 camera-space linear depth per pixel. Equal-depth fragments
 are skipped together; face ID breaks ties within a layer. Exhausted pixels stay
 empty, and iteration ends after yielding one entirely empty layer across the
 batch. Geometry is prepared once, then rerasterized per layer, with one CPU
@@ -509,10 +534,10 @@ and lazy-import regression checks with
 | Function | Numpy | Pytorch |
 | ---- | ---- | ---- |
 | `utils3d.RastContext`<br>Context for numpy-side rasterization. Based on moderngl. | [`utils3d.np.RastContext(args, kwargs)`](utils3d/numpy/rasterization.py#L257) | - |
-| `utils3d.rasterize_lines`<br>Rasterize lines. | [`utils3d.np.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L942) | [`utils3d.pt.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation, background)`](utils3d/torch/rasterization.py#L230) |
-| `utils3d.rasterize_point_cloud`<br>Rasterize point cloud. | [`utils3d.np.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id, background, ctx)`](utils3d/numpy/rasterization.py#L1195) | [`utils3d.pt.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id, background)`](utils3d/torch/rasterization.py#L347) |
+| `utils3d.rasterize_lines`<br>Rasterize lines. | [`utils3d.np.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L942) | [`utils3d.pt.rasterize_lines(size, vertices, attributes, attributes_domain, lines, view, projection, extrinsics, intrinsics, near, far, line_width, return_depth, return_interpolation, background)`](utils3d/torch/rasterization.py#L234) |
+| `utils3d.rasterize_point_cloud`<br>Rasterize point cloud. | [`utils3d.np.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id, background, ctx)`](utils3d/numpy/rasterization.py#L1195) | [`utils3d.pt.rasterize_point_cloud(size, points, point_sizes, point_size_in, point_shape, attributes, view, projection, extrinsics, intrinsics, near, far, return_depth, return_point_id, background)`](utils3d/torch/rasterization.py#L351) |
 | `utils3d.rasterize_triangles`<br>Rasterize triangles. | [`utils3d.np.rasterize_triangles(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, background, ctx)`](utils3d/numpy/rasterization.py#L418) | [`utils3d.pt.rasterize_triangles(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, background)`](utils3d/torch/rasterization.py#L21) |
-| `utils3d.rasterize_triangles_peeling`<br>Rasterize triangles with depth peeling. | [`utils3d.np.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, ctx)`](utils3d/numpy/rasterization.py#L671) | [`utils3d.pt.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation)`](utils3d/torch/rasterization.py#L131) |
+| `utils3d.rasterize_triangles_peeling`<br>Rasterize triangles with depth peeling. | [`utils3d.np.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation, ctx)`](utils3d/numpy/rasterization.py#L671) | [`utils3d.pt.rasterize_triangles_peeling(size, vertices, attributes, attributes_domain, faces, view, projection, extrinsics, intrinsics, near, far, cull_backface, return_depth, return_interpolation)`](utils3d/torch/rasterization.py#L135) |
 | `utils3d.sample_texture`<br>Sample from a texture map with a UV map. | [`utils3d.np.sample_texture(uv_map, texture_map, interpolation, mipmap_level, repeat, anisotropic, ctx)`](utils3d/numpy/rasterization.py#L1423) | - |
 | `utils3d.test_rasterization`<br>Test if rasterization works. It will render a cube with random colors and save it as a CHECKME.png file. | [`utils3d.np.test_rasterization(ctx)`](utils3d/numpy/rasterization.py#L1588) | - | 
 
