@@ -251,7 +251,7 @@ def build_mesh_from_map(
         if mask is not None:
             where_mask = np.where(mask.reshape(-1))
             faces = faces[where_mask]
-            face_attributes = face_attributes[where_mask]
+            face_attributes = tuple(x[where_mask] for x in face_attributes)
         if tri:
             faces, face_indices = triangulate_mesh(faces, return_face_indices=True)
             face_attributes = tuple(x[face_indices] for x in face_attributes)
