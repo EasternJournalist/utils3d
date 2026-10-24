@@ -155,8 +155,8 @@ def screen_coord_map(
         height, width = size[0]
     else:
         height, width = size
-    x = torch.linspace(left + 0.5 / width, right - 0.5 / width, width, dtype=dtype, device=device)
-    y = torch.linspace(top - 0.5 / height, bottom - 0.5 / height, height, dtype=dtype, device=device)
+    x = torch.linspace(left + 0.5 / width * (right - left), right - 0.5 / width * (right - left), width, dtype=dtype, device=device)
+    y = torch.linspace(top + 0.5 / height * (bottom - top), bottom - 0.5 / height * (bottom - top), height, dtype=dtype, device=device)
     x, y = torch.meshgrid(x, y, indexing='xy')
     return torch.stack([x, y], dim=2)
 
