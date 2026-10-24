@@ -867,7 +867,7 @@ def rotation_matrix_from_vectors(v1: Tensor, v2: Tensor):
     v = torch.cross(v1, v2, dim=-1)
     c = torch.sum(v1 * v2, dim=-1)
     K = skew_symmetric(v)
-    R = I + K + (1 / (1 + c))[None, None] * (K @ K)
+    R = I + K + (1 / (1 + c))[..., None, None] * (K @ K)
     return R
 
 
