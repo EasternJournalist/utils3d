@@ -761,25 +761,32 @@ def compute_mesh_laplacian(vertices: Tensor, faces: Tensor, weight: str = 'unifo
         faces (Tensor): shape (T, 3)
         weight (str): 'uniform' or 'cotangent'
     """
-    sum_verts = torch.zeros_like(vertices)                          # (..., N, 3)
-    sum_weights = torch.zeros(*vertices.shape[:-1]).to(vertices)    # (..., N)
-    face_verts = torch.index_select(vertices, -2, faces.view(-1)).view(*vertices.shape[:-2], *faces.shape, vertices.shape[-1])   # (..., T, 3)
+    sum_verts = torch.zeros_like(vertices)
+    sum_weights = torch.zeros_like(vertices[..., 0])
     if weight == 'cotangent':
+        face_verts = torch.index_select(vertices, -2, faces.reshape(-1)).reshape(
+            *vertices.shape[:-2], *faces.shape, vertices.shape[-1])
         for i in range(3):
             e1 = face_verts[..., (i + 1) % 3, :] - face_verts[..., i, :]
             e2 = face_verts[..., (i + 2) % 3, :] - face_verts[..., i, :]
-            cot_angle = (e1 * e2).sum(dim=-1) / torch.cross(e1, e2, dim=-1).norm(p=2, dim=-1)   # (..., T, 3)
-            sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 1) % 3], face_verts[..., (i + 2) % 3, :] * cot_angle[..., None])
-            sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 1) % 3], cot_angle)
-            sum_verts = torch.index_add(sum_verts, -2, faces[:, (i + 2) % 3], face_verts[..., (i + 1) % 3, :] * cot_angle[..., None])
-            sum_weights = torch.index_add(sum_weights, -1, faces[:, (i + 2) % 3], cot_angle)
+            cot_angle = (e1 * e2).sum(dim=-1) / torch.cross(e1, e2, dim=-1).norm(p=2, dim=-1)
+            for a, b in [((i + 1) % 3, (i + 2) % 3), ((i + 2) % 3, (i + 1) % 3)]:
+                sum_verts = torch.index_add(sum_verts, -2, faces[:, a], face_verts[..., b, :] * cot_angle[..., None])
+                sum_weights = torch.index_add(sum_weights, -1, faces[:, a], cot_angle)
     elif weight == 'uniform':
-        for i in range(3):
-            sum_verts = torch.index_add(sum_verts, -2, faces[:, i], face_verts[..., (i + 1) % 3, :])
-            sum_weights = torch.index_add(sum_weights, -1, faces[:, i], torch.ones_like(face_verts[..., i, 0]))
+        # Uniform weights count each neighboring vertex once, independent of
+        # face winding and of whether an edge borders one or two triangles.
+        edges = torch.stack([faces, torch.roll(faces, -1, dims=-1)], dim=-1).reshape(-1, 2)
+        edges = torch.unique(edges.sort(dim=-1).values, dim=0)
+        for a, b in [(0, 1), (1, 0)]:
+            neighbors = vertices.index_select(-2, edges[:, b])
+            sum_verts = torch.index_add(sum_verts, -2, edges[:, a], neighbors)
+            sum_weights = torch.index_add(sum_weights, -1, edges[:, a], torch.ones_like(neighbors[..., 0]))
     else:
         raise NotImplementedError
-    return sum_verts / (sum_weights[..., None] + 1e-7)
+    nonzero = sum_weights != 0
+    denominator = torch.where(nonzero, sum_weights, torch.ones_like(sum_weights))
+    return torch.where(nonzero[..., None], sum_verts / denominator[..., None], vertices)
 
 
 def laplacian_smooth_mesh(vertices: Tensor, faces: Tensor, weight: str = 'uniform', times: int = 5) -> Tensor:
@@ -791,7 +798,7 @@ def laplacian_smooth_mesh(vertices: Tensor, faces: Tensor, weight: str = 'unifor
         weight (str): 'uniform' or 'cotangent'
     """
     for _ in range(times):
-        vertices = laplacian(vertices, faces, weight)
+        vertices = compute_mesh_laplacian(vertices, faces, weight)
     return vertices
 
 
@@ -807,20 +814,20 @@ def taubin_smooth_mesh(vertices: Tensor, faces: Tensor, lambda_: float = 0.5, mu
     ## Returns
         Tensor: _description_
     """
-    pt = vertices + lambda_ * laplacian_smooth_mesh(vertices, faces)
-    p = pt + mu_ * laplacian_smooth_mesh(pt, faces)
-    return p
+    # Each pass adds a Laplacian displacement, not an absolute position.
+    pt = vertices + lambda_ * (compute_mesh_laplacian(vertices, faces) - vertices)
+    return pt + mu_ * (compute_mesh_laplacian(pt, faces) - pt)
 
 
 def laplacian_hc_smooth_mesh(vertices: Tensor, faces: Tensor, times: int = 5, alpha: float = 0.5, beta: float = 0.5, weight: str = 'uniform'):
     """HC algorithm from Improved Laplacian Smoothing of Noisy Surface Meshes by J.Vollmer et al.
     """
     p = vertices
-    for i in range(times):
+    for _ in range(times):
         q = p
-        p = laplacian_smooth_mesh(vertices, faces, weight)
+        p = compute_mesh_laplacian(q, faces, weight)
         b = p - (alpha * vertices + (1 - alpha) * q)
-        p = p - (beta * b + (1 - beta) * laplacian_smooth_mesh(b, faces, weight)) * 0.8
+        p = p - (beta * b + (1 - beta) * compute_mesh_laplacian(b, faces, weight))
     return p
 
 
