@@ -966,8 +966,8 @@ def quaternion_to_axis_angle(quaternion: ndarray) -> ndarray:
         ndarray: shape (..., 3), the axis-angle vectors corresponding to the given quaternions
     """
     assert quaternion.shape[-1] == 4
-    norm = lite_norm(quaternion[..., 1:], axis=-1)
-    axis = quaternion[..., 1:] / np.maximum(norm, np.finfo(quaternion.dtype).tiny)[..., None]
+    norm = lite_norm(quaternion[..., 1:], axis=-1)[..., None]
+    axis = quaternion[..., 1:] / np.maximum(norm, np.finfo(quaternion.dtype).tiny)
     angle = 2 * np.atan2(norm, quaternion[..., 0:1])
     return angle * axis
 
